@@ -9,11 +9,11 @@ mobileNav.querySelectorAll('a').forEach(link => {
   link.addEventListener('click', () => mobileNav.classList.remove('open'));
 });
 
-document.querySelectorAll('.faq-item').forEach(item => {
-  const question = item.querySelector('.faq-question');
+document.querySelectorAll('.m-faq-item').forEach(item => {
+  const question = item.querySelector('.m-faq-question');
   question.addEventListener('click', () => {
     const isOpen = item.classList.contains('open');
-    document.querySelectorAll('.faq-item').forEach(i => {
+    document.querySelectorAll('.m-faq-item').forEach(i => {
       i.classList.remove('open');
       i.querySelector('.icon').textContent = '+';
     });
