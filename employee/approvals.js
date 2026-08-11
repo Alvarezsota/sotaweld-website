@@ -36,11 +36,11 @@ async function requireAuth() {
   return session.user;
 }
 
-function personLine(role, name, hours, payRate, billRate, perDiemAmt, perDiem) {
+function personLine(role, name, hours, payRate, billRate, perDiemAmt, perDiem, entryId, helperRowId, description) {
   const pd = perDiem ? perDiemAmt : 0;
   const revenue = hours * billRate + pd;
   const cost = hours * payRate + pd;
-  return { role, name, hours, billRate, pd: perDiem ? pd : null, revenue, cost, margin: revenue - cost };
+  return { role, name, hours, billRate, pd: perDiem ? pd : null, revenue, cost, margin: revenue - cost, entryId, helperRowId, description: description || '' };
 }
 
 function buildJobGroups(entries, jobs) {
@@ -68,12 +68,12 @@ function buildJobGroups(entries, jobs) {
 
     const prof = e.profiles || {};
     const perDiemAmt = effectiveJob ? Number(effectiveJob.per_diem) : 0;
-    d.lines.push(personLine('welder', prof.full_name || '—', Number(e.hours), Number(prof.pay_rate || 0), Number(prof.bill_rate || 0), perDiemAmt, e.per_diem));
+    d.lines.push(personLine('welder', prof.full_name || '—', Number(e.hours), Number(prof.pay_rate || 0), Number(prof.bill_rate || 0), perDiemAmt, e.per_diem, e.id, null, e.description));
     if (e.description) d.descs.push(e.description);
 
     (e.daily_entry_helpers || []).forEach(dh => {
       const hp = dh.helpers || {};
-      d.lines.push(personLine('helper', hp.name || '—', Number(dh.hours), Number(hp.pay_rate || 0), Number(hp.bill_rate || 0), perDiemAmt, dh.per_diem));
+      d.lines.push(personLine('helper', hp.name || '—', Number(dh.hours), Number(hp.pay_rate || 0), Number(hp.bill_rate || 0), perDiemAmt, dh.per_diem, e.id, dh.id, null));
     });
   });
 
@@ -192,16 +192,20 @@ function renderDetail(groupId) {
             <span class="day-desc2">${esc(d.descs.join(' · '))}</span>
           </div>
           <table class="lines2">
-            <thead><tr><th class="l-name">Person</th><th>Hrs</th><th>Rate</th><th>PD</th><th>Bill</th><th>Margin</th></tr></thead>
+            <thead><tr><th class="l-name">Person</th><th>Hrs</th><th>Rate</th><th>PD</th><th>Bill</th><th>Margin</th><th></th></tr></thead>
             <tbody>
-              ${d.lines.map(l => `
-                <tr>
-                  <td class="l-name">${esc(l.name)}<span class="role-tag2">${l.role}</span></td>
-                  <td class="l-num">${l.hours}</td>
+              ${d.lines.map((l, li) => `
+                <tr data-entry-id="${esc(l.entryId)}" data-helper-row-id="${l.helperRowId ? esc(l.helperRowId) : ''}" data-line-key="${dateStr}-${li}">
+                  <td class="l-name">${esc(l.name)}<span class="role-tag2">${l.role}</span>${l.role === 'welder' && l.description ? `<div class="line-desc">${esc(l.description)}</div>` : ''}</td>
+                  <td class="l-num line-hours">${l.hours}</td>
                   <td class="l-num dim">$${l.billRate}</td>
                   <td class="l-num dim">${l.pd ? money(l.pd) : '—'}</td>
                   <td class="l-num">${money(l.revenue)}</td>
                   <td class="l-num pos">${money(l.margin)}</td>
+                  <td class="l-num line-actions">
+                    <button type="button" class="row-edit" data-action="edit-line">Edit</button>
+                    <button type="button" class="row-del" data-action="delete-line">Delete</button>
+                  </td>
                 </tr>`).join('')}
             </tbody>
           </table>
@@ -253,6 +257,61 @@ function renderDetail(groupId) {
     if (locked) return;
     await upsertJobWeek(g.id, { invoice_no: e.target.value.trim() || null });
   });
+
+  document.querySelectorAll('.lines2 tbody tr').forEach(row => {
+    const [dateStr, liStr] = row.dataset.lineKey.split(/-(\d+)$/);
+    const line = g.days[dateStr].lines[Number(liStr)];
+
+    row.querySelector('[data-action="edit-line"]').addEventListener('click', () => startEditLine(row, line, groupId));
+    row.querySelector('[data-action="delete-line"]').addEventListener('click', () => deleteLine(line, groupId));
+  });
+}
+
+function startEditLine(row, line, groupId) {
+  const hoursCell = row.querySelector('.line-hours');
+  const actionsCell = row.querySelector('.line-actions');
+  const nameCell = row.querySelector('.l-name');
+
+  hoursCell.innerHTML = `<input type="number" step="0.5" min="0" class="edit-hours-input" value="${line.hours}">`;
+
+  let descInput = null;
+  if (line.role === 'welder') {
+    const descDiv = nameCell.querySelector('.line-desc');
+    const existing = descDiv ? descDiv.textContent : line.description;
+    nameCell.innerHTML = `${esc(line.name)}<span class="role-tag2">${line.role}</span><textarea class="edit-desc-input">${esc(existing)}</textarea>`;
+    descInput = nameCell.querySelector('.edit-desc-input');
+  }
+
+  actionsCell.innerHTML = `
+    <button type="button" class="row-edit" data-action="save-line">Save</button>
+    <button type="button" class="row-del" data-action="cancel-line">Cancel</button>
+  `;
+
+  actionsCell.querySelector('[data-action="cancel-line"]').addEventListener('click', () => renderDetail(groupId));
+  actionsCell.querySelector('[data-action="save-line"]').addEventListener('click', async () => {
+    const newHours = Number(hoursCell.querySelector('.edit-hours-input').value);
+    const patch = { hours: newHours };
+    if (descInput) patch.description = descInput.value.trim();
+
+    if (line.helperRowId) {
+      await sb.from('daily_entry_helpers').update({ hours: newHours }).eq('id', line.helperRowId);
+    } else {
+      await sb.from('daily_entries').update(patch).eq('id', line.entryId);
+    }
+    await loadWeek();
+  });
+}
+
+async function deleteLine(line, groupId) {
+  const label = line.helperRowId ? `${line.name}'s helper hours` : `${line.name}'s whole entry for this day (including any helpers on it)`;
+  if (!confirm(`Delete ${label}? This can't be undone.`)) return;
+
+  if (line.helperRowId) {
+    await sb.from('daily_entry_helpers').delete().eq('id', line.helperRowId);
+  } else {
+    await sb.from('daily_entries').delete().eq('id', line.entryId);
+  }
+  await loadWeek();
 }
 
 async function upsertJobWeek(groupId, patch) {
