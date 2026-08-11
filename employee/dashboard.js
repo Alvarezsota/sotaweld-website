@@ -176,6 +176,28 @@ async function handleAnnouncementSubmit(e) {
   await loadAnnouncements();
 }
 
+async function loadQuoteRequests() {
+  const list = document.getElementById('quoteRequestsList');
+  const { data, error } = await sb
+    .from('quote_requests')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error || !data || !data.length) {
+    list.innerHTML = '<li class="empty-state">No quote requests yet.</li>';
+    return;
+  }
+
+  list.innerHTML = data.map(q => `
+    <li>
+      <strong>${escapeHtml(q.name)}</strong> &middot; <a href="tel:${escapeHtml(q.phone)}">${escapeHtml(q.phone)}</a>${q.email ? ` &middot; <a href="mailto:${escapeHtml(q.email)}">${escapeHtml(q.email)}</a>` : ''}
+      <div class="entry-meta">${fmt(q.created_at)} &middot; status: ${escapeHtml(q.status)}</div>
+      <div>${escapeHtml(q.message)}</div>
+    </li>
+  `).join('');
+}
+
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
@@ -190,9 +212,11 @@ function escapeHtml(str) {
 
   document.getElementById('userName').textContent = currentProfile ? currentProfile.full_name : currentUser.email;
 
-  if (currentProfile && currentProfile.role === 'admin') {
+  const isAdmin = currentProfile && currentProfile.role === 'admin';
+  if (isAdmin) {
     document.getElementById('adminBadge').style.display = 'inline-block';
     document.getElementById('postAnnouncementWrap').style.display = 'inline-block';
+    document.getElementById('quoteRequestsCard').style.display = 'block';
   }
 
   document.getElementById('logoutBtn').addEventListener('click', async (e) => {
@@ -213,4 +237,5 @@ function escapeHtml(str) {
   await refreshClockStatus();
   await loadJobEntries();
   await loadAnnouncements();
+  if (isAdmin) await loadQuoteRequests();
 })();

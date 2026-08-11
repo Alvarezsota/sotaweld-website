@@ -76,7 +76,7 @@
   <div class="container hero-content">
     <h1>State of the Arc Welding &amp; Services</h1>
     <p>State of The Art Welding &amp; Services LLC provides expert welding services in Odessa, TX, delivering high-quality craftsmanship to clients in surrounding areas.</p>
-    <a class="btn btn-red" href="sms:+14322481455">Get a Free Quote</a>
+    <a class="btn btn-red" href="#quote-form-box">Get a Free Quote</a>
     <div class="hero-badges">
       <span class="badge">Insured</span>
       <span class="badge">Bonded</span>
@@ -168,7 +168,7 @@
   <div class="container">
     <h2>Ready to get started?</h2>
     <p>Book an appointment today.</p>
-    <a class="btn btn-red" href="sms:+14322481455">Get a Free Quote</a>
+    <a class="btn btn-red" href="#quote-form-box">Get a Free Quote</a>
   </div>
 </div>
 
@@ -195,10 +195,37 @@
         <p>Get a clear, upfront price for the work.</p>
       </div>
     </div>
-    <div class="text-us-box">
-      <h3>Send us a text</h3>
-      <p>We'll respond quickly to find a time that works for you to chat.</p>
-      <a class="btn btn-navy" href="sms:+14322481455">Text Us</a>
+    <div class="text-us-box" id="quote-form-box">
+      <h3>Tell us what you need done</h3>
+      <p>Fill this out and we'll get back to you with a quote — or call/text us directly if you'd rather talk now.</p>
+      <form id="quoteForm">
+        <div class="form-row">
+          <label for="qName">Name</label>
+          <input type="text" id="qName" required>
+        </div>
+        <div class="form-row">
+          <label for="qPhone">Phone</label>
+          <input type="tel" id="qPhone" required>
+        </div>
+        <div class="form-row">
+          <label for="qEmail">Email (optional)</label>
+          <input type="email" id="qEmail">
+        </div>
+        <div class="form-row">
+          <label for="qMessage">What are you looking to get done?</label>
+          <textarea id="qMessage" required placeholder="Tell us about your project..."></textarea>
+        </div>
+        <button type="submit" class="btn btn-red" id="quoteSubmitBtn">Request a Quote</button>
+        <p class="error-msg" id="quoteError"></p>
+      </form>
+      <p class="quote-success" id="quoteSuccess" style="display:none;">Thanks! We got your request and will reach out shortly.</p>
+      <div class="quote-fallback">
+        <span>Prefer to talk now?</span>
+        <a href="tel:+14322481455">Call</a>
+        <span>or</span>
+        <a href="sms:+14322481455">Text</a>
+        <span>(432) 248-1455</span>
+      </div>
     </div>
   </div>
 </section>
@@ -309,7 +336,7 @@
   <div class="container">
     <h2>Ready to get started?</h2>
     <p>Book an appointment today.</p>
-    <a class="btn btn-red" href="sms:+14322481455">Get a Free Quote</a>
+    <a class="btn btn-red" href="#quote-form-box">Get a Free Quote</a>
   </div>
 </div>
 
@@ -362,6 +389,7 @@
   </div>
 </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="script.js"></script>
 </body>
 </html>
