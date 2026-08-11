@@ -1,5 +1,6 @@
 let currentUser = null;
 let jobsById = {};
+let helpersList = [];
 let weekStart = getMonday(new Date());
 let openJobId = null;
 let currentGroups = [];
@@ -36,11 +37,16 @@ async function requireAuth() {
   return session.user;
 }
 
-function personLine(role, name, hours, payRate, billRate, perDiemAmt, perDiem, entryId, helperRowId, description) {
+function personLine(role, name, hours, payRate, billRate, perDiemAmt, perDiem, entryId, helperRowId, description, realJobId, realOneOffName, helperId, perDiemFlag) {
   const pd = perDiem ? perDiemAmt : 0;
   const revenue = hours * billRate + pd;
   const cost = hours * payRate + pd;
-  return { role, name, hours, billRate, pd: perDiem ? pd : null, revenue, cost, margin: revenue - cost, entryId, helperRowId, description: description || '' };
+  return {
+    role, name, hours, billRate, pd: perDiem ? pd : null, revenue, cost, margin: revenue - cost,
+    entryId, helperRowId, description: description || '',
+    realJobId: realJobId || null, realOneOffName: realOneOffName || '',
+    helperId: helperId || null, perDiemFlag: !!perDiemFlag
+  };
 }
 
 function buildJobGroups(entries, jobs) {
@@ -68,12 +74,12 @@ function buildJobGroups(entries, jobs) {
 
     const prof = e.profiles || {};
     const perDiemAmt = effectiveJob ? Number(effectiveJob.per_diem) : 0;
-    d.lines.push(personLine('welder', prof.full_name || '—', Number(e.hours), Number(prof.pay_rate || 0), Number(prof.bill_rate || 0), perDiemAmt, e.per_diem, e.id, null, e.description));
+    d.lines.push(personLine('welder', prof.full_name || '—', Number(e.hours), Number(prof.pay_rate || 0), Number(prof.bill_rate || 0), perDiemAmt, e.per_diem, e.id, null, e.description, e.job_id, e.one_off_name, null, e.per_diem));
     if (e.description) d.descs.push(e.description);
 
     (e.daily_entry_helpers || []).forEach(dh => {
       const hp = dh.helpers || {};
-      d.lines.push(personLine('helper', hp.name || '—', Number(dh.hours), Number(hp.pay_rate || 0), Number(hp.bill_rate || 0), perDiemAmt, dh.per_diem, e.id, dh.id, null));
+      d.lines.push(personLine('helper', hp.name || '—', Number(dh.hours), Number(hp.pay_rate || 0), Number(hp.bill_rate || 0), perDiemAmt, dh.per_diem, e.id, dh.id, null, null, null, dh.helper_id, dh.per_diem));
     });
   });
 
@@ -90,16 +96,18 @@ async function loadWeek() {
 
   document.getElementById('weekLabel').textContent = formatWeekLabel(weekStart);
 
-  const [{ data: entries }, { data: jobs }, { data: jw }] = await Promise.all([
+  const [{ data: entries }, { data: jobs }, { data: jw }, { data: hlprs }] = await Promise.all([
     sb.from('daily_entries')
       .select('*, profiles(full_name, pay_rate, bill_rate), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate))')
       .gte('entry_date', start).lte('entry_date', end),
     sb.from('jobs').select('*'),
-    sb.from('job_weeks').select('*').eq('week_start', start)
+    sb.from('job_weeks').select('*').eq('week_start', start),
+    sb.from('helpers').select('*').order('name')
   ]);
 
   jobsById = {};
   (jobs || []).forEach(j => jobsById[j.id] = j);
+  helpersList = hlprs || [];
 
   currentJobWeeks = {};
   (jw || []).forEach(row => currentJobWeeks[row.job_id] = row);
@@ -268,36 +276,99 @@ function renderDetail(groupId) {
 }
 
 function startEditLine(row, line, groupId) {
-  const hoursCell = row.querySelector('.line-hours');
-  const actionsCell = row.querySelector('.line-actions');
-  const nameCell = row.querySelector('.l-name');
+  const isHelper = !!line.helperRowId;
 
-  hoursCell.innerHTML = `<input type="number" step="0.5" min="0" class="edit-hours-input" value="${line.hours}">`;
+  if (isHelper) {
+    row.innerHTML = `
+      <td colspan="7">
+        <div class="edit-row-form">
+          <div class="edit-field">
+            <label>Helper</label>
+            <select class="input edit-helper-select">
+              ${helpersList.map(h => `<option value="${esc(h.id)}" ${h.id === line.helperId ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="edit-field edit-field-sm">
+            <label>Hours</label>
+            <input type="number" step="0.5" min="0" class="input edit-hours-input" value="${line.hours}">
+          </div>
+          <div class="edit-field edit-field-sm edit-field-pd">
+            <label><input type="checkbox" class="edit-pd-input" ${line.perDiemFlag ? 'checked' : ''}> Per diem</label>
+          </div>
+          <div class="edit-field-actions">
+            <button type="button" class="row-edit" data-action="save-line">Save</button>
+            <button type="button" class="row-del" data-action="cancel-line">Cancel</button>
+          </div>
+        </div>
+      </td>`;
 
-  let descInput = null;
-  if (line.role === 'welder') {
-    const descDiv = nameCell.querySelector('.line-desc');
-    const existing = descDiv ? descDiv.textContent : line.description;
-    nameCell.innerHTML = `${esc(line.name)}<span class="role-tag2">${line.role}</span><textarea class="edit-desc-input">${esc(existing)}</textarea>`;
-    descInput = nameCell.querySelector('.edit-desc-input');
+    row.querySelector('[data-action="cancel-line"]').addEventListener('click', () => renderDetail(groupId));
+    row.querySelector('[data-action="save-line"]').addEventListener('click', async () => {
+      const patch = {
+        helper_id: row.querySelector('.edit-helper-select').value,
+        hours: Number(row.querySelector('.edit-hours-input').value),
+        per_diem: row.querySelector('.edit-pd-input').checked
+      };
+      await sb.from('daily_entry_helpers').update(patch).eq('id', line.helperRowId);
+      await loadWeek();
+    });
+    return;
   }
 
-  actionsCell.innerHTML = `
-    <button type="button" class="row-edit" data-action="save-line">Save</button>
-    <button type="button" class="row-del" data-action="cancel-line">Cancel</button>
-  `;
+  const allJobs = Object.values(jobsById).sort((a, b) => a.name.localeCompare(b.name));
+  const isOther = !line.realJobId;
 
-  actionsCell.querySelector('[data-action="cancel-line"]').addEventListener('click', () => renderDetail(groupId));
-  actionsCell.querySelector('[data-action="save-line"]').addEventListener('click', async () => {
-    const newHours = Number(hoursCell.querySelector('.edit-hours-input').value);
-    const patch = { hours: newHours };
-    if (descInput) patch.description = descInput.value.trim();
+  row.innerHTML = `
+    <td colspan="7">
+      <div class="edit-row-form">
+        <div class="edit-field">
+          <label>Job</label>
+          <select class="input edit-job-select">
+            ${allJobs.map(j => `<option value="${esc(j.id)}" ${j.id === line.realJobId ? 'selected' : ''}>${esc(j.name)}</option>`).join('')}
+            <option value="other" ${isOther ? 'selected' : ''}>Other / one-off…</option>
+          </select>
+        </div>
+        <div class="edit-field edit-oneoff-wrap" style="display:${isOther ? 'block' : 'none'};">
+          <label>One-off job name</label>
+          <input type="text" class="input edit-oneoff-input" value="${esc(line.realOneOffName)}">
+        </div>
+        <div class="edit-field">
+          <label>Description</label>
+          <textarea class="input edit-desc-input">${esc(line.description)}</textarea>
+        </div>
+        <div class="edit-field edit-field-sm">
+          <label>Hours</label>
+          <input type="number" step="0.5" min="0" class="input edit-hours-input" value="${line.hours}">
+        </div>
+        <div class="edit-field edit-field-sm edit-field-pd">
+          <label><input type="checkbox" class="edit-pd-input" ${line.perDiemFlag ? 'checked' : ''}> Per diem</label>
+        </div>
+        <div class="edit-field-actions">
+          <button type="button" class="row-edit" data-action="save-line">Save</button>
+          <button type="button" class="row-del" data-action="cancel-line">Cancel</button>
+        </div>
+      </div>
+    </td>`;
 
-    if (line.helperRowId) {
-      await sb.from('daily_entry_helpers').update({ hours: newHours }).eq('id', line.helperRowId);
-    } else {
-      await sb.from('daily_entries').update(patch).eq('id', line.entryId);
-    }
+  const jobSelect = row.querySelector('.edit-job-select');
+  const oneOffWrap = row.querySelector('.edit-oneoff-wrap');
+  jobSelect.addEventListener('change', () => {
+    oneOffWrap.style.display = jobSelect.value === 'other' ? 'block' : 'none';
+  });
+
+  row.querySelector('[data-action="cancel-line"]').addEventListener('click', () => renderDetail(groupId));
+  row.querySelector('[data-action="save-line"]').addEventListener('click', async () => {
+    const jobVal = jobSelect.value;
+    const other = jobVal === 'other';
+    const patch = {
+      job_id: other ? null : jobVal,
+      one_off_name: other ? row.querySelector('.edit-oneoff-input').value.trim() : null,
+      for_job_id: null,
+      description: row.querySelector('.edit-desc-input').value.trim(),
+      hours: Number(row.querySelector('.edit-hours-input').value),
+      per_diem: row.querySelector('.edit-pd-input').checked
+    };
+    await sb.from('daily_entries').update(patch).eq('id', line.entryId);
     await loadWeek();
   });
 }
