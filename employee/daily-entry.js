@@ -57,7 +57,7 @@ function stepperHtml(label, value) {
     </div>`;
 }
 function pdToggleHtml(on) {
-  return `<button type="button" class="pd-toggle${on ? ' pd-on' : ''}"><span class="pd-knob"></span><span class="pd-text">Per diem</span></button>`;
+  return `<button type="button" class="pd-toggle${on ? ' pd-on' : ''}"><span class="pd-knob"></span><span class="pd-text">Per diem<br><b>${on ? 'ON' : 'OFF'}</b></span></button>`;
 }
 function helperBlockHtml(h) {
   return `
