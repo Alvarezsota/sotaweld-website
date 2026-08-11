@@ -25,6 +25,17 @@
       <button type="submit" class="btn btn-red" id="loginBtn">Log In</button>
       <p class="error-msg" id="errorMsg"></p>
     </form>
+    <form id="setPasswordForm" style="display:none;">
+      <p class="login-sub" style="margin-bottom:16px;">Welcome! Set a password for your account.</p>
+      <label>New Password
+        <input type="password" id="newPassword" required autocomplete="new-password" minlength="6">
+      </label>
+      <label>Confirm Password
+        <input type="password" id="confirmPassword" required autocomplete="new-password" minlength="6">
+      </label>
+      <button type="submit" class="btn btn-red" id="setPasswordBtn">Set Password & Continue</button>
+      <p class="error-msg" id="setPasswordError"></p>
+    </form>
     <a href="../index.html" class="back-link">&larr; Back to website</a>
   </div>
 </div>
