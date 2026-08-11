@@ -1,8 +1,9 @@
 .de-wrap { max-width: 520px; margin: 0 auto; padding: 18px 14px 120px; }
 
-.de-date-line { display: flex; align-items: baseline; gap: 10px; padding: 4px 4px 14px; }
+.de-date-line { display: flex; align-items: center; gap: 10px; padding: 4px 4px 14px; }
 .de-date-label { font-size: 12px; text-transform: uppercase; letter-spacing: .14em; color: var(--dim); font-weight: 700; }
 .de-date-value { font-size: 15px; font-weight: 600; }
+.de-date-input { width: auto; padding: 8px 12px; font-size: 15px; font-weight: 600; }
 
 .job-card { background: var(--steel-850); border: 1px solid var(--line); border-radius: 16px; padding: 16px 14px 14px; margin-bottom: 14px; }
 .job-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }

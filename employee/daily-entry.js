@@ -12,6 +12,14 @@ const entriesContainer = document.getElementById('entriesContainer');
 const totalHoursEl = document.getElementById('totalHours');
 const submitBtn = document.getElementById('submitBtn');
 const addJobBtn = document.getElementById('addJobBtn');
+const dateInput = document.getElementById('dateInput');
+
+function todayIso() { return new Date().toISOString().slice(0, 10); }
+function selectedDateLabel() {
+  const val = dateInput.value || todayIso();
+  const [y, m, d] = val.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+}
 
 function uid() { return Math.random().toString(36).slice(2); }
 function esc(str) {
@@ -117,7 +125,7 @@ function updateSubmitState() {
   const total = entries.reduce((sum, e) => sum + Number(e.hours) + e.helpers.reduce((s, h) => s + (h.helperId ? Number(h.hours) : 0), 0), 0);
   totalHoursEl.textContent = total;
 
-  const canSubmit = entries.every(e => {
+  const canSubmit = !!dateInput.value && entries.every(e => {
     if (!e.jobId) return false;
     if (!e.description.trim()) return false;
     if (e.jobId === 'other' && !e.oneOffName.trim()) return false;
@@ -222,6 +230,10 @@ addJobBtn.addEventListener('click', () => {
   render();
 });
 
+dateInput.addEventListener('change', () => {
+  updateSubmitState();
+});
+
 document.querySelectorAll('#gasOpts .gear-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     gasFlag = btn.dataset.val;
@@ -247,7 +259,7 @@ async function handleSubmit() {
   submitBtn.disabled = true;
   submitBtn.textContent = 'Submitting...';
 
-  const today = new Date().toISOString().slice(0, 10);
+  const entryDate = dateInput.value || todayIso();
 
   try {
     for (const entry of entries) {
@@ -256,7 +268,7 @@ async function handleSubmit() {
 
       const { data: deData, error: deError } = await sb.from('daily_entries').insert({
         welder_id: currentUser.id,
-        entry_date: today,
+        entry_date: entryDate,
         job_id: other ? null : entry.jobId,
         one_off_name: other ? entry.oneOffName.trim() : null,
         for_job_id: yard ? entry.forJobId : null,
@@ -280,7 +292,7 @@ async function handleSubmit() {
     if (gasFlag || extFlag || needGloves || needShields) {
       await sb.from('safety_flags').insert({
         welder_id: currentUser.id,
-        entry_date: today,
+        entry_date: entryDate,
         gas_flag: gasFlag || null,
         ext_flag: extFlag || null,
         need_gloves: needGloves,
@@ -293,7 +305,7 @@ async function handleSubmit() {
     console.error(err);
     alert('Something went wrong submitting. Please try again or contact the office.');
     submitBtn.disabled = false;
-    submitBtn.textContent = "Submit today's work";
+    submitBtn.textContent = "Submit work";
   }
 }
 
@@ -308,7 +320,7 @@ function showSuccess() {
 
   const receiptBox = document.getElementById('receiptBox');
   receiptBox.innerHTML = `
-    <div class="receipt-row2 receipt-head2"><span>${todayLabel()}</span><span>${total} hrs</span></div>
+    <div class="receipt-row2 receipt-head2"><span>${selectedDateLabel()}</span><span>${total} hrs</span></div>
     ${entries.map(e => `
       <div class="receipt-job2">
         <div class="receipt-row2">
@@ -348,15 +360,12 @@ document.getElementById('logAnotherBtn').addEventListener('click', () => {
   document.querySelector('#extOpts .gear-btn[data-val=""]').classList.add('sel');
   document.getElementById('glovesBtn').classList.remove('sel');
   document.getElementById('shieldsBtn').classList.remove('sel');
-  submitBtn.textContent = "Submit today's work";
+  submitBtn.textContent = "Submit work";
+  dateInput.value = todayIso();
   document.getElementById('successScreen').style.display = 'none';
   document.getElementById('entryScreen').style.display = 'block';
   render();
 });
-
-function todayLabel() {
-  return new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
-}
 
 async function requireAuth() {
   const { data: { session } } = await sb.auth.getSession();
@@ -385,7 +394,8 @@ async function requireAuth() {
     window.location.href = 'login.html';
   });
 
-  document.getElementById('dateValue').textContent = todayLabel();
+  dateInput.value = todayIso();
+  dateInput.max = todayIso();
 
   const [{ data: jobsData }, { data: helpersData }] = await Promise.all([
     sb.from('jobs').select('*').eq('active', true).order('name'),
