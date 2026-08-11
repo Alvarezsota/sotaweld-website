@@ -92,6 +92,14 @@ img { max-width: 100%; display: block; }
   color: var(--navy);
 }
 .main-nav a:hover { color: var(--red); }
+.employee-nav-link {
+  color: var(--gray-text) !important;
+  font-size: 0.78rem !important;
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
+}
+.employee-nav-link:hover { color: var(--navy) !important; }
+.mobile-nav .employee-nav-link { border-left: none; padding-left: 0; padding-top: 4px; }
 .header-actions { display: flex; align-items: center; gap: 12px; }
 .menu-toggle {
   display: none;
