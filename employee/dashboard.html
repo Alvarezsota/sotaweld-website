@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Employee Dashboard | State of the Arc Welding & Services</title>
+<meta name="robots" content="noindex">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="employee.css">
+</head>
+<body>
+
+<header class="dash-header">
+  <div class="brand">
+    <img src="../assets/img/logo.jpeg" alt="Logo">
+    State of the Arc Welding
+  </div>
+  <div class="user-info">
+    <span id="userName">Loading...</span>
+    <span id="adminBadge" class="admin-badge" style="display:none;">Admin</span>
+    <a class="btn btn-navy" id="logoutBtn" href="#" style="padding:8px 18px;">Log Out</a>
+  </div>
+</header>
+
+<main class="dash-main">
+
+  <div class="dash-card">
+    <h2>Time Clock</h2>
+    <div class="clock-status">
+      <div class="status-text"><span class="status-dot" id="statusDot"></span><span id="statusText">Checking status...</span></div>
+      <button class="btn btn-red" id="clockBtn" disabled>...</button>
+    </div>
+  </div>
+
+  <div class="dash-card">
+    <h2>Log a Job</h2>
+    <form id="jobForm">
+      <div class="form-row">
+        <label for="jobName">Job / Site Name</label>
+        <input type="text" id="jobName" required placeholder="e.g. Rocking Double S - P66 FL-Line repair">
+      </div>
+      <div class="form-row">
+        <label for="jobDesc">What did you do?</label>
+        <textarea id="jobDesc" placeholder="Brief description of the work completed"></textarea>
+      </div>
+      <div class="form-row">
+        <label for="jobPhoto">Photo (optional)</label>
+        <input type="file" id="jobPhoto" accept="image/*" capture="environment">
+      </div>
+      <button type="submit" class="btn btn-navy" id="jobSubmitBtn">Submit Entry</button>
+      <p class="error-msg" id="jobError"></p>
+    </form>
+  </div>
+
+  <div class="dash-card">
+    <h2>My Recent Entries</h2>
+    <ul class="entry-list" id="jobList">
+      <li class="empty-state">Loading...</li>
+    </ul>
+  </div>
+
+  <div class="dash-card">
+    <h2>Announcements <span id="postAnnouncementWrap" style="display:none;"><button class="btn btn-red" id="newAnnouncementBtn" style="padding:8px 16px; font-size:0.75rem;">+ New</button></span></h2>
+    <form id="announcementForm" style="display:none; margin-bottom:20px;">
+      <div class="form-row">
+        <label for="annTitle">Title</label>
+        <input type="text" id="annTitle" required>
+      </div>
+      <div class="form-row">
+        <label for="annBody">Message</label>
+        <textarea id="annBody" required></textarea>
+      </div>
+      <button type="submit" class="btn btn-navy">Post</button>
+    </form>
+    <div id="announcementList">
+      <p class="empty-state">Loading...</p>
+    </div>
+  </div>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-client.js"></script>
+<script src="dashboard.js"></script>
+</body>
+</html>
