@@ -21,6 +21,114 @@ function selectedDateLabel() {
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 }
 
+let weekPanelStart = getMonday(new Date());
+let weekPanelLoaded = false;
+const weekToggleBtn = document.getElementById('weekToggleBtn');
+const weekPanel = document.getElementById('weekPanel');
+const weekChev = document.getElementById('weekChev');
+const weekPanelLabel = document.getElementById('weekPanelLabel');
+const weekPanelBody = document.getElementById('weekPanelBody');
+
+function getMonday(d) {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  date.setDate(diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+function ymd(d) { return d.toISOString().slice(0, 10); }
+function dayLabel(dateStr) {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function formatWeekLabel(start) {
+  const end = addDays(start, 6);
+  const opts = { month: 'short', day: 'numeric' };
+  return `${start.toLocaleDateString(undefined, opts)} – ${end.toLocaleDateString(undefined, opts)}`;
+}
+function jobLabelFor(row) {
+  if (row.job_id) {
+    const j = jobs.find(x => x.id === row.job_id);
+    return j ? j.name : (row.one_off_name || 'Job');
+  }
+  return row.one_off_name || 'One-off job';
+}
+
+async function loadWeekPanel() {
+  weekPanelLabel.textContent = formatWeekLabel(weekPanelStart);
+  weekPanelBody.innerHTML = '<div class="week-day-empty">Loading…</div>';
+
+  const start = ymd(weekPanelStart);
+  const end = ymd(addDays(weekPanelStart, 6));
+
+  const { data: rows } = await sb.from('daily_entries')
+    .select('*')
+    .eq('welder_id', currentUser.id)
+    .gte('entry_date', start)
+    .lte('entry_date', end)
+    .order('entry_date');
+
+  const entries = rows || [];
+  let helperRows = [];
+  if (entries.length) {
+    const { data: hRows } = await sb.from('daily_entry_helpers')
+      .select('*')
+      .in('daily_entry_id', entries.map(e => e.id));
+    helperRows = hRows || [];
+  }
+
+  let weekTotal = 0;
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const dateStr = ymd(addDays(weekPanelStart, i));
+    const dayEntries = entries.filter(e => e.entry_date === dateStr);
+    const dayHrs = dayEntries.reduce((s, e) => s + Number(e.hours), 0);
+    weekTotal += dayHrs;
+    days.push({ dateStr, dayEntries, dayHrs });
+  }
+
+  weekPanelBody.innerHTML = days.map(day => `
+    <div class="week-day">
+      <div class="week-day-head">
+        <span class="week-day-date">${dayLabel(day.dateStr)}</span>
+        <span class="week-day-hrs">${day.dayHrs ? day.dayHrs + ' hrs' : ''}</span>
+      </div>
+      ${day.dayEntries.length ? day.dayEntries.map(e => `
+        <div class="week-entry">
+          <div class="week-entry-row">
+            <span class="week-entry-name">${esc(jobLabelFor(e))}</span>
+            <span class="week-entry-hrs">${e.hours} hrs${e.per_diem ? ' · PD' : ''}</span>
+          </div>
+          ${e.description ? `<div class="week-entry-desc">${esc(e.description)}</div>` : ''}
+          ${helperRows.filter(h => h.daily_entry_id === e.id).map(h => {
+            const hp = helpers.find(x => x.id === h.helper_id);
+            return `<div class="week-entry-helper">&#8618; ${esc(hp ? hp.name : 'Helper')} — ${h.hours} hrs${h.per_diem ? ' · PD' : ''}</div>`;
+          }).join('')}
+        </div>
+      `).join('') : '<div class="week-day-empty">No work logged</div>'}
+    </div>
+  `).join('') + `<div class="week-total-row"><span>Week total</span><span>${weekTotal} hrs</span></div>`;
+}
+
+weekToggleBtn.addEventListener('click', () => {
+  const opening = weekPanel.style.display === 'none';
+  weekPanel.style.display = opening ? 'block' : 'none';
+  weekToggleBtn.classList.toggle('open', opening);
+  if (opening && !weekPanelLoaded) {
+    weekPanelLoaded = true;
+    loadWeekPanel();
+  }
+});
+document.getElementById('prevWeekBtn2').addEventListener('click', () => {
+  weekPanelStart = addDays(weekPanelStart, -7);
+  loadWeekPanel();
+});
+document.getElementById('nextWeekBtn2').addEventListener('click', () => {
+  weekPanelStart = addDays(weekPanelStart, 7);
+  loadWeekPanel();
+});
+
 function uid() { return Math.random().toString(36).slice(2); }
 function esc(str) {
   const div = document.createElement('div');
@@ -300,6 +408,7 @@ async function handleSubmit() {
       });
     }
 
+    weekPanelLoaded = false;
     showSuccess();
   } catch (err) {
     console.error(err);

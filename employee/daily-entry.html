@@ -38,6 +38,19 @@
       <input type="date" id="dateInput" class="input de-date-input">
     </div>
 
+    <button type="button" class="week-toggle-btn" id="weekToggleBtn">
+      <span>This week's logs</span>
+      <span class="chev" id="weekChev">&#9662;</span>
+    </button>
+    <div class="week-panel" id="weekPanel" style="display:none;">
+      <div class="week-panel-nav">
+        <button type="button" class="week-nav-btn" id="prevWeekBtn2">&larr;</button>
+        <span class="week-panel-label" id="weekPanelLabel"></span>
+        <button type="button" class="week-nav-btn" id="nextWeekBtn2">&rarr;</button>
+      </div>
+      <div id="weekPanelBody"></div>
+    </div>
+
     <div id="entriesContainer"></div>
 
     <button class="add-job" id="addJobBtn">+ Add another job (split day)</button>

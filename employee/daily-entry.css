@@ -5,6 +5,27 @@
 .de-date-value { font-size: 15px; font-weight: 600; }
 .de-date-input { width: auto; padding: 8px 12px; font-size: 15px; font-weight: 600; }
 
+.week-toggle-btn { width: 100%; display: flex; align-items: center; justify-content: space-between; background: var(--steel-850); border: 1px solid var(--line); color: var(--text); border-radius: 12px; padding: 13px 16px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; margin-bottom: 4px; }
+.week-toggle-btn .chev { color: var(--dim); transition: transform .15s; }
+.week-toggle-btn.open .chev { transform: rotate(180deg); }
+.week-panel { background: var(--steel-850); border: 1px solid var(--line); border-top: none; border-radius: 0 0 12px 12px; padding: 14px 16px 16px; margin: -4px 0 14px; }
+.week-panel-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.week-nav-btn { width: 36px; height: 36px; border-radius: 9px; border: 1px solid var(--line); background: var(--steel-800); color: var(--text); cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+.week-panel-label { font-size: 13px; font-weight: 700; color: var(--dim); }
+.week-day { padding: 10px 0; border-top: 1px solid rgba(69,77,89,.5); }
+.week-day:first-child { border-top: none; }
+.week-day-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.week-day-date { font-size: 13px; font-weight: 800; }
+.week-day-hrs { font-size: 13px; font-weight: 700; color: var(--dim); }
+.week-day-empty { font-size: 12px; color: var(--dim2); font-style: italic; }
+.week-entry { padding: 4px 0; }
+.week-entry-row { display: flex; justify-content: space-between; font-size: 13px; }
+.week-entry-name { font-weight: 600; }
+.week-entry-hrs { color: var(--dim); font-weight: 600; white-space: nowrap; margin-left: 10px; }
+.week-entry-desc { font-size: 12px; color: var(--dim2); margin-top: 2px; }
+.week-entry-helper { font-size: 12px; color: var(--dim); padding: 2px 0 2px 8px; }
+.week-total-row { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--line); font-size: 14px; font-weight: 800; }
+
 .job-card { background: var(--steel-850); border: 1px solid var(--line); border-radius: 16px; padding: 16px 14px 14px; margin-bottom: 14px; }
 .job-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .job-idx { font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--molten); background: rgba(255,255,255,.08); padding: 4px 9px; border-radius: 6px; }
