@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log Today's Work | State of the Arc Welding</title>
+<meta name="robots" content="noindex">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dark-theme.css">
+<link rel="stylesheet" href="daily-entry.css">
+</head>
+<body>
+
+<header class="et-nav">
+  <div class="et-nav-left">
+    <img src="../assets/img/logo.jpeg" alt="Logo">
+    <span class="et-wordmark">State of the Arc</span>
+  </div>
+  <nav class="et-links" id="navLinks">
+    <a class="et-link on" href="daily-entry.html">Log Work</a>
+    <a class="et-link" href="dashboard.html">Office</a>
+    <span id="adminNavLinks" style="display:none;">
+      <a class="et-link" href="admin-setup.html">Setup</a>
+      <a class="et-link" href="approvals.html">Approvals</a>
+    </span>
+  </nav>
+  <div class="et-user">
+    <span id="userName">Loading...</span>
+    <span id="adminBadge" class="admin-pill" style="display:none;">Admin</span>
+    <button class="et-logout" id="logoutBtn">Log Out</button>
+  </div>
+</header>
+
+<div id="entryScreen">
+  <div class="de-wrap">
+    <div class="de-date-line">
+      <span class="de-date-label">Today</span>
+      <span class="de-date-value" id="dateValue"></span>
+    </div>
+
+    <div id="entriesContainer"></div>
+
+    <button class="add-job" id="addJobBtn">+ Add another job (split day)</button>
+
+    <div class="card safety-card">
+      <div class="safety-head">Safety gear check</div>
+      <p class="safety-note">Flag anything wrong and the office will see it right away.</p>
+
+      <div class="gear">
+        <div class="gear-top">4-gas monitor</div>
+        <div class="gear-opts" id="gasOpts">
+          <button class="gear-btn ok sel" data-val="">Good</button>
+          <button class="gear-btn warn" data-val="bump">Needs bump test</button>
+          <button class="gear-btn bad" data-val="replace">Out of date — replace</button>
+        </div>
+      </div>
+
+      <div class="gear">
+        <div class="gear-top">Fire extinguisher</div>
+        <div class="gear-opts" id="extOpts">
+          <button class="gear-btn ok sel" data-val="">Good</button>
+          <button class="gear-btn warn" data-val="inspect">Needs inspection</button>
+          <button class="gear-btn bad" data-val="replace">No good — replace</button>
+        </div>
+      </div>
+
+      <div class="gear">
+        <div class="gear-top">Helper PPE needed</div>
+        <div class="gear-opts">
+          <button class="ppe-btn" id="glovesBtn">Gloves</button>
+          <button class="ppe-btn" id="shieldsBtn">Face shields</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="submit-bar2">
+    <div class="total2">
+      <span class="total-num2" id="totalHours">0</span>
+      <span class="total-lbl2">total hrs today</span>
+    </div>
+    <button class="btn2 btn2-solid" id="submitBtn" disabled>Submit today's work</button>
+  </div>
+</div>
+
+<div id="successScreen" style="display:none;">
+  <div class="de-wrap success2">
+    <div class="success-ring2">&#10003;</div>
+    <h2 class="success-title2">Work submitted</h2>
+    <p class="success-sub2">Sent for approval. It's now on each job's weekly ticket.</p>
+    <div class="card" id="receiptBox"></div>
+    <div id="alertSentBox"></div>
+    <button class="btn2 btn2-line" id="logAnotherBtn" style="margin-top:24px;">Log another day</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-client.js"></script>
+<script src="daily-entry.js"></script>
+</body>
+</html>

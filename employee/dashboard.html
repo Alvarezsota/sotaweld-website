@@ -3,85 +3,54 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Employee Dashboard | State of the Arc Welding & Services</title>
+<title>Office | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../styles.css">
-<link rel="stylesheet" href="employee.css">
+<link rel="stylesheet" href="dark-theme.css">
+<link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
 
-<header class="dash-header">
-  <div class="brand">
+<header class="et-nav">
+  <div class="et-nav-left">
     <img src="../assets/img/logo.jpeg" alt="Logo">
-    State of the Arc Welding
+    <span class="et-wordmark">State of the Arc</span>
   </div>
-  <div class="user-info">
+  <nav class="et-links" id="navLinks">
+    <a class="et-link" href="daily-entry.html">Log Work</a>
+    <a class="et-link on" href="dashboard.html">Office</a>
+    <span id="adminNavLinks" style="display:none;">
+      <a class="et-link" href="admin-setup.html">Setup</a>
+      <a class="et-link" href="approvals.html">Approvals</a>
+    </span>
+  </nav>
+  <div class="et-user">
     <span id="userName">Loading...</span>
-    <span id="adminBadge" class="admin-badge" style="display:none;">Admin</span>
-    <a class="btn btn-navy" id="logoutBtn" href="#" style="padding:8px 18px;">Log Out</a>
+    <span id="adminBadge" class="admin-pill" style="display:none;">Admin</span>
+    <button class="et-logout" id="logoutBtn">Log Out</button>
   </div>
 </header>
 
-<main class="dash-main">
+<main class="wrap db-main">
 
-  <div class="dash-card" id="quoteRequestsCard" style="display:none;">
-    <h2>Quote Requests <span class="admin-badge" style="font-size:0.65rem;">Admin</span></h2>
-    <ul class="entry-list" id="quoteRequestsList">
-      <li class="empty-state">Loading...</li>
+  <div class="card" id="quoteRequestsCard" style="display:none;">
+    <h2 class="card-h">Quote Requests <span class="admin-pill">Admin</span></h2>
+    <ul class="entry-list2" id="quoteRequestsList">
+      <li class="empty-state2">Loading...</li>
     </ul>
   </div>
 
-  <div class="dash-card">
-    <h2>Time Clock</h2>
-    <div class="clock-status">
-      <div class="status-text"><span class="status-dot" id="statusDot"></span><span id="statusText">Checking status...</span></div>
-      <button class="btn btn-red" id="clockBtn" disabled>...</button>
-    </div>
-  </div>
-
-  <div class="dash-card">
-    <h2>Log a Job</h2>
-    <form id="jobForm">
-      <div class="form-row">
-        <label for="jobName">Job / Site Name</label>
-        <input type="text" id="jobName" required placeholder="e.g. Rocking Double S - P66 FL-Line repair">
-      </div>
-      <div class="form-row">
-        <label for="jobDesc">What did you do?</label>
-        <textarea id="jobDesc" placeholder="Brief description of the work completed"></textarea>
-      </div>
-      <div class="form-row">
-        <label for="jobPhoto">Photo (optional)</label>
-        <input type="file" id="jobPhoto" accept="image/*" capture="environment">
-      </div>
-      <button type="submit" class="btn btn-navy" id="jobSubmitBtn">Submit Entry</button>
-      <p class="error-msg" id="jobError"></p>
-    </form>
-  </div>
-
-  <div class="dash-card">
-    <h2>My Recent Entries</h2>
-    <ul class="entry-list" id="jobList">
-      <li class="empty-state">Loading...</li>
-    </ul>
-  </div>
-
-  <div class="dash-card">
-    <h2>Announcements <span id="postAnnouncementWrap" style="display:none;"><button class="btn btn-red" id="newAnnouncementBtn" style="padding:8px 16px; font-size:0.75rem;">+ New</button></span></h2>
+  <div class="card">
+    <h2 class="card-h">Announcements <span id="postAnnouncementWrap" style="display:none;"><button class="btn2 btn2-solid small" id="newAnnouncementBtn">+ New</button></span></h2>
     <form id="announcementForm" style="display:none; margin-bottom:20px;">
-      <div class="form-row">
-        <label for="annTitle">Title</label>
-        <input type="text" id="annTitle" required>
-      </div>
-      <div class="form-row">
-        <label for="annBody">Message</label>
-        <textarea id="annBody" required></textarea>
-      </div>
-      <button type="submit" class="btn btn-navy">Post</button>
+      <label class="field-label">Title</label>
+      <input class="input" type="text" id="annTitle" required>
+      <label class="field-label">Message</label>
+      <textarea class="input" id="annBody" required></textarea>
+      <button type="submit" class="btn2 btn2-line" style="margin-top:14px;">Post</button>
     </form>
     <div id="announcementList">
-      <p class="empty-state">Loading...</p>
+      <p class="empty-state2">Loading...</p>
     </div>
   </div>
 

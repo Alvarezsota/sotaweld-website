@@ -1,0 +1,233 @@
+let currentUser = null;
+let jobsList = [];
+let weldersList = [];
+let helpersList = [];
+
+function esc(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
+function num(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+
+async function requireAuth() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) {
+    window.location.href = 'login.html';
+    return null;
+  }
+  return session.user;
+}
+
+// ---------- Jobs ----------
+function renderJobs() {
+  const table = document.getElementById('jobsTable');
+  table.innerHTML = jobsList.map(j => `
+    <div class="jt-row${j.active ? '' : ' off'}" data-job-id="${j.id}">
+      <input class="cell-in strong job-name" value="${escAttr(j.name)}" placeholder="Job name">
+      <input class="cell-in job-operator" value="${escAttr(j.operator || '')}" placeholder="Operator">
+      <input class="cell-in job-bill" value="${escAttr(j.bill_to || '')}" placeholder="Set bill-to…">
+      <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num job-pd" value="${escAttr(j.per_diem)}"></div>
+      <div class="c"><button type="button" class="toggle2${j.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>
+      <button type="button" class="row-x" data-action="delete-job">&times;</button>
+    </div>
+  `).join('');
+}
+
+async function loadJobs() {
+  const { data } = await sb.from('jobs').select('*').order('name');
+  jobsList = data || [];
+  renderJobs();
+}
+
+document.getElementById('jobsTable').addEventListener('blur', async (e) => {
+  const row = e.target.closest('[data-job-id]');
+  if (!row) return;
+  const id = row.dataset.jobId;
+  const job = jobsList.find(j => j.id === id);
+  if (!job) return;
+
+  let patch = null;
+  if (e.target.classList.contains('job-name')) patch = { name: e.target.value.trim() };
+  else if (e.target.classList.contains('job-operator')) patch = { operator: e.target.value.trim() };
+  else if (e.target.classList.contains('job-bill')) patch = { bill_to: e.target.value.trim() };
+  else if (e.target.classList.contains('job-pd')) patch = { per_diem: num(e.target.value) };
+  if (!patch) return;
+
+  Object.assign(job, patch);
+  await sb.from('jobs').update(patch).eq('id', id);
+}, true);
+
+document.getElementById('jobsTable').addEventListener('click', async (e) => {
+  const row = e.target.closest('[data-job-id]');
+  if (!row) return;
+  const id = row.dataset.jobId;
+  const job = jobsList.find(j => j.id === id);
+  if (!job) return;
+
+  if (e.target.closest('[data-action="toggle-active"]')) {
+    job.active = !job.active;
+    renderJobs();
+    await sb.from('jobs').update({ active: job.active }).eq('id', id);
+    return;
+  }
+  if (e.target.closest('[data-action="delete-job"]')) {
+    if (!confirm(`Delete "${job.name}"? This can't be undone.`)) return;
+    await sb.from('jobs').delete().eq('id', id);
+    jobsList = jobsList.filter(j => j.id !== id);
+    renderJobs();
+  }
+});
+
+document.getElementById('addJobBtn').addEventListener('click', async () => {
+  const { data, error } = await sb.from('jobs').insert({ name: 'New Job', per_diem: 100 }).select().single();
+  if (error) { console.error(error); return; }
+  jobsList.push(data);
+  renderJobs();
+});
+
+// ---------- Welders (profiles) ----------
+function renderWelders() {
+  const table = document.getElementById('weldersTable');
+  document.getElementById('welderCount').textContent = weldersList.length;
+  table.innerHTML = weldersList.map(p => `
+    <div class="p-row" data-profile-id="${p.id}">
+      <div>
+        <input class="cell-in strong welder-name" value="${escAttr(p.full_name)}" placeholder="Name">
+      </div>
+      <div class="c rate"><span class="rd">$</span><input class="cell-in num welder-pay" value="${escAttr(p.pay_rate)}"></div>
+      <div class="c rate"><span class="rd">$</span><input class="cell-in num welder-bill" value="${escAttr(p.bill_rate)}"></div>
+      <span class="c margin-cell">$${(num(p.bill_rate) - num(p.pay_rate)).toFixed(0)}</span>
+      <span class="c">${p.role === 'admin' ? '<span class="admin-tag">Admin</span>' : ''}</span>
+    </div>
+  `).join('');
+}
+
+async function loadWelders() {
+  const { data } = await sb.from('profiles').select('*').order('full_name');
+  weldersList = data || [];
+  renderWelders();
+}
+
+document.getElementById('weldersTable').addEventListener('blur', async (e) => {
+  const row = e.target.closest('[data-profile-id]');
+  if (!row) return;
+  const id = row.dataset.profileId;
+  const p = weldersList.find(x => x.id === id);
+  if (!p) return;
+
+  let patch = null;
+  if (e.target.classList.contains('welder-name')) patch = { full_name: e.target.value.trim() };
+  else if (e.target.classList.contains('welder-pay')) patch = { pay_rate: num(e.target.value) };
+  else if (e.target.classList.contains('welder-bill')) patch = { bill_rate: num(e.target.value) };
+  if (!patch) return;
+
+  Object.assign(p, patch);
+  renderWelders();
+  await sb.from('profiles').update(patch).eq('id', id);
+}, true);
+
+// ---------- Helpers ----------
+function renderHelpers() {
+  const table = document.getElementById('helpersTable');
+  document.getElementById('helperCount').textContent = helpersList.length;
+  table.innerHTML = helpersList.map(h => `
+    <div class="p-row helpers-row-grid${h.active ? '' : ' off'}" data-helper-id="${h.id}">
+      <input class="cell-in strong helper-name" value="${escAttr(h.name)}" placeholder="Name">
+      <div class="c rate"><span class="rd">$</span><input class="cell-in num helper-pay" value="${escAttr(h.pay_rate)}"></div>
+      <div class="c rate"><span class="rd">$</span><input class="cell-in num helper-bill" value="${escAttr(h.bill_rate)}"></div>
+      <span class="c margin-cell">$${(num(h.bill_rate) - num(h.pay_rate)).toFixed(0)}</span>
+      <div class="c"><button type="button" class="toggle2${h.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>
+      <button type="button" class="row-x" data-action="delete-helper">&times;</button>
+    </div>
+  `).join('');
+}
+
+async function loadHelpers() {
+  const { data } = await sb.from('helpers').select('*').order('name');
+  helpersList = data || [];
+  renderHelpers();
+}
+
+document.getElementById('helpersTable').addEventListener('blur', async (e) => {
+  const row = e.target.closest('[data-helper-id]');
+  if (!row) return;
+  const id = row.dataset.helperId;
+  const h = helpersList.find(x => x.id === id);
+  if (!h) return;
+
+  let patch = null;
+  if (e.target.classList.contains('helper-name')) patch = { name: e.target.value.trim() };
+  else if (e.target.classList.contains('helper-pay')) patch = { pay_rate: num(e.target.value) };
+  else if (e.target.classList.contains('helper-bill')) patch = { bill_rate: num(e.target.value) };
+  if (!patch) return;
+
+  Object.assign(h, patch);
+  await sb.from('helpers').update(patch).eq('id', id);
+}, true);
+
+document.getElementById('helpersTable').addEventListener('click', async (e) => {
+  const row = e.target.closest('[data-helper-id]');
+  if (!row) return;
+  const id = row.dataset.helperId;
+  const h = helpersList.find(x => x.id === id);
+  if (!h) return;
+
+  if (e.target.closest('[data-action="toggle-active"]')) {
+    h.active = !h.active;
+    renderHelpers();
+    await sb.from('helpers').update({ active: h.active }).eq('id', id);
+    return;
+  }
+  if (e.target.closest('[data-action="delete-helper"]')) {
+    if (!confirm(`Delete "${h.name}"? This can't be undone.`)) return;
+    await sb.from('helpers').delete().eq('id', id);
+    helpersList = helpersList.filter(x => x.id !== id);
+    renderHelpers();
+  }
+});
+
+document.getElementById('addHelperBtn').addEventListener('click', async () => {
+  const { data, error } = await sb.from('helpers').insert({ name: 'New Helper', pay_rate: 18, bill_rate: 25 }).select().single();
+  if (error) { console.error(error); return; }
+  helpersList.push(data);
+  renderHelpers();
+});
+
+// ---------- Tabs ----------
+document.getElementById('tabJobsBtn').addEventListener('click', () => {
+  document.getElementById('tabJobsBtn').classList.add('on');
+  document.getElementById('tabPeopleBtn').classList.remove('on');
+  document.getElementById('jobsPanel').style.display = 'block';
+  document.getElementById('peoplePanel').style.display = 'none';
+});
+document.getElementById('tabPeopleBtn').addEventListener('click', () => {
+  document.getElementById('tabPeopleBtn').classList.add('on');
+  document.getElementById('tabJobsBtn').classList.remove('on');
+  document.getElementById('peoplePanel').style.display = 'block';
+  document.getElementById('jobsPanel').style.display = 'none';
+});
+
+(async function init() {
+  currentUser = await requireAuth();
+  if (!currentUser) return;
+
+  const { data: profile } = await sb.from('profiles').select('*').eq('id', currentUser.id).single();
+
+  if (!profile || profile.role !== 'admin') {
+    document.getElementById('notAdminMsg').style.display = 'block';
+    document.getElementById('userName').textContent = profile ? profile.full_name : currentUser.email;
+    return;
+  }
+
+  document.getElementById('userName').textContent = profile.full_name;
+  document.getElementById('adminContent').style.display = 'block';
+
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    window.location.href = 'login.html';
+  });
+
+  await Promise.all([loadJobs(), loadWelders(), loadHelpers()]);
+})();

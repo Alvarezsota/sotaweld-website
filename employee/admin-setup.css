@@ -1,0 +1,55 @@
+.as-body { padding: 24px 22px 60px; }
+
+.tabs2 { display: inline-flex; gap: 6px; background: var(--steel-850); border: 1px solid var(--line); border-radius: 12px; padding: 5px; margin-bottom: 20px; }
+.tab2 { border: none; background: none; color: var(--dim); font-size: 14px; font-weight: 700; padding: 9px 15px; border-radius: 8px; cursor: pointer; font-family: inherit; }
+.tab2.on { background: var(--steel-700); color: var(--text); }
+
+.section-note2 { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; background: var(--steel-850); border: 1px solid var(--line); border-radius: 12px; padding: 13px 16px; margin-bottom: 16px; }
+.section-note2 span { font-size: 13px; color: var(--dim); font-weight: 500; line-height: 1.5; }
+.btn2.small { font-size: 13px; padding: 8px 14px; white-space: nowrap; }
+
+.jt-head, .jt-row { display: grid; grid-template-columns: 2.4fr 1.3fr 1.6fr .9fr .7fr 36px; align-items: center; gap: 8px; }
+.jt-head { padding: 6px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); font-weight: 700; }
+.jt-head .c { text-align: center; }
+.jt-row { background: var(--steel-850); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; margin-bottom: 7px; }
+.jt-row.off { opacity: .5; }
+.cell-in { width: 100%; background: transparent; border: 1px solid transparent; color: var(--text); border-radius: 7px; padding: 8px 9px; font-size: 14px; font-family: inherit; }
+.cell-in:hover { border-color: var(--steel-600); }
+.cell-in:focus { outline: none; border-color: var(--molten); background: var(--steel-800); }
+.cell-in.strong { font-weight: 700; }
+.cell-in.num { text-align: center; width: 56px; padding: 8px 4px; }
+.c { display: flex; align-items: center; justify-content: center; }
+.pd-cell { gap: 2px; }
+.pd-dollar { color: var(--dim); font-size: 13px; }
+
+.toggle2 { width: 42px; height: 24px; border-radius: 99px; border: none; background: var(--steel-600); cursor: pointer; position: relative; }
+.toggle2 .tk2 { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #c7cfd9; transition: left .15s, background .15s; }
+.toggle2.ton { background: rgba(87,201,140,.4); }
+.toggle2.ton .tk2 { left: 21px; background: var(--ok); }
+.row-x { border: none; background: none; color: var(--dim2); cursor: pointer; display: flex; justify-content: center; padding: 6px; border-radius: 6px; font-size: 16px; }
+.row-x:hover { color: var(--danger); }
+
+.people-group { margin-bottom: 26px; }
+.pg-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.pg-title { display: flex; align-items: center; gap: 9px; font-size: 17px; font-weight: 800; }
+.pg-count { font-size: 12px; font-weight: 700; color: var(--dim); background: var(--steel-700); padding: 2px 9px; border-radius: 99px; }
+.pg-note { font-size: 12px; color: var(--dim2); margin: 6px 0 12px; }
+.pg-note a { color: var(--arc); }
+
+.p-head, .p-row { display: grid; grid-template-columns: 2.2fr 1fr 1fr 1fr .8fr; align-items: center; gap: 8px; }
+.helpers-row-grid { grid-template-columns: 2.2fr 1fr 1fr 1fr .8fr 20px; }
+.p-head { padding: 6px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); font-weight: 700; }
+.p-row { background: var(--steel-850); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: 7px; }
+.rate { gap: 0; }
+.rd { color: var(--dim); font-size: 13px; }
+.margin-cell { font-weight: 800; color: var(--molten-2); }
+.admin-tag { font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--arc); background: rgba(255,255,255,.12); padding: 3px 7px; border-radius: 5px; }
+
+@media (max-width: 640px) {
+  .jt-head span:nth-child(3), .jt-row > *:nth-child(3),
+  .jt-head span:nth-child(4), .jt-row .pd-cell { display: none; }
+  .jt-head, .jt-row { grid-template-columns: 2fr 1.2fr .7fr 36px; }
+  .p-head span:nth-child(2), .p-row > *:nth-child(2) { display: none; }
+  .p-head, .p-row { grid-template-columns: 1.8fr 1fr 1fr .8fr; }
+  .helpers-row-grid { grid-template-columns: 1.8fr 1fr 1fr .8fr 20px !important; }
+}

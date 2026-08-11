@@ -1,0 +1,9 @@
+.db-main { padding: 24px 16px 60px; display: flex; flex-direction: column; gap: 20px; }
+.card-h { font-size: 17px; font-weight: 800; display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.entry-list2 { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.entry-list2 li { border-bottom: 1px solid var(--line); padding-bottom: 10px; font-size: 14px; }
+.entry-meta2 { color: var(--dim2); font-size: 12px; margin: 3px 0; }
+.announcement-item2 { border-left: 3px solid var(--molten); padding: 10px 16px; margin-bottom: 14px; background: var(--steel-800); border-radius: 0 10px 10px 0; }
+.announcement-item2 h3 { font-size: 15px; margin: 0 0 4px; }
+.announcement-item2 p { margin: 0; font-size: 14px; color: var(--dim); }
+.announcement-item2 .date2 { font-size: 11px; color: var(--dim2); margin-top: 6px; }

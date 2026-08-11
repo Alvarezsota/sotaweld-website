@@ -42,13 +42,13 @@
         return;
       }
 
-      window.location.href = 'dashboard.html';
+      window.location.href = 'daily-entry.html';
     });
     return;
   }
 
   if (session) {
-    window.location.href = 'dashboard.html';
+    window.location.href = 'daily-entry.html';
     return;
   }
 
@@ -73,6 +73,6 @@
       return;
     }
 
-    window.location.href = 'dashboard.html';
+    window.location.href = 'daily-entry.html';
   });
 })();
