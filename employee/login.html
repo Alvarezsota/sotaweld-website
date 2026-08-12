@@ -2,39 +2,40 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Employee Login | State of the Arc Welding & Services</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../styles.css">
-<link rel="stylesheet" href="employee.css">
+<link rel="stylesheet" href="dark-theme.css">
+<link rel="stylesheet" href="login.css">
 </head>
 <body class="employee-body">
+<div class="login-bg" aria-hidden="true"></div>
 <div class="login-wrap">
-  <div class="login-card">
+  <div class="login-card card">
     <img src="../assets/img/logo.jpeg" alt="State of the Arc Welding logo" class="login-logo">
     <h1>Employee Login</h1>
     <p class="login-sub">State of the Arc Welding &amp; Services</p>
     <form id="loginForm">
-      <label>Email
-        <input type="email" id="email" required autocomplete="username">
+      <label class="field-label">Email
+        <input type="email" class="input" id="email" required autocomplete="username">
       </label>
-      <label>Password
-        <input type="password" id="password" required autocomplete="current-password">
+      <label class="field-label">Password
+        <input type="password" class="input" id="password" required autocomplete="current-password">
       </label>
-      <button type="submit" class="btn btn-red" id="loginBtn">Log In</button>
-      <p class="error-msg" id="errorMsg"></p>
+      <button type="submit" class="btn2 btn2-solid" id="loginBtn">Log In</button>
+      <p class="error-msg2" id="errorMsg"></p>
     </form>
     <form id="setPasswordForm" style="display:none;">
       <p class="login-sub" style="margin-bottom:16px;">Welcome! Set a password for your account.</p>
-      <label>New Password
-        <input type="password" id="newPassword" required autocomplete="new-password" minlength="6">
+      <label class="field-label">New Password
+        <input type="password" class="input" id="newPassword" required autocomplete="new-password" minlength="6">
       </label>
-      <label>Confirm Password
-        <input type="password" id="confirmPassword" required autocomplete="new-password" minlength="6">
+      <label class="field-label">Confirm Password
+        <input type="password" class="input" id="confirmPassword" required autocomplete="new-password" minlength="6">
       </label>
-      <button type="submit" class="btn btn-red" id="setPasswordBtn">Set Password & Continue</button>
-      <p class="error-msg" id="setPasswordError"></p>
+      <button type="submit" class="btn2 btn2-solid" id="setPasswordBtn">Set Password &amp; Continue</button>
+      <p class="error-msg2" id="setPasswordError"></p>
     </form>
     <a href="../index.html" class="back-link">&larr; Back to website</a>
   </div>
