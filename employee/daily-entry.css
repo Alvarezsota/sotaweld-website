@@ -38,8 +38,17 @@
 .oneoff.yard .field-label { color: var(--arc); }
 .oneoff.flat { background: rgba(87,201,140,.08); border-color: rgba(87,201,140,.35); }
 .oneoff.flat .field-label { color: var(--ok); }
-.flat-row { display: flex; gap: 10px; margin-top: 4px; }
-.flat-field { flex: 1; }
+.parts-list { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.part-row { background: var(--steel-800); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.part-name-input { margin-bottom: 8px; }
+.part-nums { display: flex; align-items: center; gap: 7px; }
+.part-qty-input { width: 56px; flex: 0 0 auto; text-align: center; padding: 10px 4px; }
+.part-rate-input { width: 76px; flex: 0 0 auto; text-align: center; padding: 10px 4px; }
+.part-x, .part-eq { color: var(--dim2); font-weight: 700; font-size: 13px; flex: 0 0 auto; }
+.part-line-total { flex: 1; text-align: right; font-weight: 800; color: var(--ok); font-size: 14px; }
+.remove-part { width: 32px; height: 32px; flex: 0 0 auto; border-radius: 8px; background: var(--steel-700); border: 1px solid var(--line); color: var(--danger); font-size: 16px; cursor: pointer; }
+.add-part { width: 100%; margin-top: 10px; padding: 11px; border-radius: 10px; background: none; border: 1px dashed rgba(87,201,140,.45); color: var(--ok); font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.parts-total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(87,201,140,.25); font-size: 14px; font-weight: 800; color: var(--ok); }
 .field-label-sm { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--dim2); margin-bottom: 5px; }
 
 .you-row { display: flex; gap: 10px; align-items: stretch; margin-top: 12px; }

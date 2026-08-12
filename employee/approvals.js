@@ -37,17 +37,18 @@ async function requireAuth() {
   return session.user;
 }
 
-function personLine(role, name, hours, payRate, billRate, perDiemAmt, perDiem, entryId, helperRowId, description, realJobId, realOneOffName, helperId, perDiemFlag, flatAmount, flatQuantity) {
+function personLine(role, name, hours, payRate, billRate, perDiemAmt, perDiem, entryId, helperRowId, description, realJobId, realOneOffName, helperId, perDiemFlag, parts) {
   const pd = perDiem ? perDiemAmt : 0;
-  const isFlat = flatAmount != null;
-  const revenue = (isFlat ? Number(flatAmount) : hours * billRate) + pd;
+  const isFlat = Array.isArray(parts);
+  const partsSum = isFlat ? parts.reduce((s, p) => s + Number(p.quantity) * Number(p.rate), 0) : 0;
+  const revenue = (isFlat ? partsSum : hours * billRate) + pd;
   const cost = hours * payRate + pd;
   return {
     role, name, hours, billRate, pd: perDiem ? pd : null, revenue, cost, margin: revenue - cost,
     entryId, helperRowId, description: description || '',
     realJobId: realJobId || null, realOneOffName: realOneOffName || '',
     helperId: helperId || null, perDiemFlag: !!perDiemFlag,
-    flatAmount: isFlat ? Number(flatAmount) : null, flatQuantity: flatQuantity != null ? Number(flatQuantity) : null
+    parts: isFlat ? parts : null
   };
 }
 
@@ -76,7 +77,8 @@ function buildJobGroups(entries, jobs) {
 
     const prof = e.profiles || {};
     const perDiemAmt = effectiveJob ? Number(effectiveJob.per_diem) : 0;
-    d.lines.push(personLine('welder', prof.full_name || '—', Number(e.hours), Number(prof.pay_rate || 0), Number(prof.bill_rate || 0), perDiemAmt, e.per_diem, e.id, null, e.description, e.job_id, e.one_off_name, null, e.per_diem, e.flat_amount, e.flat_quantity));
+    const isFlatJob = effectiveJob && effectiveJob.billing_type === 'flat';
+    d.lines.push(personLine('welder', prof.full_name || '—', Number(e.hours), Number(prof.pay_rate || 0), Number(prof.bill_rate || 0), perDiemAmt, e.per_diem, e.id, null, e.description, e.job_id, e.one_off_name, null, e.per_diem, isFlatJob ? (e.daily_entry_parts || []) : undefined));
     if (e.description) d.descs.push(e.description);
 
     (e.daily_entry_helpers || []).forEach(dh => {
@@ -100,7 +102,7 @@ async function loadWeek() {
 
   const [{ data: entries }, { data: jobs }, { data: jw }, { data: hlprs }] = await Promise.all([
     sb.from('daily_entries')
-      .select('*, profiles(full_name, pay_rate, bill_rate), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate))')
+      .select('*, profiles(full_name, pay_rate, bill_rate), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate)), daily_entry_parts(*)')
       .gte('entry_date', start).lte('entry_date', end),
     sb.from('jobs').select('*'),
     sb.from('job_weeks').select('*').eq('week_start', start),
@@ -206,9 +208,9 @@ function renderDetail(groupId) {
             <tbody>
               ${d.lines.map((l, li) => `
                 <tr data-entry-id="${esc(l.entryId)}" data-helper-row-id="${l.helperRowId ? esc(l.helperRowId) : ''}" data-line-key="${dateStr}-${li}">
-                  <td class="l-name">${esc(l.name)}<span class="role-tag2">${l.role}</span>${l.role === 'welder' && l.description ? `<div class="line-desc">${esc(l.description)}</div>` : ''}${l.flatAmount != null ? `<div class="line-desc flat-tag">Flat rate${l.flatQuantity ? ' · qty ' + esc(String(l.flatQuantity)) : ''}</div>` : ''}</td>
+                  <td class="l-name">${esc(l.name)}<span class="role-tag2">${l.role}</span>${l.role === 'welder' && l.description ? `<div class="line-desc">${esc(l.description)}</div>` : ''}${l.parts ? `<div class="line-desc flat-tag">Flat rate</div>${l.parts.map(p => `<div class="line-desc part-line-desc">${esc(p.description)} — ${p.quantity} &times; $${p.rate} = ${money(Number(p.quantity) * Number(p.rate))}</div>`).join('')}` : ''}</td>
                   <td class="l-num line-hours">${l.hours}</td>
-                  <td class="l-num dim">${l.flatAmount != null ? '—' : '$' + l.billRate}</td>
+                  <td class="l-num dim">${l.parts ? '—' : '$' + l.billRate}</td>
                   <td class="l-num dim">${l.pd ? money(l.pd) : '—'}</td>
                   <td class="l-num">${money(l.revenue)}</td>
                   <td class="l-num pos">${money(l.margin)}</td>
@@ -321,6 +323,24 @@ function startEditLine(row, line, groupId) {
   const isOther = !line.realJobId;
   const isFlatJob = (jobId) => { const j = jobsById[jobId]; return !!(j && j.billing_type === 'flat'); };
   const startsFlat = isFlatJob(line.realJobId);
+  let editParts = (line.parts || []).map(p => ({ id: p.id, description: p.description, quantity: p.quantity, rate: p.rate }));
+  if (!editParts.length) editParts.push({ id: null, description: '', quantity: 1, rate: '' });
+
+  function editPartsHtml() {
+    return `
+      <div class="edit-parts-list">
+        ${editParts.map((p, pi) => `
+          <div class="edit-part-row" data-part-idx="${pi}">
+            <input type="text" class="input edit-part-desc" placeholder="Part" value="${escAttr(p.description)}">
+            <input type="number" step="1" min="0" class="input edit-part-qty" placeholder="Qty" value="${escAttr(p.quantity)}">
+            <span class="part-x">&times;</span>
+            <input type="number" step="0.01" min="0" class="input edit-part-rate" placeholder="Rate $" value="${escAttr(p.rate)}">
+            <button type="button" class="remove-part" data-action="remove-edit-part">&times;</button>
+          </div>
+        `).join('')}
+      </div>
+      <button type="button" class="add-part" data-action="add-edit-part">+ Add part</button>`;
+  }
 
   row.innerHTML = `
     <td colspan="7">
@@ -347,13 +367,9 @@ function startEditLine(row, line, groupId) {
         <div class="edit-field edit-field-sm edit-field-pd">
           <label><input type="checkbox" class="edit-pd-input" ${line.perDiemFlag ? 'checked' : ''}> Per diem</label>
         </div>
-        <div class="edit-field edit-field-sm edit-flat-wrap" style="display:${startsFlat ? 'flex' : 'none'};">
-          <label>Qty (optional)</label>
-          <input type="number" step="1" min="0" class="input edit-flat-qty-input" value="${line.flatQuantity != null ? line.flatQuantity : ''}">
-        </div>
-        <div class="edit-field edit-field-sm edit-flat-wrap" style="display:${startsFlat ? 'flex' : 'none'};">
-          <label>Flat amount ($)</label>
-          <input type="number" step="1" min="0" class="input edit-flat-amount-input" value="${line.flatAmount != null ? line.flatAmount : ''}">
+        <div class="edit-field edit-flat-wrap" style="display:${startsFlat ? 'block' : 'none'};">
+          <label>Parts billed (qty &times; rate)</label>
+          <div class="edit-parts-wrap">${editPartsHtml()}</div>
         </div>
         <div class="edit-field-actions">
           <button type="button" class="row-edit" data-action="save-line">Save</button>
@@ -364,15 +380,43 @@ function startEditLine(row, line, groupId) {
 
   const jobSelect = row.querySelector('.edit-job-select');
   const oneOffWrap = row.querySelector('.edit-oneoff-wrap');
-  const flatWraps = row.querySelectorAll('.edit-flat-wrap');
+  const flatWrap = row.querySelector('.edit-flat-wrap');
+  const partsWrap = row.querySelector('.edit-parts-wrap');
+
+  function readPartsFromDom() {
+    row.querySelectorAll('.edit-part-row').forEach((el, pi) => {
+      editParts[pi].description = el.querySelector('.edit-part-desc').value;
+      editParts[pi].quantity = el.querySelector('.edit-part-qty').value;
+      editParts[pi].rate = el.querySelector('.edit-part-rate').value;
+    });
+  }
+  function rebindParts() {
+    partsWrap.innerHTML = editPartsHtml();
+    partsWrap.querySelector('[data-action="add-edit-part"]').addEventListener('click', () => {
+      readPartsFromDom();
+      editParts.push({ id: null, description: '', quantity: 1, rate: '' });
+      rebindParts();
+    });
+    partsWrap.querySelectorAll('[data-action="remove-edit-part"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        readPartsFromDom();
+        const idx = Number(btn.closest('[data-part-idx]').dataset.partIdx);
+        editParts.splice(idx, 1);
+        if (!editParts.length) editParts.push({ id: null, description: '', quantity: 1, rate: '' });
+        rebindParts();
+      });
+    });
+  }
+  rebindParts();
+
   jobSelect.addEventListener('change', () => {
     oneOffWrap.style.display = jobSelect.value === 'other' ? 'block' : 'none';
-    const flatNow = isFlatJob(jobSelect.value);
-    flatWraps.forEach(w => w.style.display = flatNow ? 'flex' : 'none');
+    flatWrap.style.display = isFlatJob(jobSelect.value) ? 'block' : 'none';
   });
 
   row.querySelector('[data-action="cancel-line"]').addEventListener('click', () => renderDetail(groupId));
   row.querySelector('[data-action="save-line"]').addEventListener('click', async () => {
+    readPartsFromDom();
     const jobVal = jobSelect.value;
     const other = jobVal === 'other';
     const flatNow = isFlatJob(jobVal);
@@ -382,11 +426,19 @@ function startEditLine(row, line, groupId) {
       for_job_id: null,
       description: row.querySelector('.edit-desc-input').value.trim(),
       hours: Number(row.querySelector('.edit-hours-input').value),
-      per_diem: row.querySelector('.edit-pd-input').checked,
-      flat_amount: flatNow ? Number(row.querySelector('.edit-flat-amount-input').value || 0) : null,
-      flat_quantity: flatNow && row.querySelector('.edit-flat-qty-input').value !== '' ? Number(row.querySelector('.edit-flat-qty-input').value) : null
+      per_diem: row.querySelector('.edit-pd-input').checked
     };
     await sb.from('daily_entries').update(patch).eq('id', line.entryId);
+
+    if (flatNow) {
+      await sb.from('daily_entry_parts').delete().eq('daily_entry_id', line.entryId);
+      const validParts = editParts
+        .filter(p => p.description.trim() && Number(p.quantity) > 0 && Number(p.rate) > 0)
+        .map(p => ({ daily_entry_id: line.entryId, description: p.description.trim(), quantity: Number(p.quantity), rate: Number(p.rate) }));
+      if (validParts.length) await sb.from('daily_entry_parts').insert(validParts);
+    } else if (line.parts) {
+      await sb.from('daily_entry_parts').delete().eq('daily_entry_id', line.entryId);
+    }
     await loadWeek();
   });
 }

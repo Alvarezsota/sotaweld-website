@@ -71,11 +71,14 @@ async function loadWeekPanel() {
 
   const entries = rows || [];
   let helperRows = [];
+  let partRows = [];
   if (entries.length) {
-    const { data: hRows } = await sb.from('daily_entry_helpers')
-      .select('*')
-      .in('daily_entry_id', entries.map(e => e.id));
+    const [{ data: hRows }, { data: pRows }] = await Promise.all([
+      sb.from('daily_entry_helpers').select('*').in('daily_entry_id', entries.map(e => e.id)),
+      sb.from('daily_entry_parts').select('*').in('daily_entry_id', entries.map(e => e.id))
+    ]);
     helperRows = hRows || [];
+    partRows = pRows || [];
   }
 
   let weekTotal = 0;
@@ -98,10 +101,10 @@ async function loadWeekPanel() {
         <div class="week-entry">
           <div class="week-entry-row">
             <span class="week-entry-name">${esc(jobLabelFor(e))}</span>
-            <span class="week-entry-hrs">${e.hours} hrs${e.per_diem ? ' · PD' : ''}</span>
+            <span class="week-entry-hrs">${hoursTracked(e.job_id) ? e.hours + ' hrs' : ''}${e.per_diem ? ' · PD' : ''}</span>
           </div>
           ${e.description ? `<div class="week-entry-desc">${esc(e.description)}</div>` : ''}
-          ${e.flat_amount ? `<div class="week-entry-helper">&#8618; Billed${e.flat_quantity ? ' (' + esc(String(e.flat_quantity)) + ')' : ''} — $${Number(e.flat_amount).toLocaleString()}</div>` : ''}
+          ${partRows.filter(p => p.daily_entry_id === e.id).map(p => `<div class="week-entry-helper">&#8618; ${esc(p.description)} (${p.quantity} &times; $${p.rate}) — $${(Number(p.quantity) * Number(p.rate)).toLocaleString()}</div>`).join('')}
           ${helperRows.filter(h => h.daily_entry_id === e.id).map(h => {
             const hp = helpers.find(x => x.id === h.helper_id);
             return `<div class="week-entry-helper">&#8618; ${esc(hp ? hp.name : 'Helper')} — ${h.hours} hrs${h.per_diem ? ' · PD' : ''}</div>`;
@@ -139,11 +142,16 @@ function esc(str) {
 function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
 
 function newEntry() {
-  return { uid: uid(), jobId: '', oneOffName: '', forJobId: '', description: '', hours: 10, perDiem: true, helpers: [], flatAmount: '', flatQuantity: '' };
+  return { uid: uid(), jobId: '', oneOffName: '', forJobId: '', description: '', hours: 10, perDiem: true, helpers: [], parts: [newPart()] };
 }
 function newHelperRow() {
   return { uid: uid(), helperId: '', hours: 10, perDiem: true };
 }
+function newPart() {
+  return { uid: uid(), name: '', qty: 1, rate: '' };
+}
+function partTotal(p) { return Number(p.qty || 0) * Number(p.rate || 0); }
+function partsTotal(parts) { return parts.reduce((s, p) => s + partTotal(p), 0); }
 function isYard(jobId) {
   const j = jobs.find(x => x.id === jobId);
   return !!(j && j.is_yard);
@@ -151,6 +159,10 @@ function isYard(jobId) {
 function isFlat(jobId) {
   const j = jobs.find(x => x.id === jobId);
   return !!(j && j.billing_type === 'flat');
+}
+function hoursTracked(jobId) {
+  const j = jobs.find(x => x.id === jobId);
+  return !j || j.track_hours !== false;
 }
 function jobName(entry) {
   if (entry.jobId === 'other') return entry.oneOffName || 'One-off job';
@@ -172,6 +184,20 @@ function stepperHtml(label, value) {
 function pdToggleHtml(on) {
   return `<button type="button" class="pd-toggle${on ? ' pd-on' : ''}"><span class="pd-knob"></span><span class="pd-text">Per diem<br><b>${on ? 'ON' : 'OFF'}</b></span></button>`;
 }
+function partRowHtml(p) {
+  return `
+    <div class="part-row" data-part-uid="${p.uid}">
+      <input type="text" class="input part-name-input" placeholder="e.g. 4x4 leg bracket" value="${escAttr(p.name)}">
+      <div class="part-nums">
+        <input type="number" step="1" min="0" class="input part-qty-input" placeholder="Qty" value="${escAttr(p.qty)}">
+        <span class="part-x">&times;</span>
+        <input type="number" step="0.01" min="0" class="input part-rate-input" placeholder="Rate $" value="${escAttr(p.rate)}">
+        <span class="part-eq">=</span>
+        <span class="part-line-total" data-part-uid="${p.uid}">$${partTotal(p).toLocaleString()}</span>
+        <button type="button" class="remove-part" data-action="remove-part">&times;</button>
+      </div>
+    </div>`;
+}
 function helperBlockHtml(h) {
   return `
     <div class="helper-block" data-helper-uid="${h.uid}">
@@ -192,6 +218,7 @@ function entryCardHtml(entry, idx) {
   const other = entry.jobId === 'other';
   const yard = isYard(entry.jobId);
   const flat = isFlat(entry.jobId);
+  const hrsOn = hoursTracked(entry.jobId);
   return `
     <div class="job-card" data-entry-uid="${entry.uid}">
       <div class="job-card-top">
@@ -223,21 +250,19 @@ function entryCardHtml(entry, idx) {
       <textarea class="input descr-input" rows="2" placeholder="e.g. Cont. fab on compressor piping">${esc(entry.description)}</textarea>
       ${flat ? `
         <div class="oneoff flat">
-          <label class="field-label">Flat-rate billing for today</label>
-          <div class="flat-row">
-            <div class="flat-field">
-              <label class="field-label-sm">Quantity (optional)</label>
-              <input type="number" step="1" min="0" class="input flat-qty-input" placeholder="e.g. 3 racks" value="${escAttr(entry.flatQuantity)}">
-            </div>
-            <div class="flat-field">
-              <label class="field-label-sm">Amount ($)</label>
-              <input type="number" step="1" min="0" class="input flat-amount-input" placeholder="e.g. 1200" value="${escAttr(entry.flatAmount)}">
-            </div>
+          <label class="field-label">Parts billed today</label>
+          <span class="oneoff-note" style="margin:0 0 10px;">List each different part you built — quantity &times; rate gets billed to the customer.${hrsOn ? ' Your hours below are still tracked separately for your pay.' : ''}</span>
+          <div class="parts-list">
+            ${entry.parts.map(p => partRowHtml(p)).join('')}
           </div>
-          <span class="oneoff-note">This is what gets billed to the customer for today — separate from your hours below, which are still tracked for your pay.</span>
+          <button type="button" class="add-part" data-action="add-part">+ Add another part</button>
+          <div class="parts-total-row">
+            <span>Total billed today</span>
+            <span class="flat-total-value" data-entry-uid="${entry.uid}">$${partsTotal(entry.parts).toLocaleString()}</span>
+          </div>
         </div>` : ''}
       <div class="you-row">
-        ${stepperHtml('Your hours', entry.hours)}
+        ${hrsOn ? stepperHtml('Your hours', entry.hours) : ''}
         ${pdToggleHtml(entry.perDiem)}
       </div>
       ${entry.helpers.map(h => helperBlockHtml(h)).join('')}
@@ -259,7 +284,7 @@ function updateSubmitState() {
     if (!e.description.trim()) return false;
     if (e.jobId === 'other' && !e.oneOffName.trim()) return false;
     if (isYard(e.jobId) && !e.forJobId) return false;
-    if (isFlat(e.jobId) && !(Number(e.flatAmount) > 0)) return false;
+    if (isFlat(e.jobId) && !e.parts.some(p => p.name.trim() && Number(p.qty) > 0 && Number(p.rate) > 0)) return false;
     return true;
   });
   submitBtn.disabled = !canSubmit;
@@ -278,6 +303,19 @@ entriesContainer.addEventListener('click', (e) => {
   }
   if (e.target.closest('[data-action="add-helper"]')) {
     entry.helpers.push(newHelperRow());
+    render();
+    return;
+  }
+  if (e.target.closest('[data-action="add-part"]')) {
+    entry.parts.push(newPart());
+    render();
+    return;
+  }
+  const removePartBtn = e.target.closest('[data-action="remove-part"]');
+  if (removePartBtn) {
+    const partEl = e.target.closest('[data-part-uid]');
+    entry.parts = entry.parts.filter(x => x.uid !== partEl.dataset.partUid);
+    if (!entry.parts.length) entry.parts.push(newPart());
     render();
     return;
   }
@@ -320,6 +358,7 @@ entriesContainer.addEventListener('change', (e) => {
     entry.jobId = e.target.value;
     if (entry.jobId !== 'other') entry.oneOffName = '';
     if (!isYard(entry.jobId)) entry.forJobId = '';
+    if (!hoursTracked(entry.jobId)) entry.hours = 0;
     render();
     return;
   }
@@ -353,16 +392,36 @@ entriesContainer.addEventListener('input', (e) => {
     updateSubmitState();
     return;
   }
-  if (e.target.classList.contains('flat-qty-input')) {
-    entry.flatQuantity = e.target.value;
-    return;
-  }
-  if (e.target.classList.contains('flat-amount-input')) {
-    entry.flatAmount = e.target.value;
-    updateSubmitState();
-    return;
+  const partEl = e.target.closest('[data-part-uid]');
+  if (partEl) {
+    const p = entry.parts.find(x => x.uid === partEl.dataset.partUid);
+    if (!p) return;
+    if (e.target.classList.contains('part-name-input')) {
+      p.name = e.target.value;
+      return;
+    }
+    if (e.target.classList.contains('part-qty-input')) {
+      p.qty = e.target.value;
+      updatePartTotals(entry);
+      return;
+    }
+    if (e.target.classList.contains('part-rate-input')) {
+      p.rate = e.target.value;
+      updatePartTotals(entry);
+      return;
+    }
   }
 });
+
+function updatePartTotals(entry) {
+  entry.parts.forEach(p => {
+    const el = entriesContainer.querySelector(`.part-line-total[data-part-uid="${p.uid}"]`);
+    if (el) el.textContent = '$' + partTotal(p).toLocaleString();
+  });
+  const totalEl = entriesContainer.querySelector(`.flat-total-value[data-entry-uid="${entry.uid}"]`);
+  if (totalEl) totalEl.textContent = '$' + partsTotal(entry.parts).toLocaleString();
+  updateSubmitState();
+}
 
 addJobBtn.addEventListener('click', () => {
   entries.push(newEntry());
@@ -414,9 +473,7 @@ async function handleSubmit() {
         for_job_id: yard ? entry.forJobId : null,
         description: entry.description.trim(),
         hours: entry.hours,
-        per_diem: entry.perDiem,
-        flat_amount: flat ? Number(entry.flatAmount) : null,
-        flat_quantity: flat && entry.flatQuantity !== '' ? Number(entry.flatQuantity) : null
+        per_diem: entry.perDiem
       }).select().single();
 
       if (deError) throw deError;
@@ -428,6 +485,16 @@ async function handleSubmit() {
       if (helperRows.length) {
         const { error: heError } = await sb.from('daily_entry_helpers').insert(helperRows);
         if (heError) throw heError;
+      }
+
+      if (flat) {
+        const partRows = entry.parts
+          .filter(p => p.name.trim() && Number(p.qty) > 0 && Number(p.rate) > 0)
+          .map(p => ({ daily_entry_id: deData.id, description: p.name.trim(), quantity: Number(p.qty), rate: Number(p.rate) }));
+        if (partRows.length) {
+          const { error: partError } = await sb.from('daily_entry_parts').insert(partRows);
+          if (partError) throw partError;
+        }
       }
     }
 
@@ -468,9 +535,11 @@ function showSuccess() {
       <div class="receipt-job2">
         <div class="receipt-row2">
           <span class="rj-name2">${esc(jobName(e))}${isYard(e.jobId) && e.forJobId ? ' &rarr; ' + esc(jobs.find(j => j.id === e.forJobId)?.name || '') : ''}</span>
-          <span class="rj-hrs2">${e.hours} hrs${e.perDiem ? ' · PD' : ''}</span>
+          <span class="rj-hrs2">${hoursTracked(e.jobId) ? e.hours + ' hrs' : ''}${e.perDiem ? ' · PD' : ''}</span>
         </div>
-        ${isFlat(e.jobId) && e.flatAmount ? `<div class="receipt-row2 receipt-helper2"><span>&#8618; Billed${e.flatQuantity ? ' (' + esc(String(e.flatQuantity)) + ')' : ''}</span><span>$${Number(e.flatAmount).toLocaleString()}</span></div>` : ''}
+        ${isFlat(e.jobId) ? e.parts.filter(p => p.name.trim() && Number(p.qty) > 0 && Number(p.rate) > 0).map(p => `
+          <div class="receipt-row2 receipt-helper2"><span>&#8618; ${esc(p.name)} (${p.qty} &times; $${p.rate})</span><span>$${partTotal(p).toLocaleString()}</span></div>
+        `).join('') : ''}
         ${e.helpers.filter(h => h.helperId).map(h => {
           const hp = helpers.find(x => x.id === h.helperId);
           return `<div class="receipt-row2 receipt-helper2"><span>&#8618; ${esc(hp ? hp.name : '')}</span><span>${h.hours} hrs${h.perDiem ? ' · PD' : ''}</span></div>`;
