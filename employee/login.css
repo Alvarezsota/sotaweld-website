@@ -6,29 +6,28 @@
   inset: 0;
   z-index: 0;
   overflow: hidden;
-  background-color: #14161b;
-  background-image:
-    repeating-linear-gradient(60deg, rgba(255,255,255,.045) 0px, rgba(255,255,255,.045) 1px, transparent 1px, transparent 84px),
-    repeating-linear-gradient(-60deg, rgba(255,255,255,.045) 0px, rgba(255,255,255,.045) 1px, transparent 1px, transparent 84px),
-    repeating-linear-gradient(0deg, rgba(212,175,106,.16) 0px, rgba(212,175,106,.16) 1.5px, transparent 1.5px, transparent 84px),
-    linear-gradient(160deg, #1c2028 0%, #14161b 45%, #1a1d24 100%);
+  background-color: #15171c;
+  background-image: url("../assets/img/login-bg.svg");
+  background-size: cover;
+  background-position: center;
 }
 .login-bg::before,
 .login-bg::after {
   content: "";
   position: absolute;
   inset: -60%;
-  background: linear-gradient(115deg, transparent 35%, rgba(212,175,106,.18) 48%, rgba(255,232,180,.32) 50%, rgba(212,175,106,.18) 52%, transparent 65%);
+  background: linear-gradient(115deg, transparent 38%, rgba(212,175,106,.32) 48%, rgba(255,232,180,.55) 50%, rgba(212,175,106,.32) 52%, transparent 62%);
   background-size: 220% 220%;
-  animation: loginWave 11s ease-in-out infinite;
-  mix-blend-mode: screen;
+  animation: loginWave 12s ease-in-out infinite;
+  mix-blend-mode: soft-light;
 }
 .login-bg::after {
-  background: linear-gradient(70deg, transparent 40%, rgba(154,161,171,.14) 49%, rgba(255,255,255,.2) 50%, rgba(154,161,171,.14) 51%, transparent 60%);
+  background: linear-gradient(70deg, transparent 42%, rgba(230,235,242,.28) 49%, rgba(255,255,255,.42) 50%, rgba(230,235,242,.28) 51%, transparent 58%);
   background-size: 260% 260%;
   animation-name: loginWaveAlt;
-  animation-duration: 15s;
+  animation-duration: 17s;
   animation-direction: reverse;
+  mix-blend-mode: overlay;
 }
 
 @keyframes loginWave {
