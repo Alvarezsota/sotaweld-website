@@ -24,6 +24,15 @@
 .week-entry-hrs { color: var(--dim); font-weight: 600; white-space: nowrap; margin-left: 10px; }
 .week-entry-desc { font-size: 12px; color: var(--dim2); margin-top: 2px; }
 .week-entry-helper { font-size: 12px; color: var(--dim); padding: 2px 0 2px 8px; }
+.week-entry-actions { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
+.we-edit-btn, .we-del-btn { background: none; border: none; font-size: 12px; font-weight: 700; cursor: pointer; padding: 3px 0; font-family: inherit; }
+.we-edit-btn { color: var(--arc); }
+.we-del-btn { color: #e0554f; }
+.week-entry-lock { font-size: 11px; font-style: italic; color: var(--dim2); }
+.week-entry-editing { margin: 6px 0; }
+.edit-card .job-idx { color: var(--arc); }
+.edit-card-footer { display: flex; gap: 10px; margin-top: 14px; }
+.edit-card-footer .btn2 { flex: 1; }
 .week-total-row { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--line); font-size: 14px; font-weight: 800; }
 
 .job-card { background: var(--steel-850); border: 1px solid var(--line); border-radius: 16px; padding: 16px 14px 14px; margin-bottom: 14px; }

@@ -23,6 +23,10 @@ function selectedDateLabel() {
 
 let weekPanelStart = getMonday(new Date());
 let weekPanelLoaded = false;
+let weekPanelDays = [];
+let weekPanelLockedJobIds = new Set();
+let editingEntryUid = null;
+let editState = null;
 const weekToggleBtn = document.getElementById('weekToggleBtn');
 const weekPanel = document.getElementById('weekPanel');
 const weekChev = document.getElementById('weekChev');
@@ -58,61 +62,189 @@ function jobLabelFor(row) {
 async function loadWeekPanel() {
   weekPanelLabel.textContent = formatWeekLabel(weekPanelStart);
   weekPanelBody.innerHTML = '<div class="week-day-empty">Loading…</div>';
+  editingEntryUid = null;
+  editState = null;
 
   const start = ymd(weekPanelStart);
   const end = ymd(addDays(weekPanelStart, 6));
 
-  const { data: rows } = await sb.from('daily_entries')
-    .select('*')
-    .eq('welder_id', currentUser.id)
-    .gte('entry_date', start)
-    .lte('entry_date', end)
-    .order('entry_date');
+  const [{ data: rows }, { data: jwRows }] = await Promise.all([
+    sb.from('daily_entries').select('*').eq('welder_id', currentUser.id)
+      .gte('entry_date', start).lte('entry_date', end).order('entry_date'),
+    sb.from('job_weeks').select('*').eq('week_start', start)
+  ]);
 
-  const entries = rows || [];
+  const weekEntries = rows || [];
+  weekPanelLockedJobIds = new Set((jwRows || []).filter(r => r.status === 'approved' || r.status === 'synced').map(r => r.job_id));
+
   let helperRows = [];
   let partRows = [];
-  if (entries.length) {
+  if (weekEntries.length) {
     const [{ data: hRows }, { data: pRows }] = await Promise.all([
-      sb.from('daily_entry_helpers').select('*').in('daily_entry_id', entries.map(e => e.id)),
-      sb.from('daily_entry_parts').select('*').in('daily_entry_id', entries.map(e => e.id))
+      sb.from('daily_entry_helpers').select('*').in('daily_entry_id', weekEntries.map(e => e.id)),
+      sb.from('daily_entry_parts').select('*').in('daily_entry_id', weekEntries.map(e => e.id))
     ]);
     helperRows = hRows || [];
     partRows = pRows || [];
   }
 
-  let weekTotal = 0;
-  const days = [];
+  weekPanelDays = [];
   for (let i = 0; i < 7; i++) {
     const dateStr = ymd(addDays(weekPanelStart, i));
-    const dayEntries = entries.filter(e => e.entry_date === dateStr);
-    const dayHrs = dayEntries.reduce((s, e) => s + Number(e.hours), 0);
-    weekTotal += dayHrs;
-    days.push({ dateStr, dayEntries, dayHrs });
+    const dayEntries = weekEntries.filter(e => e.entry_date === dateStr).map(e => ({
+      row: e,
+      helpers: helperRows.filter(h => h.daily_entry_id === e.id),
+      parts: partRows.filter(p => p.daily_entry_id === e.id)
+    }));
+    weekPanelDays.push({ dateStr, dayEntries });
   }
 
-  weekPanelBody.innerHTML = days.map(day => `
+  renderWeekPanelBody();
+}
+
+function effectiveJobIdFor(row) {
+  const job = row.job_id ? jobs.find(j => j.id === row.job_id) : null;
+  const isYardRow = job && job.is_yard;
+  return (isYardRow && row.for_job_id) ? row.for_job_id : (row.job_id || null);
+}
+function isLockedRow(row) {
+  const eid = effectiveJobIdFor(row);
+  return !!eid && weekPanelLockedJobIds.has(eid);
+}
+
+function renderWeekPanelBody() {
+  let weekTotal = 0;
+  weekPanelDays.forEach(day => {
+    day.dayHrs = day.dayEntries.reduce((s, d) => s + Number(d.row.hours), 0);
+    weekTotal += day.dayHrs;
+  });
+
+  weekPanelBody.innerHTML = weekPanelDays.map(day => `
     <div class="week-day">
       <div class="week-day-head">
         <span class="week-day-date">${dayLabel(day.dateStr)}</span>
         <span class="week-day-hrs">${day.dayHrs ? day.dayHrs + ' hrs' : ''}</span>
       </div>
-      ${day.dayEntries.length ? day.dayEntries.map(e => `
-        <div class="week-entry">
-          <div class="week-entry-row">
-            <span class="week-entry-name">${esc(jobLabelFor(e))}</span>
-            <span class="week-entry-hrs">${hoursTracked(e.job_id) ? e.hours + ' hrs' : ''}${e.per_diem ? ' · PD' : ''}</span>
-          </div>
-          ${e.description ? `<div class="week-entry-desc">${esc(e.description)}</div>` : ''}
-          ${partRows.filter(p => p.daily_entry_id === e.id).map(p => `<div class="week-entry-helper">&#8618; ${esc(p.description)} (${p.quantity} &times; $${p.rate}) — $${(Number(p.quantity) * Number(p.rate)).toLocaleString()}</div>`).join('')}
-          ${helperRows.filter(h => h.daily_entry_id === e.id).map(h => {
-            const hp = helpers.find(x => x.id === h.helper_id);
-            return `<div class="week-entry-helper">&#8618; ${esc(hp ? hp.name : 'Helper')} — ${h.hours} hrs${h.per_diem ? ' · PD' : ''}</div>`;
-          }).join('')}
-        </div>
-      `).join('') : '<div class="week-day-empty">No work logged</div>'}
+      ${day.dayEntries.length ? day.dayEntries.map(d => weekEntryHtml(d)).join('') : '<div class="week-day-empty">No work logged</div>'}
     </div>
   `).join('') + `<div class="week-total-row"><span>Week total</span><span>${weekTotal} hrs</span></div>`;
+}
+
+function weekEntryHtml(d) {
+  const e = d.row;
+  if (editingEntryUid === e.id) {
+    return `<div class="week-entry-editing" data-entry-id="${e.id}">${editCardHtml(editState)}</div>`;
+  }
+  const locked = isLockedRow(e);
+  return `
+    <div class="week-entry" data-entry-id="${e.id}">
+      <div class="week-entry-row">
+        <span class="week-entry-name">${esc(jobLabelFor(e))}</span>
+        <span class="week-entry-hrs">${hoursTracked(e.job_id) ? e.hours + ' hrs' : ''}${e.per_diem ? ' · PD' : ''}</span>
+      </div>
+      ${e.description ? `<div class="week-entry-desc">${esc(e.description)}</div>` : ''}
+      ${d.parts.map(p => `<div class="week-entry-helper">&#8618; ${esc(p.description)} (${p.quantity} &times; $${p.rate}) — $${(Number(p.quantity) * Number(p.rate)).toLocaleString()}</div>`).join('')}
+      ${d.helpers.map(h => {
+        const hp = helpers.find(x => x.id === h.helper_id);
+        return `<div class="week-entry-helper">&#8618; ${esc(hp ? hp.name : 'Helper')} — ${h.hours} hrs${h.per_diem ? ' · PD' : ''}</div>`;
+      }).join('')}
+      <div class="week-entry-actions">
+        ${locked ? '<span class="week-entry-lock">Approved by office — contact them to change</span>' : `
+          <button type="button" class="we-edit-btn" data-action="edit-entry">Edit</button>
+          <button type="button" class="we-del-btn" data-action="delete-entry">Delete</button>
+        `}
+      </div>
+    </div>`;
+}
+
+function startEditEntry(entryId) {
+  let found = null;
+  for (const day of weekPanelDays) {
+    const d = day.dayEntries.find(x => x.row.id === entryId);
+    if (d) { found = d; break; }
+  }
+  if (!found) return;
+  const e = found.row;
+  editingEntryUid = entryId;
+  editState = {
+    uid: entryId,
+    jobId: e.job_id || (e.one_off_name ? 'other' : ''),
+    oneOffName: e.one_off_name || '',
+    forJobId: e.for_job_id || '',
+    description: e.description || '',
+    hours: Number(e.hours) || 0,
+    perDiem: !!e.per_diem,
+    helpers: found.helpers.map(h => ({ uid: uid(), helperId: h.helper_id, hours: Number(h.hours), perDiem: !!h.per_diem })),
+    parts: found.parts.length ? found.parts.map(p => ({ uid: uid(), name: p.description, qty: p.quantity, rate: p.rate })) : [newPart()]
+  };
+  renderWeekPanelBody();
+}
+
+async function saveEditEntry(entryId) {
+  const other = editState.jobId === 'other';
+  const yard = isYard(editState.jobId);
+  const flat = isFlat(editState.jobId);
+
+  if (!editState.jobId) { alert('Pick a job.'); return; }
+  if (!editState.description.trim()) { alert('Add a description.'); return; }
+  if (other && !editState.oneOffName.trim()) { alert('Name the one-off job.'); return; }
+  if (yard && !editState.forJobId) { alert('Pick which job this yard work is for.'); return; }
+  if (flat && !editState.parts.some(p => p.name.trim() && Number(p.qty) > 0 && Number(p.rate) > 0)) {
+    alert('Add at least one part with a quantity and rate.');
+    return;
+  }
+
+  const saveBtn = weekPanelBody.querySelector('[data-action="save-edit"]');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+
+  try {
+    const { error: upErr } = await sb.from('daily_entries').update({
+      job_id: other ? null : editState.jobId,
+      one_off_name: other ? editState.oneOffName.trim() : null,
+      for_job_id: yard ? editState.forJobId : null,
+      description: editState.description.trim(),
+      hours: editState.hours,
+      per_diem: editState.perDiem
+    }).eq('id', entryId);
+    if (upErr) throw upErr;
+
+    await sb.from('daily_entry_helpers').delete().eq('daily_entry_id', entryId);
+    const helperRows = editState.helpers
+      .filter(h => h.helperId)
+      .map(h => ({ daily_entry_id: entryId, helper_id: h.helperId, hours: h.hours, per_diem: h.perDiem }));
+    if (helperRows.length) {
+      const { error: heErr } = await sb.from('daily_entry_helpers').insert(helperRows);
+      if (heErr) throw heErr;
+    }
+
+    await sb.from('daily_entry_parts').delete().eq('daily_entry_id', entryId);
+    if (flat) {
+      const partRows = editState.parts
+        .filter(p => p.name.trim() && Number(p.qty) > 0 && Number(p.rate) > 0)
+        .map(p => ({ daily_entry_id: entryId, description: p.name.trim(), quantity: Number(p.qty), rate: Number(p.rate) }));
+      if (partRows.length) {
+        const { error: peErr } = await sb.from('daily_entry_parts').insert(partRows);
+        if (peErr) throw peErr;
+      }
+    }
+
+    editingEntryUid = null;
+    editState = null;
+    loadWeekPanel();
+  } catch (err) {
+    console.error(err);
+    alert('Could not save changes. Please try again.');
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save changes'; }
+  }
+}
+
+function updateEditPartTotals() {
+  editState.parts.forEach(p => {
+    const el = weekPanelBody.querySelector(`.part-line-total[data-part-uid="${p.uid}"]`);
+    if (el) el.textContent = '$' + partTotal(p).toLocaleString();
+  });
+  const totalEl = weekPanelBody.querySelector(`.flat-total-value[data-entry-uid="${editState.uid}"]`);
+  if (totalEl) totalEl.textContent = '$' + partsTotal(editState.parts).toLocaleString();
 }
 
 weekToggleBtn.addEventListener('click', () => {
@@ -131,6 +263,122 @@ document.getElementById('prevWeekBtn2').addEventListener('click', () => {
 document.getElementById('nextWeekBtn2').addEventListener('click', () => {
   weekPanelStart = addDays(weekPanelStart, 7);
   loadWeekPanel();
+});
+
+weekPanelBody.addEventListener('click', async (e) => {
+  const entryDiv = e.target.closest('[data-entry-id]');
+  if (!entryDiv) return;
+  const entryId = entryDiv.dataset.entryId;
+
+  if (e.target.closest('[data-action="edit-entry"]')) {
+    startEditEntry(entryId);
+    return;
+  }
+  if (e.target.closest('[data-action="cancel-edit"]')) {
+    editingEntryUid = null;
+    editState = null;
+    renderWeekPanelBody();
+    return;
+  }
+  if (e.target.closest('[data-action="delete-entry"]')) {
+    if (!confirm("Delete this ticket? This can't be undone.")) return;
+    const { error } = await sb.from('daily_entries').delete().eq('id', entryId);
+    if (error) { alert('Could not delete: ' + error.message); return; }
+    editingEntryUid = null;
+    editState = null;
+    loadWeekPanel();
+    return;
+  }
+  if (!editState || editingEntryUid !== entryId) return;
+
+  if (e.target.closest('[data-action="save-edit"]')) {
+    saveEditEntry(entryId);
+    return;
+  }
+  if (e.target.closest('[data-action="add-helper"]')) {
+    editState.helpers.push(newHelperRow());
+    renderWeekPanelBody();
+    return;
+  }
+  if (e.target.closest('[data-action="add-part"]')) {
+    editState.parts.push(newPart());
+    renderWeekPanelBody();
+    return;
+  }
+  const removePartBtn = e.target.closest('[data-action="remove-part"]');
+  if (removePartBtn) {
+    const partEl = e.target.closest('[data-part-uid]');
+    editState.parts = editState.parts.filter(x => x.uid !== partEl.dataset.partUid);
+    if (!editState.parts.length) editState.parts.push(newPart());
+    renderWeekPanelBody();
+    return;
+  }
+  const stepBtn = e.target.closest('.step-btn');
+  if (stepBtn) {
+    const helperEl = e.target.closest('[data-helper-uid]');
+    const delta = stepBtn.dataset.dir === 'inc' ? 0.5 : -0.5;
+    const target = helperEl ? editState.helpers.find(x => x.uid === helperEl.dataset.helperUid) : editState;
+    target.hours = Math.max(0, Math.min(24, +(Number(target.hours) + delta).toFixed(1)));
+    renderWeekPanelBody();
+    return;
+  }
+  const pdToggle = e.target.closest('.pd-toggle');
+  if (pdToggle) {
+    const helperEl = e.target.closest('[data-helper-uid]');
+    const target = helperEl ? editState.helpers.find(x => x.uid === helperEl.dataset.helperUid) : editState;
+    target.perDiem = !target.perDiem;
+    renderWeekPanelBody();
+    return;
+  }
+  const removeHelperBtn = e.target.closest('[data-action="remove-helper"]');
+  if (removeHelperBtn) {
+    const helperEl = e.target.closest('[data-helper-uid]');
+    editState.helpers = editState.helpers.filter(x => x.uid !== helperEl.dataset.helperUid);
+    renderWeekPanelBody();
+    return;
+  }
+});
+
+weekPanelBody.addEventListener('change', (e) => {
+  if (!editState) return;
+  const entryDiv = e.target.closest('[data-entry-id]');
+  if (!entryDiv || entryDiv.dataset.entryId !== editingEntryUid) return;
+
+  if (e.target.classList.contains('job-select')) {
+    editState.jobId = e.target.value;
+    if (editState.jobId !== 'other') editState.oneOffName = '';
+    if (!isYard(editState.jobId)) editState.forJobId = '';
+    if (!hoursTracked(editState.jobId)) editState.hours = 0;
+    renderWeekPanelBody();
+    return;
+  }
+  if (e.target.classList.contains('for-job-select')) {
+    editState.forJobId = e.target.value;
+    return;
+  }
+  const helperEl = e.target.closest('[data-helper-uid]');
+  if (helperEl && e.target.classList.contains('helper-select')) {
+    const h = editState.helpers.find(x => x.uid === helperEl.dataset.helperUid);
+    h.helperId = e.target.value;
+    return;
+  }
+});
+
+weekPanelBody.addEventListener('input', (e) => {
+  if (!editState) return;
+  const entryDiv = e.target.closest('[data-entry-id]');
+  if (!entryDiv || entryDiv.dataset.entryId !== editingEntryUid) return;
+
+  if (e.target.classList.contains('descr-input')) { editState.description = e.target.value; return; }
+  if (e.target.classList.contains('oneoff-name-input')) { editState.oneOffName = e.target.value; return; }
+  const partEl = e.target.closest('[data-part-uid]');
+  if (partEl) {
+    const p = editState.parts.find(x => x.uid === partEl.dataset.partUid);
+    if (!p) return;
+    if (e.target.classList.contains('part-name-input')) { p.name = e.target.value; return; }
+    if (e.target.classList.contains('part-qty-input')) { p.qty = e.target.value; updateEditPartTotals(); return; }
+    if (e.target.classList.contains('part-rate-input')) { p.rate = e.target.value; updateEditPartTotals(); return; }
+  }
 });
 
 function uid() { return Math.random().toString(36).slice(2); }
@@ -214,6 +462,63 @@ function helperBlockHtml(h) {
       </div>
     </div>`;
 }
+function editCardHtml(entry) {
+  const other = entry.jobId === 'other';
+  const yard = isYard(entry.jobId);
+  const flat = isFlat(entry.jobId);
+  const hrsOn = hoursTracked(entry.jobId);
+  return `
+    <div class="job-card edit-card" data-entry-uid="${entry.uid}">
+      <div class="job-card-top">
+        <span class="job-idx">Edit ticket</span>
+        <button type="button" class="remove-job" data-action="cancel-edit">&times; Cancel</button>
+      </div>
+      <label class="field-label">Jobsite</label>
+      <select class="input job-select">
+        <option value="">Pick your job…</option>
+        ${jobs.map(j => `<option value="${j.id}" ${entry.jobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${j.is_yard ? ' (yard)' : ''}</option>`).join('')}
+        <option value="other" ${other ? 'selected' : ''}>+ Other / one-off job…</option>
+      </select>
+      ${other ? `
+        <div class="oneoff">
+          <label class="field-label">Name this one-off job</label>
+          <input type="text" class="input oneoff-name-input" placeholder="e.g. Emergency repair — Miller lease" value="${escAttr(entry.oneOffName)}">
+        </div>` : ''}
+      ${yard ? `
+        <div class="oneoff yard">
+          <label class="field-label">Which job is this yard work for?</label>
+          <select class="input for-job-select">
+            <option value="">Pick the job it's for…</option>
+            ${jobs.filter(j => !j.is_yard).map(j => `<option value="${j.id}" ${entry.forJobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}</option>`).join('')}
+          </select>
+        </div>` : ''}
+      <label class="field-label">What did you work on?</label>
+      <textarea class="input descr-input" rows="2">${esc(entry.description)}</textarea>
+      ${flat ? `
+        <div class="oneoff flat">
+          <label class="field-label">Parts billed that day</label>
+          <div class="parts-list">
+            ${entry.parts.map(p => partRowHtml(p)).join('')}
+          </div>
+          <button type="button" class="add-part" data-action="add-part">+ Add another part</button>
+          <div class="parts-total-row">
+            <span>Total billed</span>
+            <span class="flat-total-value" data-entry-uid="${entry.uid}">$${partsTotal(entry.parts).toLocaleString()}</span>
+          </div>
+        </div>` : ''}
+      <div class="you-row">
+        ${hrsOn ? stepperHtml('Your hours', entry.hours) : ''}
+        ${pdToggleHtml(entry.perDiem)}
+      </div>
+      ${entry.helpers.map(h => helperBlockHtml(h)).join('')}
+      <button type="button" class="add-helper" data-action="add-helper">+ Add helper</button>
+      <div class="edit-card-footer">
+        <button type="button" class="btn2 btn2-line small" data-action="delete-entry">Delete ticket</button>
+        <button type="button" class="btn2 btn2-solid small" data-action="save-edit">Save changes</button>
+      </div>
+    </div>`;
+}
+
 function entryCardHtml(entry, idx) {
   const other = entry.jobId === 'other';
   const yard = isYard(entry.jobId);
