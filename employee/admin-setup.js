@@ -29,6 +29,7 @@ function renderJobs() {
       <input class="cell-in job-operator" value="${escAttr(j.operator || '')}" placeholder="Operator">
       <input class="cell-in job-bill" value="${escAttr(j.bill_to || '')}" placeholder="Set bill-to…">
       <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num job-pd" value="${escAttr(j.per_diem)}"></div>
+      <div class="c"><button type="button" class="toggle2${j.billing_type === 'flat' ? ' ton' : ''}" data-action="toggle-flat" title="Flat rate job (billed a flat dollar amount instead of by the hour)"><span class="tk2"></span></button></div>
       <div class="c"><button type="button" class="toggle2${j.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>
       <button type="button" class="row-x" data-action="delete-job">&times;</button>
     </div>
@@ -70,6 +71,12 @@ document.getElementById('jobsTable').addEventListener('click', async (e) => {
     job.active = !job.active;
     renderJobs();
     await sb.from('jobs').update({ active: job.active }).eq('id', id);
+    return;
+  }
+  if (e.target.closest('[data-action="toggle-flat"]')) {
+    job.billing_type = job.billing_type === 'flat' ? 'hourly' : 'flat';
+    renderJobs();
+    await sb.from('jobs').update({ billing_type: job.billing_type }).eq('id', id);
     return;
   }
   if (e.target.closest('[data-action="delete-job"]')) {

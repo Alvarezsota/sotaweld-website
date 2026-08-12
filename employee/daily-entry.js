@@ -101,6 +101,7 @@ async function loadWeekPanel() {
             <span class="week-entry-hrs">${e.hours} hrs${e.per_diem ? ' · PD' : ''}</span>
           </div>
           ${e.description ? `<div class="week-entry-desc">${esc(e.description)}</div>` : ''}
+          ${e.flat_amount ? `<div class="week-entry-helper">&#8618; Billed${e.flat_quantity ? ' (' + esc(String(e.flat_quantity)) + ')' : ''} — $${Number(e.flat_amount).toLocaleString()}</div>` : ''}
           ${helperRows.filter(h => h.daily_entry_id === e.id).map(h => {
             const hp = helpers.find(x => x.id === h.helper_id);
             return `<div class="week-entry-helper">&#8618; ${esc(hp ? hp.name : 'Helper')} — ${h.hours} hrs${h.per_diem ? ' · PD' : ''}</div>`;
@@ -138,7 +139,7 @@ function esc(str) {
 function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
 
 function newEntry() {
-  return { uid: uid(), jobId: '', oneOffName: '', forJobId: '', description: '', hours: 10, perDiem: true, helpers: [] };
+  return { uid: uid(), jobId: '', oneOffName: '', forJobId: '', description: '', hours: 10, perDiem: true, helpers: [], flatAmount: '', flatQuantity: '' };
 }
 function newHelperRow() {
   return { uid: uid(), helperId: '', hours: 10, perDiem: true };
@@ -146,6 +147,10 @@ function newHelperRow() {
 function isYard(jobId) {
   const j = jobs.find(x => x.id === jobId);
   return !!(j && j.is_yard);
+}
+function isFlat(jobId) {
+  const j = jobs.find(x => x.id === jobId);
+  return !!(j && j.billing_type === 'flat');
 }
 function jobName(entry) {
   if (entry.jobId === 'other') return entry.oneOffName || 'One-off job';
@@ -186,6 +191,7 @@ function helperBlockHtml(h) {
 function entryCardHtml(entry, idx) {
   const other = entry.jobId === 'other';
   const yard = isYard(entry.jobId);
+  const flat = isFlat(entry.jobId);
   return `
     <div class="job-card" data-entry-uid="${entry.uid}">
       <div class="job-card-top">
@@ -215,6 +221,21 @@ function entryCardHtml(entry, idx) {
         </div>` : ''}
       <label class="field-label">What did you work on?</label>
       <textarea class="input descr-input" rows="2" placeholder="e.g. Cont. fab on compressor piping">${esc(entry.description)}</textarea>
+      ${flat ? `
+        <div class="oneoff flat">
+          <label class="field-label">Flat-rate billing for today</label>
+          <div class="flat-row">
+            <div class="flat-field">
+              <label class="field-label-sm">Quantity (optional)</label>
+              <input type="number" step="1" min="0" class="input flat-qty-input" placeholder="e.g. 3 racks" value="${escAttr(entry.flatQuantity)}">
+            </div>
+            <div class="flat-field">
+              <label class="field-label-sm">Amount ($)</label>
+              <input type="number" step="1" min="0" class="input flat-amount-input" placeholder="e.g. 1200" value="${escAttr(entry.flatAmount)}">
+            </div>
+          </div>
+          <span class="oneoff-note">This is what gets billed to the customer for today — separate from your hours below, which are still tracked for your pay.</span>
+        </div>` : ''}
       <div class="you-row">
         ${stepperHtml('Your hours', entry.hours)}
         ${pdToggleHtml(entry.perDiem)}
@@ -238,6 +259,7 @@ function updateSubmitState() {
     if (!e.description.trim()) return false;
     if (e.jobId === 'other' && !e.oneOffName.trim()) return false;
     if (isYard(e.jobId) && !e.forJobId) return false;
+    if (isFlat(e.jobId) && !(Number(e.flatAmount) > 0)) return false;
     return true;
   });
   submitBtn.disabled = !canSubmit;
@@ -331,6 +353,15 @@ entriesContainer.addEventListener('input', (e) => {
     updateSubmitState();
     return;
   }
+  if (e.target.classList.contains('flat-qty-input')) {
+    entry.flatQuantity = e.target.value;
+    return;
+  }
+  if (e.target.classList.contains('flat-amount-input')) {
+    entry.flatAmount = e.target.value;
+    updateSubmitState();
+    return;
+  }
 });
 
 addJobBtn.addEventListener('click', () => {
@@ -373,6 +404,7 @@ async function handleSubmit() {
     for (const entry of entries) {
       const other = entry.jobId === 'other';
       const yard = isYard(entry.jobId);
+      const flat = isFlat(entry.jobId);
 
       const { data: deData, error: deError } = await sb.from('daily_entries').insert({
         welder_id: currentUser.id,
@@ -382,7 +414,9 @@ async function handleSubmit() {
         for_job_id: yard ? entry.forJobId : null,
         description: entry.description.trim(),
         hours: entry.hours,
-        per_diem: entry.perDiem
+        per_diem: entry.perDiem,
+        flat_amount: flat ? Number(entry.flatAmount) : null,
+        flat_quantity: flat && entry.flatQuantity !== '' ? Number(entry.flatQuantity) : null
       }).select().single();
 
       if (deError) throw deError;
@@ -436,6 +470,7 @@ function showSuccess() {
           <span class="rj-name2">${esc(jobName(e))}${isYard(e.jobId) && e.forJobId ? ' &rarr; ' + esc(jobs.find(j => j.id === e.forJobId)?.name || '') : ''}</span>
           <span class="rj-hrs2">${e.hours} hrs${e.perDiem ? ' · PD' : ''}</span>
         </div>
+        ${isFlat(e.jobId) && e.flatAmount ? `<div class="receipt-row2 receipt-helper2"><span>&#8618; Billed${e.flatQuantity ? ' (' + esc(String(e.flatQuantity)) + ')' : ''}</span><span>$${Number(e.flatAmount).toLocaleString()}</span></div>` : ''}
         ${e.helpers.filter(h => h.helperId).map(h => {
           const hp = helpers.find(x => x.id === h.helperId);
           return `<div class="receipt-row2 receipt-helper2"><span>&#8618; ${esc(hp ? hp.name : '')}</span><span>${h.hours} hrs${h.perDiem ? ' · PD' : ''}</span></div>`;
