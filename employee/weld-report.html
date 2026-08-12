@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Weld Report | State of the Arc Welding</title>
+<meta name="robots" content="noindex">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dark-theme.css">
+<link rel="stylesheet" href="weld-report.css">
+</head>
+<body>
+
+<header class="et-nav">
+  <div class="et-nav-left">
+    <img src="../assets/img/logo.jpeg" alt="Logo">
+    <span class="et-wordmark">State of the Arc</span>
+  </div>
+  <nav class="et-links" id="navLinks">
+    <a class="et-link" href="daily-entry.html">Log Work</a>
+    <a class="et-link on" href="weld-report.html">Weld Report</a>
+    <a class="et-link" href="dashboard.html">Office</a>
+    <span id="adminNavLinks" style="display:none;">
+      <a class="et-link" href="admin-setup.html">Setup</a>
+      <a class="et-link" href="approvals.html">Approvals</a>
+    </span>
+  </nav>
+  <div class="et-user">
+    <span id="userName">Loading...</span>
+    <span id="adminBadge" class="admin-pill" style="display:none;">Admin</span>
+    <button class="et-logout" id="logoutBtn">Log Out</button>
+  </div>
+</header>
+
+<div id="reportScreen">
+  <div class="wr-wrap">
+    <div class="wr-date-line">
+      <span class="de-date-label">Date</span>
+      <input type="date" id="dateInput" class="input de-date-input">
+    </div>
+    <p class="wr-intro">Log your weld inches for the day. Totals calculate automatically as you type. One report per day &mdash; submitting again for the same day updates it.</p>
+
+    <div class="card wr-section">
+      <div class="wr-section-head"><span>Pipe Welds</span><span class="wr-section-total" id="pipeSub">0 in</span></div>
+      <div class="wr-table-scroll">
+        <table class="wr-table">
+          <thead>
+            <tr><th class="wr-l">Nominal</th><th>OD</th><th>Std /weld</th><th>Qty</th><th>Sch 80 /weld</th><th>Qty</th><th>Sch 100+ /weld</th><th>Qty</th><th>Weld In.</th></tr>
+          </thead>
+          <tbody id="pipeBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card wr-section">
+      <div class="wr-section-head"><span>Olet Welds</span><span class="wr-section-total" id="oletSub">0 in</span></div>
+      <div class="wr-table-scroll">
+        <table class="wr-table">
+          <thead>
+            <tr><th class="wr-l">Olet Size</th><th>Std /weld</th><th>Qty</th><th>Sch 80 /weld</th><th>Qty</th><th>Weld In.</th></tr>
+          </thead>
+          <tbody id="oletBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card wr-section">
+      <div class="wr-section-head"><span>Miscellaneous / Off-chart</span><span class="wr-section-total" id="miscSub">0 in</span></div>
+      <div id="miscBody"></div>
+      <button type="button" class="add-part" id="addMiscBtn">+ Add line</button>
+    </div>
+
+    <div class="wr-totalsbar">
+      <div class="wr-subs">
+        <span>Pipe <b id="pipeSub2">0</b></span>
+        <span>Olets <b id="oletSub2">0</b></span>
+        <span>Misc <b id="miscSub2">0</b></span>
+      </div>
+      <div class="wr-grand">
+        <span class="wr-grand-lbl">Total weld inches today</span>
+        <span class="wr-grand-val"><span id="grandTotal">0</span> in</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="submit-bar2">
+    <button class="btn2 btn2-solid" id="submitBtn" style="flex:1; max-width:520px;">Submit Weld Report</button>
+  </div>
+</div>
+
+<div id="successScreen" style="display:none;">
+  <div class="de-wrap success2">
+    <div class="success-ring2">&#10003;</div>
+    <h2 class="success-title2">Weld report submitted</h2>
+    <p class="success-sub2" id="successSub">Saved for today. It'll be included in tonight's summary.</p>
+    <button class="btn2 btn2-line" id="editAgainBtn" style="margin-top:24px;">Edit today's report</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-client.js"></script>
+<script src="weld-report.js"></script>
+</body>
+</html>

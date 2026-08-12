@@ -1,0 +1,30 @@
+.wr-wrap { max-width: 720px; margin: 0 auto; padding: 18px 14px 140px; }
+
+.wr-date-line { display: flex; align-items: center; gap: 10px; padding: 4px 4px 10px; }
+.wr-intro { font-size: 13px; color: var(--dim); font-weight: 500; line-height: 1.5; margin: 0 0 16px; }
+
+.wr-section { margin-bottom: 14px; padding: 0; overflow: hidden; }
+.wr-section-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 800; }
+.wr-section-total { font-size: 13px; font-weight: 800; color: var(--ok); }
+.wr-table-scroll { overflow-x: auto; }
+.wr-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
+.wr-table th { padding: 8px 6px; text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--dim2); font-weight: 700; border-bottom: 1px solid var(--line); background: var(--steel-800); }
+.wr-table th.wr-l, .wr-table td.wr-l { text-align: left; padding-left: 14px; }
+.wr-table td { padding: 6px; text-align: center; border-bottom: 1px solid rgba(69,77,89,.4); }
+.wr-table td.wr-l { font-weight: 700; }
+.wr-table td.wr-per { color: var(--dim); font-variant-numeric: tabular-nums; }
+.wr-table td.wr-rowtot { font-weight: 800; color: var(--ok); font-variant-numeric: tabular-nums; min-width: 56px; }
+.wr-qty-input { width: 52px; text-align: center; padding: 7px 3px; font-size: 14px; font-weight: 700; }
+
+.wr-misc-row { display: flex; gap: 8px; align-items: center; padding: 10px 16px; border-bottom: 1px solid rgba(69,77,89,.4); }
+.wr-misc-row:last-of-type { border-bottom: none; }
+.wr-misc-desc { flex: 1; }
+.wr-misc-in { width: 76px; flex: 0 0 auto; text-align: center; }
+.wr-section .add-part { margin: 10px 16px 14px; width: calc(100% - 32px); }
+
+.wr-totalsbar { position: sticky; bottom: 0; background: linear-gradient(0deg, var(--steel-900), rgba(25,28,33,.85)); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-top: 10px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; }
+.wr-subs { display: flex; gap: 16px; flex-wrap: wrap; color: var(--dim); font-size: 13px; font-weight: 600; }
+.wr-subs b { color: var(--text); font-variant-numeric: tabular-nums; }
+.wr-grand { text-align: right; }
+.wr-grand-lbl { display: block; font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+.wr-grand-val { font-size: 26px; font-weight: 800; color: var(--ok); font-variant-numeric: tabular-nums; }
