@@ -1,6 +1,6 @@
 (async function () {
   const initialHash = window.location.hash;
-  const isInviteOrRecovery = /type=invite|type=recovery/.test(initialHash);
+  const isInviteOrRecovery = /type=invite|type=recovery|type=signup/.test(initialHash);
 
   const { data: { session } } = await sb.auth.getSession();
 
