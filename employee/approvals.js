@@ -83,12 +83,15 @@ function buildJobGroups(entries, jobs) {
     const perDiemAmt = effectiveJob ? Number(effectiveJob.per_diem) : 0;
     const isFlatJob = effectiveJob && effectiveJob.billing_type === 'flat';
     const stainlessRate = effectiveJob ? Number(effectiveJob.stainless_bill_rate || 125) : 125;
-    d.lines.push(personLine('welder', prof.full_name || '—', Number(e.hours), Number(prof.pay_rate || 0), Number(prof.bill_rate || 0), perDiemAmt, e.per_diem, e.id, null, e.description, e.job_id, e.one_off_name, null, e.per_diem, isFlatJob ? (e.daily_entry_parts || []) : undefined, e.welder_id, e.entry_date, e.for_job_id, e.is_stainless, stainlessRate));
+    const jobBillRateOverride = effectiveJob && effectiveJob.bill_rate != null ? Number(effectiveJob.bill_rate) : null;
+    const welderBillRate = jobBillRateOverride != null ? jobBillRateOverride : Number(prof.bill_rate || 0);
+    d.lines.push(personLine('welder', prof.full_name || '—', Number(e.hours), Number(prof.pay_rate || 0), welderBillRate, perDiemAmt, e.per_diem, e.id, null, e.description, e.job_id, e.one_off_name, null, e.per_diem, isFlatJob ? (e.daily_entry_parts || []) : undefined, e.welder_id, e.entry_date, e.for_job_id, e.is_stainless, stainlessRate));
     if (e.description) d.descs.push(e.description);
 
     (e.daily_entry_helpers || []).forEach(dh => {
       const hp = dh.helpers || {};
-      d.lines.push(personLine('helper', hp.name || '—', Number(dh.hours), Number(hp.pay_rate || 0), Number(hp.bill_rate || 0), perDiemAmt, dh.per_diem, e.id, dh.id, null, null, null, dh.helper_id, dh.per_diem));
+      const helperBillRate = jobBillRateOverride != null ? jobBillRateOverride : Number(hp.bill_rate || 0);
+      d.lines.push(personLine('helper', hp.name || '—', Number(dh.hours), Number(hp.pay_rate || 0), helperBillRate, perDiemAmt, dh.per_diem, e.id, dh.id, null, null, null, dh.helper_id, dh.per_diem));
     });
   });
 
