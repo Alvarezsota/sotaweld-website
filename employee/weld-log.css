@@ -1,0 +1,26 @@
+.wl-body { padding: 28px 0 60px; }
+
+.d-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; flex-wrap: wrap; gap: 16px; }
+.hdr-sub { font-size: 18px; font-weight: 800; }
+.week-nav { display: flex; gap: 8px; margin-top: 8px; }
+.week-summary { display: flex; align-items: center; gap: 18px; background: var(--steel-850); border: 1px solid var(--line); border-radius: 14px; padding: 12px 20px; font-size: 13px; font-weight: 700; color: var(--dim); }
+
+.wl-welder-card { margin-bottom: 18px; }
+.wl-welder-head { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.wl-welder-name { font-size: 17px; font-weight: 800; }
+.wl-welder-total { font-size: 13px; font-weight: 700; color: var(--ok); }
+
+.wl-day { padding: 10px 0; border-top: 1px solid rgba(69,77,89,.4); }
+.wl-day:first-child { border-top: none; }
+.wl-day-head { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; color: var(--dim); margin-bottom: 8px; }
+.wl-day-total { color: var(--text); font-weight: 800; }
+
+.wl-job { background: var(--steel-800); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.wl-job:last-child { margin-bottom: 0; }
+.wl-job-head { display: flex; justify-content: space-between; align-items: baseline; }
+.wl-job-name { font-size: 14px; font-weight: 700; }
+.wl-job-total { font-size: 13px; font-weight: 800; color: var(--ok); }
+.wl-items { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+.wl-item { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); padding-left: 8px; }
+.wl-item-misc { font-style: italic; }
+.wl-item-in { color: var(--dim2); font-variant-numeric: tabular-nums; }

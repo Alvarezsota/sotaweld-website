@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Approvals | State of the Arc Welding</title>
+<title>Weld Log | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="dark-theme.css">
-<link rel="stylesheet" href="approvals.css">
+<link rel="stylesheet" href="weld-log.css">
 </head>
 <body>
 
@@ -21,8 +21,8 @@
     <a class="et-link" href="weld-report.html">Weld Report</a>
     <a class="et-link" href="dashboard.html">Office</a>
     <a class="et-link" href="admin-setup.html">Setup</a>
-    <a class="et-link on" href="approvals.html">Approvals</a>
-    <a class="et-link" href="weld-log.html">Weld Log</a>
+    <a class="et-link" href="approvals.html">Approvals</a>
+    <a class="et-link on" href="weld-log.html">Weld Log</a>
   </nav>
   <div class="et-user">
     <span id="userName">Loading...</span>
@@ -36,7 +36,7 @@
 </div>
 
 <div id="adminContent" style="display:none;">
-  <div class="wrap-wide ap-body">
+  <div class="wrap-wide wl-body">
 
     <div class="d-hdr">
       <div>
@@ -49,14 +49,13 @@
       <div class="week-summary" id="weekSummary"></div>
     </div>
 
-    <div id="jobGrid" class="job-grid"></div>
-    <div id="jobDetail" style="display:none;"></div>
+    <div id="weldLogBody"></div>
 
   </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-client.js"></script>
-<script src="approvals.js"></script>
+<script src="weld-log.js"></script>
 </body>
 </html>

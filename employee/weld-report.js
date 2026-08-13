@@ -1,9 +1,12 @@
 let currentUser = null;
 let currentProfile = null;
-let existingReportId = null;
+let jobs = [];
+let entries = [];
 
 const dateInput = document.getElementById('dateInput');
 const submitBtn = document.getElementById('submitBtn');
+const addJobBtn = document.getElementById('addJobBtn');
+const entriesContainer = document.getElementById('entriesContainer');
 
 const PI = 3.14;
 // [nominal, OD] from the shop weld inch chart
@@ -15,11 +18,26 @@ const OLET = [[0.5,5.28],[0.75,6.66],[1,8.23],[2,14.95],[3,21.98],[4,28.26],[6,4
 
 function fmt(n) { return Math.round(n * 100) / 100; }
 function todayIso() { return new Date().toISOString().slice(0, 10); }
+function uid() { return Math.random().toString(36).slice(2); }
+function esc(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
+function cssEscape(s) { return String(s).replace(/"/g, '\\"'); }
+
+function isYard(jobId) {
+  const j = jobs.find(x => x.id === jobId);
+  return !!(j && j.is_yard);
+}
 
 function newMiscRow(desc, inches) {
-  return { uid: Math.random().toString(36).slice(2), desc: desc || '', inches: inches != null ? inches : '' };
+  return { uid: uid(), desc: desc || '', inches: inches != null ? inches : '' };
 }
-let miscRows = [newMiscRow()];
+function newEntry() {
+  return { uid: uid(), rowId: null, jobId: '', oneOffName: '', forJobId: '', miscRows: [newMiscRow()] };
+}
 
 function miscRowHtml(r) {
   return `
@@ -29,20 +47,9 @@ function miscRowHtml(r) {
       <button type="button" class="row-x" data-action="remove-misc">&times;</button>
     </div>`;
 }
-function esc(str) {
-  const div = document.createElement('div');
-  div.textContent = str == null ? '' : String(str);
-  return div.innerHTML;
-}
-function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
 
-function renderMisc() {
-  document.getElementById('miscBody').innerHTML = miscRows.map(miscRowHtml).join('');
-}
-
-function buildPipeRows() {
-  const pb = document.getElementById('pipeBody');
-  pb.innerHTML = PIPE.map(([nom, od]) => {
+function pipeRowsHtml() {
+  return PIPE.map(([nom, od]) => {
     const std = od * PI, s80 = std * 1.4, s100 = std * 1.6;
     return `
       <tr data-rowkey="pipe-${nom}">
@@ -58,9 +65,8 @@ function buildPipeRows() {
       </tr>`;
   }).join('');
 }
-function buildOletRows() {
-  const ob = document.getElementById('oletBody');
-  ob.innerHTML = OLET.map(([sz, std]) => {
+function oletRowsHtml() {
+  return OLET.map(([sz, std]) => {
     const s80 = std * 1.4;
     return `
       <tr data-rowkey="olet-${sz}">
@@ -74,139 +80,341 @@ function buildOletRows() {
   }).join('');
 }
 
-function recalc() {
+function oneOffSlotHtml(entry) {
+  if (entry.jobId !== 'other') return '';
+  return `
+    <div class="oneoff">
+      <label class="field-label">Name this one-off job</label>
+      <input type="text" class="input oneoff-name-input" placeholder="e.g. Emergency repair — Miller lease" value="${escAttr(entry.oneOffName)}">
+    </div>`;
+}
+function forJobSlotHtml(entry) {
+  if (!isYard(entry.jobId)) return '';
+  return `
+    <div class="oneoff yard">
+      <label class="field-label">Which job is this yard work for?</label>
+      <select class="input for-job-select">
+        <option value="">Pick the job it's for…</option>
+        ${jobs.filter(j => !j.is_yard).map(j => `<option value="${j.id}" ${entry.forJobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}</option>`).join('')}
+      </select>
+      <span class="oneoff-note">These weld inches land on that job's log.</span>
+    </div>`;
+}
+
+function entryCardHtml(entry) {
+  const other = entry.jobId === 'other';
+  return `
+    <div class="job-card wr-entry" data-entry-uid="${entry.uid}">
+      <div class="job-card-top">
+        <span class="job-idx">Weld report</span>
+        <button type="button" class="remove-job" data-action="remove-entry">&times; Remove</button>
+      </div>
+      <label class="field-label">Jobsite</label>
+      <select class="input job-select">
+        <option value="">Pick your job…</option>
+        ${jobs.map(j => `<option value="${j.id}" ${entry.jobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${j.is_yard ? ' (yard)' : ''}</option>`).join('')}
+        <option value="other" ${other ? 'selected' : ''}>+ Other / one-off job…</option>
+      </select>
+      <div data-oneoff-slot>${oneOffSlotHtml(entry)}</div>
+      <div data-forjob-slot>${forJobSlotHtml(entry)}</div>
+
+      <div class="wr-section-inner">
+        <div class="wr-section-head"><span>Pipe Welds</span><span class="wr-section-total" data-pipe-sub>0 in</span></div>
+        <div class="wr-table-scroll">
+          <table class="wr-table">
+            <thead>
+              <tr><th class="wr-l">Nominal</th><th>OD</th><th>Std /weld</th><th>Qty</th><th>Sch 80 /weld</th><th>Qty</th><th>Sch 100+ /weld</th><th>Qty</th><th>Weld In.</th></tr>
+            </thead>
+            <tbody data-pipe-body>${pipeRowsHtml()}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="wr-section-inner">
+        <div class="wr-section-head"><span>Olet Welds</span><span class="wr-section-total" data-olet-sub>0 in</span></div>
+        <div class="wr-table-scroll">
+          <table class="wr-table">
+            <thead>
+              <tr><th class="wr-l">Olet Size</th><th>Std /weld</th><th>Qty</th><th>Sch 80 /weld</th><th>Qty</th><th>Weld In.</th></tr>
+            </thead>
+            <tbody data-olet-body>${oletRowsHtml()}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="wr-section-inner">
+        <div class="wr-section-head"><span>Miscellaneous / Off-chart</span><span class="wr-section-total" data-misc-sub>0 in</span></div>
+        <div data-misc-body>${entry.miscRows.map(miscRowHtml).join('')}</div>
+        <button type="button" class="add-part" data-action="add-misc">+ Add line</button>
+      </div>
+
+      <div class="wr-entry-total-row"><span>Job total</span><span data-entry-total>0 in</span></div>
+    </div>`;
+}
+
+function recalcEntry(entryEl) {
   let pipeTotal = 0, oletTotal = 0, miscTotal = 0;
-  document.querySelectorAll('#pipeBody tr').forEach(tr => {
+  entryEl.querySelectorAll('[data-pipe-body] tr').forEach(tr => {
     let t = 0;
     tr.querySelectorAll('.wr-qty-input').forEach(q => { t += (Number(q.value) || 0) * Number(q.dataset.val); });
     tr.querySelector('[data-rowtot]').textContent = fmt(t);
     pipeTotal += t;
   });
-  document.querySelectorAll('#oletBody tr').forEach(tr => {
+  entryEl.querySelectorAll('[data-olet-body] tr').forEach(tr => {
     let t = 0;
     tr.querySelectorAll('.wr-qty-input').forEach(q => { t += (Number(q.value) || 0) * Number(q.dataset.val); });
     tr.querySelector('[data-rowtot]').textContent = fmt(t);
     oletTotal += t;
   });
-  document.querySelectorAll('.wr-misc-in').forEach(m => { miscTotal += Number(m.value) || 0; });
+  entryEl.querySelectorAll('.wr-misc-in').forEach(m => { miscTotal += Number(m.value) || 0; });
 
   const grand = pipeTotal + oletTotal + miscTotal;
-  document.getElementById('pipeSub').textContent = fmt(pipeTotal) + ' in';
-  document.getElementById('oletSub').textContent = fmt(oletTotal) + ' in';
-  document.getElementById('miscSub').textContent = fmt(miscTotal) + ' in';
-  document.getElementById('pipeSub2').textContent = fmt(pipeTotal);
-  document.getElementById('oletSub2').textContent = fmt(oletTotal);
-  document.getElementById('miscSub2').textContent = fmt(miscTotal);
-  document.getElementById('grandTotal').textContent = fmt(grand);
+  entryEl.querySelector('[data-pipe-sub]').textContent = fmt(pipeTotal) + ' in';
+  entryEl.querySelector('[data-olet-sub]').textContent = fmt(oletTotal) + ' in';
+  entryEl.querySelector('[data-misc-sub]').textContent = fmt(miscTotal) + ' in';
+  entryEl.querySelector('[data-entry-total]').textContent = fmt(grand) + ' in';
+  entryEl.dataset.grand = fmt(grand);
   return { pipeTotal: fmt(pipeTotal), oletTotal: fmt(oletTotal), miscTotal: fmt(miscTotal), grand: fmt(grand) };
 }
 
-document.addEventListener('input', (e) => {
-  if (e.target.classList.contains('wr-qty-input') || e.target.classList.contains('wr-misc-in')) recalc();
-  if (e.target.classList.contains('wr-misc-desc')) {
-    const row = e.target.closest('[data-misc-uid]');
-    const r = miscRows.find(x => x.uid === row.dataset.miscUid);
-    if (r) r.desc = e.target.value;
-  }
-  if (e.target.classList.contains('wr-misc-in')) {
-    const row = e.target.closest('[data-misc-uid]');
-    const r = miscRows.find(x => x.uid === row.dataset.miscUid);
-    if (r) r.inches = e.target.value;
-  }
-});
+function recalcGrand() {
+  let grand = 0;
+  entriesContainer.querySelectorAll('.wr-entry').forEach(el => { grand += Number(el.dataset.grand || 0); });
+  document.getElementById('grandTotal').textContent = fmt(grand);
+  updateSubmitState();
+  return fmt(grand);
+}
 
-document.getElementById('miscBody').addEventListener('click', (e) => {
-  if (e.target.closest('[data-action="remove-misc"]')) {
-    const row = e.target.closest('[data-misc-uid]');
-    miscRows = miscRows.filter(x => x.uid !== row.dataset.miscUid);
-    if (!miscRows.length) miscRows.push(newMiscRow());
-    renderMisc();
-    recalc();
-  }
-});
-document.getElementById('addMiscBtn').addEventListener('click', () => {
-  miscRows.push(newMiscRow());
-  renderMisc();
-});
+function updateSubmitState() {
+  const grand = [...entriesContainer.querySelectorAll('.wr-entry')].reduce((s, el) => s + Number(el.dataset.grand || 0), 0);
+  const jobsOk = entries.length > 0 && entries.every(e => {
+    if (!e.jobId) return false;
+    if (e.jobId === 'other' && !e.oneOffName.trim()) return false;
+    if (isYard(e.jobId) && !e.forJobId) return false;
+    return true;
+  });
+  submitBtn.disabled = !(jobsOk && grand > 0);
+}
 
-function buildBreakdown() {
+function buildBreakdownForEntry(entryEl) {
   const breakdown = [];
-  document.querySelectorAll('.wr-qty-input').forEach(q => {
+  entryEl.querySelectorAll('.wr-qty-input').forEach(q => {
     const v = Number(q.value) || 0;
     if (v > 0) breakdown.push({ label: q.dataset.lbl, qty: v, total: fmt(v * Number(q.dataset.val)) });
   });
   return breakdown;
 }
-function buildMiscItems() {
-  return miscRows
+function buildMiscItemsForEntry(entry) {
+  return entry.miscRows
     .filter(r => r.desc.trim() || Number(r.inches) > 0)
     .map(r => ({ description: r.desc.trim() || '(no description)', inches: Number(r.inches) || 0 }));
 }
 
-async function loadExistingReport() {
-  existingReportId = null;
+function appendEntryCard(entry, breakdown) {
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = entryCardHtml(entry);
+  const entryEl = wrapper.firstElementChild;
+  entriesContainer.appendChild(entryEl);
+
+  if (breakdown && breakdown.length) {
+    breakdown.forEach(item => {
+      const input = entryEl.querySelector(`.wr-qty-input[data-lbl="${cssEscape(item.label)}"]`);
+      if (input) input.value = item.qty;
+    });
+  }
+
+  if (entries.length <= 1) {
+    entryEl.querySelector('[data-action="remove-entry"]').style.display = 'none';
+  }
+
+  recalcEntry(entryEl);
+  recalcGrand();
+}
+
+function refreshRemoveButtons() {
+  const cards = entriesContainer.querySelectorAll('.wr-entry [data-action="remove-entry"]');
+  cards.forEach(btn => { btn.style.display = entries.length > 1 ? '' : 'none'; });
+}
+
+entriesContainer.addEventListener('input', (e) => {
+  const entryEl = e.target.closest('.wr-entry');
+  if (!entryEl) return;
+  const entry = entries.find(x => x.uid === entryEl.dataset.entryUid);
+  if (!entry) return;
+
+  if (e.target.classList.contains('wr-qty-input') || e.target.classList.contains('wr-misc-in')) {
+    recalcEntry(entryEl);
+    recalcGrand();
+  }
+  if (e.target.classList.contains('oneoff-name-input')) {
+    entry.oneOffName = e.target.value;
+    updateSubmitState();
+  }
+  const row = e.target.closest('[data-misc-uid]');
+  if (row) {
+    const r = entry.miscRows.find(x => x.uid === row.dataset.miscUid);
+    if (r) {
+      if (e.target.classList.contains('wr-misc-desc')) r.desc = e.target.value;
+      if (e.target.classList.contains('wr-misc-in')) r.inches = e.target.value;
+    }
+  }
+});
+
+entriesContainer.addEventListener('change', (e) => {
+  const entryEl = e.target.closest('.wr-entry');
+  if (!entryEl) return;
+  const entry = entries.find(x => x.uid === entryEl.dataset.entryUid);
+  if (!entry) return;
+
+  if (e.target.classList.contains('job-select')) {
+    entry.jobId = e.target.value;
+    if (entry.jobId !== 'other') entry.oneOffName = '';
+    if (!isYard(entry.jobId)) entry.forJobId = '';
+    entryEl.querySelector('[data-oneoff-slot]').innerHTML = oneOffSlotHtml(entry);
+    entryEl.querySelector('[data-forjob-slot]').innerHTML = forJobSlotHtml(entry);
+    updateSubmitState();
+    return;
+  }
+  if (e.target.classList.contains('for-job-select')) {
+    entry.forJobId = e.target.value;
+    updateSubmitState();
+  }
+});
+
+entriesContainer.addEventListener('click', async (e) => {
+  const entryEl = e.target.closest('.wr-entry');
+  if (!entryEl) return;
+  const entry = entries.find(x => x.uid === entryEl.dataset.entryUid);
+  if (!entry) return;
+
+  if (e.target.closest('[data-action="remove-entry"]')) {
+    if (entries.length <= 1) return;
+    if (entry.rowId) {
+      if (!confirm("Remove this job from today's weld report? This deletes it right away.")) return;
+      const { error } = await sb.from('weld_reports').delete().eq('id', entry.rowId);
+      if (error) { alert('Could not remove: ' + error.message); return; }
+    }
+    entries = entries.filter(x => x.uid !== entry.uid);
+    entryEl.remove();
+    refreshRemoveButtons();
+    recalcGrand();
+    return;
+  }
+  if (e.target.closest('[data-action="add-misc"]')) {
+    entry.miscRows.push(newMiscRow());
+    entryEl.querySelector('[data-misc-body]').innerHTML = entry.miscRows.map(miscRowHtml).join('');
+    return;
+  }
+  const removeMiscBtn = e.target.closest('[data-action="remove-misc"]');
+  if (removeMiscBtn) {
+    const row = e.target.closest('[data-misc-uid]');
+    entry.miscRows = entry.miscRows.filter(x => x.uid !== row.dataset.miscUid);
+    if (!entry.miscRows.length) entry.miscRows.push(newMiscRow());
+    entryEl.querySelector('[data-misc-body]').innerHTML = entry.miscRows.map(miscRowHtml).join('');
+    recalcEntry(entryEl);
+    recalcGrand();
+  }
+});
+
+addJobBtn.addEventListener('click', () => {
+  const entry = newEntry();
+  entries.push(entry);
+  appendEntryCard(entry);
+  refreshRemoveButtons();
+});
+
+async function loadReportsForDate() {
   const date = dateInput.value || todayIso();
+  entriesContainer.innerHTML = '';
+  entries = [];
+
   const { data } = await sb.from('weld_reports')
     .select('*')
     .eq('welder_id', currentUser.id)
     .eq('report_date', date)
-    .maybeSingle();
+    .order('created_at');
 
-  buildPipeRows();
-  buildOletRows();
-  miscRows = [newMiscRow()];
-  renderMisc();
-
-  if (data) {
-    existingReportId = data.id;
-    (data.breakdown || []).forEach(item => {
-      const input = document.querySelector(`.wr-qty-input[data-lbl="${cssEscape(item.label)}"]`);
-      if (input) input.value = item.qty;
+  if (data && data.length) {
+    data.forEach(row => {
+      const entry = {
+        uid: uid(),
+        rowId: row.id,
+        jobId: row.job_id || 'other',
+        oneOffName: row.one_off_name || '',
+        forJobId: row.for_job_id || '',
+        miscRows: (row.misc_items && row.misc_items.length) ? row.misc_items.map(m => newMiscRow(m.description, m.inches)) : [newMiscRow()]
+      };
+      entries.push(entry);
+      appendEntryCard(entry, row.breakdown || []);
     });
-    if ((data.misc_items || []).length) {
-      miscRows = data.misc_items.map(m => newMiscRow(m.description, m.inches));
-      renderMisc();
-    }
-    document.getElementById('submitBtn').textContent = 'Update Weld Report';
+    submitBtn.textContent = 'Update Weld Report';
   } else {
-    document.getElementById('submitBtn').textContent = 'Submit Weld Report';
+    const entry = newEntry();
+    entries.push(entry);
+    appendEntryCard(entry);
+    submitBtn.textContent = 'Submit Weld Report';
   }
-  recalc();
+  refreshRemoveButtons();
+  recalcGrand();
 }
-function cssEscape(s) { return String(s).replace(/"/g, '\\"'); }
 
 submitBtn.addEventListener('click', async () => {
   submitBtn.disabled = true;
   submitBtn.textContent = 'Saving...';
 
-  const totals = recalc();
   const date = dateInput.value || todayIso();
-  const payload = {
-    welder_id: currentUser.id,
-    report_date: date,
-    pipe_inches: totals.pipeTotal,
-    olet_inches: totals.oletTotal,
-    misc_inches: totals.miscTotal,
-    total_inches: totals.grand,
-    breakdown: buildBreakdown(),
-    misc_items: buildMiscItems(),
-    updated_at: new Date().toISOString()
-  };
 
-  const { error } = await sb.from('weld_reports').upsert(payload, { onConflict: 'welder_id,report_date' });
+  try {
+    for (const entry of entries) {
+      const entryEl = entriesContainer.querySelector(`[data-entry-uid="${entry.uid}"]`);
+      const totals = recalcEntry(entryEl);
+      const other = entry.jobId === 'other';
+      const yard = isYard(entry.jobId);
 
-  if (error) {
-    console.error(error);
+      if (totals.grand <= 0) {
+        if (entry.rowId) {
+          const { error } = await sb.from('weld_reports').delete().eq('id', entry.rowId);
+          if (error) throw error;
+          entry.rowId = null;
+        }
+        continue;
+      }
+
+      const payload = {
+        welder_id: currentUser.id,
+        report_date: date,
+        job_id: other ? null : entry.jobId,
+        one_off_name: other ? entry.oneOffName.trim() : null,
+        for_job_id: yard ? entry.forJobId : null,
+        pipe_inches: totals.pipeTotal,
+        olet_inches: totals.oletTotal,
+        misc_inches: totals.miscTotal,
+        total_inches: totals.grand,
+        breakdown: buildBreakdownForEntry(entryEl),
+        misc_items: buildMiscItemsForEntry(entry),
+        updated_at: new Date().toISOString()
+      };
+
+      if (entry.rowId) {
+        const { error } = await sb.from('weld_reports').update(payload).eq('id', entry.rowId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await sb.from('weld_reports').insert(payload).select().single();
+        if (error) throw error;
+        entry.rowId = data.id;
+      }
+    }
+
+    const grandNow = recalcGrand();
+    document.getElementById('successSub').textContent = `${grandNow} in logged for ${new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}. It'll be included in tonight's summary.`;
+    document.getElementById('reportScreen').style.display = 'none';
+    document.getElementById('successScreen').style.display = 'block';
+  } catch (err) {
+    console.error(err);
     alert('Something went wrong saving. Please try again or contact the office.');
-    submitBtn.disabled = false;
-    submitBtn.textContent = existingReportId ? 'Update Weld Report' : 'Submit Weld Report';
-    return;
   }
-
-  document.getElementById('successSub').textContent = `${totals.grand} in logged for ${new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}. It'll be included in tonight's summary.`;
-  document.getElementById('reportScreen').style.display = 'none';
-  document.getElementById('successScreen').style.display = 'block';
   submitBtn.disabled = false;
+  submitBtn.textContent = 'Submit Weld Report';
 });
 
 document.getElementById('editAgainBtn').addEventListener('click', () => {
@@ -214,7 +422,7 @@ document.getElementById('editAgainBtn').addEventListener('click', () => {
   document.getElementById('reportScreen').style.display = 'block';
 });
 
-dateInput.addEventListener('change', () => { loadExistingReport(); });
+dateInput.addEventListener('change', () => { loadReportsForDate(); });
 
 async function requireAuth() {
   const { data: { session } } = await sb.auth.getSession();
@@ -246,5 +454,8 @@ async function requireAuth() {
   dateInput.value = todayIso();
   dateInput.max = todayIso();
 
-  await loadExistingReport();
+  const { data: jobsData } = await sb.from('jobs').select('*').eq('active', true).order('name');
+  jobs = jobsData || [];
+
+  await loadReportsForDate();
 })();

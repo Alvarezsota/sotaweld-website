@@ -1,6 +1,7 @@
 let currentUser = null;
 let jobsById = {};
 let helpersList = [];
+let weldersList = [];
 let weekStart = getMonday(new Date());
 let openJobId = null;
 let currentGroups = [];
@@ -37,7 +38,7 @@ async function requireAuth() {
   return session.user;
 }
 
-function personLine(role, name, hours, payRate, billRate, perDiemAmt, perDiem, entryId, helperRowId, description, realJobId, realOneOffName, helperId, perDiemFlag, parts) {
+function personLine(role, name, hours, payRate, billRate, perDiemAmt, perDiem, entryId, helperRowId, description, realJobId, realOneOffName, helperId, perDiemFlag, parts, welderId, entryDate, forJobId) {
   const pd = perDiem ? perDiemAmt : 0;
   const isFlat = Array.isArray(parts);
   const partsSum = isFlat ? parts.reduce((s, p) => s + Number(p.quantity) * Number(p.rate), 0) : 0;
@@ -48,7 +49,8 @@ function personLine(role, name, hours, payRate, billRate, perDiemAmt, perDiem, e
     entryId, helperRowId, description: description || '',
     realJobId: realJobId || null, realOneOffName: realOneOffName || '',
     helperId: helperId || null, perDiemFlag: !!perDiemFlag,
-    parts: isFlat ? parts : null
+    parts: isFlat ? parts : null,
+    welderId: welderId || null, entryDate: entryDate || null, forJobId: forJobId || null
   };
 }
 
@@ -78,7 +80,7 @@ function buildJobGroups(entries, jobs) {
     const prof = e.profiles || {};
     const perDiemAmt = effectiveJob ? Number(effectiveJob.per_diem) : 0;
     const isFlatJob = effectiveJob && effectiveJob.billing_type === 'flat';
-    d.lines.push(personLine('welder', prof.full_name || '—', Number(e.hours), Number(prof.pay_rate || 0), Number(prof.bill_rate || 0), perDiemAmt, e.per_diem, e.id, null, e.description, e.job_id, e.one_off_name, null, e.per_diem, isFlatJob ? (e.daily_entry_parts || []) : undefined));
+    d.lines.push(personLine('welder', prof.full_name || '—', Number(e.hours), Number(prof.pay_rate || 0), Number(prof.bill_rate || 0), perDiemAmt, e.per_diem, e.id, null, e.description, e.job_id, e.one_off_name, null, e.per_diem, isFlatJob ? (e.daily_entry_parts || []) : undefined, e.welder_id, e.entry_date, e.for_job_id));
     if (e.description) d.descs.push(e.description);
 
     (e.daily_entry_helpers || []).forEach(dh => {
@@ -100,18 +102,20 @@ async function loadWeek() {
 
   document.getElementById('weekLabel').textContent = formatWeekLabel(weekStart);
 
-  const [{ data: entries }, { data: jobs }, { data: jw }, { data: hlprs }] = await Promise.all([
+  const [{ data: entries }, { data: jobs }, { data: jw }, { data: hlprs }, { data: welders }] = await Promise.all([
     sb.from('daily_entries')
       .select('*, profiles(full_name, pay_rate, bill_rate), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate)), daily_entry_parts(*)')
       .gte('entry_date', start).lte('entry_date', end),
     sb.from('jobs').select('*'),
     sb.from('job_weeks').select('*').eq('week_start', start),
-    sb.from('helpers').select('*').order('name')
+    sb.from('helpers').select('*').order('name'),
+    sb.from('profiles').select('*').order('full_name')
   ]);
 
   jobsById = {};
   (jobs || []).forEach(j => jobsById[j.id] = j);
   helpersList = hlprs || [];
+  weldersList = welders || [];
 
   currentJobWeeks = {};
   (jw || []).forEach(row => currentJobWeeks[row.job_id] = row);
@@ -342,19 +346,39 @@ function startEditLine(row, line, groupId) {
       <button type="button" class="add-part" data-action="add-edit-part">+ Add part</button>`;
   }
 
+  const isYardJob = (jobId) => { const j = jobsById[jobId]; return !!(j && j.is_yard); };
+  const startsYard = isYardJob(line.realJobId);
+
   row.innerHTML = `
     <td colspan="7">
       <div class="edit-row-form">
         <div class="edit-field">
+          <label>Welder</label>
+          <select class="input edit-welder-select">
+            ${weldersList.map(w => `<option value="${esc(w.id)}" ${w.id === line.welderId ? 'selected' : ''}>${esc(w.full_name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="edit-field edit-field-sm">
+          <label>Date</label>
+          <input type="date" class="input edit-date-input" value="${esc(line.entryDate)}">
+        </div>
+        <div class="edit-field">
           <label>Job</label>
           <select class="input edit-job-select">
-            ${allJobs.map(j => `<option value="${esc(j.id)}" ${j.id === line.realJobId ? 'selected' : ''}>${esc(j.name)}</option>`).join('')}
+            ${allJobs.map(j => `<option value="${esc(j.id)}" ${j.id === line.realJobId ? 'selected' : ''}>${esc(j.name)}${j.is_yard ? ' (yard)' : ''}</option>`).join('')}
             <option value="other" ${isOther ? 'selected' : ''}>Other / one-off…</option>
           </select>
         </div>
         <div class="edit-field edit-oneoff-wrap" style="display:${isOther ? 'block' : 'none'};">
           <label>One-off job name</label>
           <input type="text" class="input edit-oneoff-input" value="${esc(line.realOneOffName)}">
+        </div>
+        <div class="edit-field edit-forjob-wrap" style="display:${startsYard ? 'block' : 'none'};">
+          <label>Which job is this yard work for?</label>
+          <select class="input edit-forjob-select">
+            <option value="">Pick the job it's for…</option>
+            ${allJobs.filter(j => !j.is_yard).map(j => `<option value="${esc(j.id)}" ${j.id === line.forJobId ? 'selected' : ''}>${esc(j.name)}</option>`).join('')}
+          </select>
         </div>
         <div class="edit-field">
           <label>Description</label>
@@ -380,6 +404,7 @@ function startEditLine(row, line, groupId) {
 
   const jobSelect = row.querySelector('.edit-job-select');
   const oneOffWrap = row.querySelector('.edit-oneoff-wrap');
+  const forJobWrap = row.querySelector('.edit-forjob-wrap');
   const flatWrap = row.querySelector('.edit-flat-wrap');
   const partsWrap = row.querySelector('.edit-parts-wrap');
 
@@ -411,6 +436,7 @@ function startEditLine(row, line, groupId) {
 
   jobSelect.addEventListener('change', () => {
     oneOffWrap.style.display = jobSelect.value === 'other' ? 'block' : 'none';
+    forJobWrap.style.display = isYardJob(jobSelect.value) ? 'block' : 'none';
     flatWrap.style.display = isFlatJob(jobSelect.value) ? 'block' : 'none';
   });
 
@@ -419,11 +445,14 @@ function startEditLine(row, line, groupId) {
     readPartsFromDom();
     const jobVal = jobSelect.value;
     const other = jobVal === 'other';
+    const yardNow = isYardJob(jobVal);
     const flatNow = isFlatJob(jobVal);
     const patch = {
+      welder_id: row.querySelector('.edit-welder-select').value,
+      entry_date: row.querySelector('.edit-date-input').value,
       job_id: other ? null : jobVal,
       one_off_name: other ? row.querySelector('.edit-oneoff-input').value.trim() : null,
-      for_job_id: null,
+      for_job_id: yardNow ? (row.querySelector('.edit-forjob-select').value || null) : null,
       description: row.querySelector('.edit-desc-input').value.trim(),
       hours: Number(row.querySelector('.edit-hours-input').value),
       per_diem: row.querySelector('.edit-pd-input').checked
