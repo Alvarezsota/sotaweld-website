@@ -13,7 +13,7 @@ function esc(str) {
   return div.innerHTML;
 }
 function money(n) { return '$' + Math.round(n).toLocaleString(); }
-function ymd(d) { return d.toISOString().slice(0, 10); }
+function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function getMonday(d) {
   const date = new Date(d);
   const day = date.getDay();

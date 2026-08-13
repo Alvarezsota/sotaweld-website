@@ -36,6 +36,15 @@
 .row-x { width: 32px; height: 32px; flex: 0 0 auto; border-radius: 8px; background: var(--steel-700); border: 1px solid var(--line); color: var(--danger); font-size: 16px; cursor: pointer; }
 .add-part { width: 100%; margin-top: 10px; padding: 11px; border-radius: 10px; background: none; border: 1px dashed rgba(87,201,140,.45); color: var(--ok); font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
 
+.wr-split-section { padding: 12px; border-radius: 12px; background: rgba(233,158,63,.07); border: 1px solid rgba(233,158,63,.3); }
+.wr-split-section .wr-section-head { border-bottom: none; padding: 0 0 4px; }
+.wr-split-row { display: flex; gap: 6px; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(69,77,89,.4); flex-wrap: wrap; }
+.wr-split-row:last-of-type { border-bottom: none; }
+.split-size-select { flex: 1 1 70px; min-width: 64px; }
+.split-sched-select { flex: 1 1 90px; min-width: 80px; }
+.split-qty-input { width: 56px; flex: 0 0 auto; text-align: center; }
+.split-line-total { flex: 1 1 100%; order: 5; font-size: 11px; color: var(--dim); text-align: right; }
+
 .wr-entry-total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(87,201,140,.25); font-size: 14px; font-weight: 800; color: var(--ok); }
 
 .wr-totalsbar { position: sticky; bottom: 0; background: linear-gradient(0deg, var(--steel-900), rgba(25,28,33,.85)); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-top: 10px; display: flex; justify-content: flex-end; }

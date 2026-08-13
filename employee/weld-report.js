@@ -1,12 +1,15 @@
 let currentUser = null;
 let currentProfile = null;
 let jobs = [];
+let weldersList = [];
 let entries = [];
 
 const dateInput = document.getElementById('dateInput');
 const submitBtn = document.getElementById('submitBtn');
 const addJobBtn = document.getElementById('addJobBtn');
 const entriesContainer = document.getElementById('entriesContainer');
+
+const SPLIT_FN_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/weld-split-credit';
 
 const PI = 3.14;
 // [nominal, OD] from the shop weld inch chart
@@ -15,9 +18,25 @@ const PIPE = [[2,2.38],[3,3.5],[4,4.5],[5,5.56],[6,6.63],[8,8.63],[10,10.75],[12
               [32,32],[34,34],[36,36],[38,38],[40,40]];
 // [size, Std weld inches] (Sch 80 = Std * 1.4)
 const OLET = [[0.5,5.28],[0.75,6.66],[1,8.23],[2,14.95],[3,21.98],[4,28.26],[6,41.64],[8,54.2],[10,67.51]];
+// Big pipe (14"+) can be split between two welders working the same weld
+const BIG_PIPE = PIPE.filter(([nom]) => nom > 12);
+function pipeWeldInches(nominal, schedule) {
+  const row = PIPE.find(([nom]) => nom === Number(nominal));
+  if (!row) return 0;
+  const std = row[1] * PI;
+  if (schedule === 'sch80') return std * 1.4;
+  if (schedule === 'sch100') return std * 1.6;
+  return std;
+}
+function schedLabel(schedule) {
+  return schedule === 'sch80' ? 'Sch80' : schedule === 'sch100' ? 'Sch100+' : 'Std';
+}
 
 function fmt(n) { return Math.round(n * 100) / 100; }
-function todayIso() { return new Date().toISOString().slice(0, 10); }
+function todayIso() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
 function uid() { return Math.random().toString(36).slice(2); }
 function esc(str) {
   const div = document.createElement('div');
@@ -35,8 +54,11 @@ function isYard(jobId) {
 function newMiscRow(desc, inches) {
   return { uid: uid(), desc: desc || '', inches: inches != null ? inches : '' };
 }
+function newSplitLine(nominal, schedule, qty) {
+  return { uid: uid(), nominal: nominal || '', schedule: schedule || 'std', qty: qty != null ? qty : 1 };
+}
 function newEntry() {
-  return { uid: uid(), rowId: null, jobId: '', oneOffName: '', forJobId: '', miscRows: [newMiscRow()] };
+  return { uid: uid(), rowId: null, jobId: '', oneOffName: '', forJobId: '', miscRows: [newMiscRow()], splitPartnerId: '', splitLines: [] };
 }
 
 function miscRowHtml(r) {
@@ -45,6 +67,24 @@ function miscRowHtml(r) {
       <input type="text" class="input wr-misc-desc" placeholder="Description (pipe supports, tacks, repairs…)" value="${escAttr(r.desc)}">
       <input type="number" step="0.1" min="0" class="input wr-misc-in" placeholder="in" value="${escAttr(r.inches)}">
       <button type="button" class="row-x" data-action="remove-misc">&times;</button>
+    </div>`;
+}
+
+function splitLineHtml(line) {
+  return `
+    <div class="wr-split-row" data-split-uid="${line.uid}">
+      <select class="input split-size-select">
+        <option value="">Size…</option>
+        ${BIG_PIPE.map(([nom]) => `<option value="${nom}" ${Number(line.nominal) === nom ? 'selected' : ''}>${nom}"</option>`).join('')}
+      </select>
+      <select class="input split-sched-select">
+        <option value="std" ${line.schedule === 'std' ? 'selected' : ''}>Std</option>
+        <option value="sch80" ${line.schedule === 'sch80' ? 'selected' : ''}>Sch 80</option>
+        <option value="sch100" ${line.schedule === 'sch100' ? 'selected' : ''}>Sch 100+</option>
+      </select>
+      <input type="number" min="0" step="1" class="input split-qty-input" placeholder="Qty" value="${escAttr(line.qty)}">
+      <span class="split-line-total" data-split-uid="${line.uid}">0 in (your half)</span>
+      <button type="button" class="row-x" data-action="remove-split">&times;</button>
     </div>`;
 }
 
@@ -148,6 +188,18 @@ function entryCardHtml(entry) {
         <button type="button" class="add-part" data-action="add-misc">+ Add line</button>
       </div>
 
+      <div class="wr-section-inner wr-split-section">
+        <div class="wr-section-head"><span>Split Welds (14&Prime;+ with a partner)</span><span class="wr-section-total" data-split-sub>0 in (your half)</span></div>
+        <span class="oneoff-note" style="display:block;margin-bottom:10px;">For big pipe where two welders worked the same weld together — pick who you split it with. They're automatically credited their half too, no need for them to log it separately.</span>
+        <label class="field-label">Split with</label>
+        <select class="input split-partner-select">
+          <option value="">Pick the other welder…</option>
+          ${weldersList.filter(w => w.id !== currentUser.id).map(w => `<option value="${w.id}" ${entry.splitPartnerId === w.id ? 'selected' : ''}>${esc(w.full_name)}</option>`).join('')}
+        </select>
+        <div data-split-body>${entry.splitLines.map(splitLineHtml).join('')}</div>
+        <button type="button" class="add-part" data-action="add-split">+ Add split weld</button>
+      </div>
+
       <div class="wr-entry-total-row"><span>Job total</span><span data-entry-total>0 in</span></div>
     </div>`;
 }
@@ -168,13 +220,27 @@ function recalcEntry(entryEl) {
   });
   entryEl.querySelectorAll('.wr-misc-in').forEach(m => { miscTotal += Number(m.value) || 0; });
 
-  const grand = pipeTotal + oletTotal + miscTotal;
+  let splitTotal = 0;
+  entryEl.querySelectorAll('.wr-split-row').forEach(row => {
+    const nominal = row.querySelector('.split-size-select').value;
+    const schedule = row.querySelector('.split-sched-select').value;
+    const qty = Number(row.querySelector('.split-qty-input').value) || 0;
+    const half = nominal ? pipeWeldInches(nominal, schedule) / 2 : 0;
+    const lineTotal = half * qty;
+    const totalEl = row.querySelector('.split-line-total');
+    if (totalEl) totalEl.textContent = fmt(lineTotal) + ' in (your half)';
+    splitTotal += lineTotal;
+  });
+  const splitSubEl = entryEl.querySelector('[data-split-sub]');
+  if (splitSubEl) splitSubEl.textContent = fmt(splitTotal) + ' in (your half)';
+
+  const grand = pipeTotal + oletTotal + miscTotal + splitTotal;
   entryEl.querySelector('[data-pipe-sub]').textContent = fmt(pipeTotal) + ' in';
   entryEl.querySelector('[data-olet-sub]').textContent = fmt(oletTotal) + ' in';
   entryEl.querySelector('[data-misc-sub]').textContent = fmt(miscTotal) + ' in';
   entryEl.querySelector('[data-entry-total]').textContent = fmt(grand) + ' in';
   entryEl.dataset.grand = fmt(grand);
-  return { pipeTotal: fmt(pipeTotal), oletTotal: fmt(oletTotal), miscTotal: fmt(miscTotal), grand: fmt(grand) };
+  return { pipeTotal: fmt(pipeTotal + splitTotal), oletTotal: fmt(oletTotal), miscTotal: fmt(miscTotal), splitTotal: fmt(splitTotal), grand: fmt(grand) };
 }
 
 function recalcGrand() {
@@ -185,6 +251,13 @@ function recalcGrand() {
   return fmt(grand);
 }
 
+function entrySplitLinesValid(entryEl) {
+  const rows = [...entryEl.querySelectorAll('.wr-split-row')];
+  const hasQty = rows.some(row => row.querySelector('.split-size-select').value && Number(row.querySelector('.split-qty-input').value) > 0);
+  if (!hasQty) return true;
+  return !!entryEl.querySelector('.split-partner-select').value;
+}
+
 function updateSubmitState() {
   const grand = [...entriesContainer.querySelectorAll('.wr-entry')].reduce((s, el) => s + Number(el.dataset.grand || 0), 0);
   const jobsOk = entries.length > 0 && entries.every(e => {
@@ -193,16 +266,41 @@ function updateSubmitState() {
     if (isYard(e.jobId) && !e.forJobId) return false;
     return true;
   });
-  submitBtn.disabled = !(jobsOk && grand > 0);
+  const splitsOk = [...entriesContainer.querySelectorAll('.wr-entry')].every(entrySplitLinesValid);
+  submitBtn.disabled = !(jobsOk && splitsOk && grand > 0);
 }
 
-function buildBreakdownForEntry(entryEl) {
+function buildBreakdownForEntry(entryEl, partnerId, partnerName) {
   const breakdown = [];
   entryEl.querySelectorAll('.wr-qty-input').forEach(q => {
     const v = Number(q.value) || 0;
     if (v > 0) breakdown.push({ label: q.dataset.lbl, qty: v, total: fmt(v * Number(q.dataset.val)) });
   });
+  entryEl.querySelectorAll('.wr-split-row').forEach(row => {
+    const nominal = row.querySelector('.split-size-select').value;
+    const schedule = row.querySelector('.split-sched-select').value;
+    const qty = Number(row.querySelector('.split-qty-input').value) || 0;
+    if (!nominal || qty <= 0) return;
+    const half = pipeWeldInches(nominal, schedule) / 2;
+    breakdown.push({
+      label: `${nominal}" ${schedLabel(schedule)} (split w/ ${partnerName})`,
+      qty, total: fmt(half * qty),
+      nominal: Number(nominal), schedule, partnerId
+    });
+  });
   return breakdown;
+}
+function buildSplitItemsForPartner(entryEl, myName) {
+  const items = [];
+  entryEl.querySelectorAll('.wr-split-row').forEach(row => {
+    const nominal = row.querySelector('.split-size-select').value;
+    const schedule = row.querySelector('.split-sched-select').value;
+    const qty = Number(row.querySelector('.split-qty-input').value) || 0;
+    if (!nominal || qty <= 0) return;
+    const half = pipeWeldInches(nominal, schedule) / 2;
+    items.push({ label: `${nominal}" ${schedLabel(schedule)} (split w/ ${myName})`, qty, total: fmt(half * qty) });
+  });
+  return items;
 }
 function buildMiscItemsForEntry(entry) {
   return entry.miscRows
@@ -217,7 +315,7 @@ function appendEntryCard(entry, breakdown) {
   entriesContainer.appendChild(entryEl);
 
   if (breakdown && breakdown.length) {
-    breakdown.forEach(item => {
+    breakdown.filter(item => !item.partnerId).forEach(item => {
       const input = entryEl.querySelector(`.wr-qty-input[data-lbl="${cssEscape(item.label)}"]`);
       if (input) input.value = item.qty;
     });
@@ -242,7 +340,7 @@ entriesContainer.addEventListener('input', (e) => {
   const entry = entries.find(x => x.uid === entryEl.dataset.entryUid);
   if (!entry) return;
 
-  if (e.target.classList.contains('wr-qty-input') || e.target.classList.contains('wr-misc-in')) {
+  if (e.target.classList.contains('wr-qty-input') || e.target.classList.contains('wr-misc-in') || e.target.classList.contains('split-qty-input')) {
     recalcEntry(entryEl);
     recalcGrand();
   }
@@ -257,6 +355,11 @@ entriesContainer.addEventListener('input', (e) => {
       if (e.target.classList.contains('wr-misc-desc')) r.desc = e.target.value;
       if (e.target.classList.contains('wr-misc-in')) r.inches = e.target.value;
     }
+  }
+  const splitRow = e.target.closest('[data-split-uid]');
+  if (splitRow && e.target.classList.contains('split-qty-input')) {
+    const line = entry.splitLines.find(x => x.uid === splitRow.dataset.splitUid);
+    if (line) line.qty = e.target.value;
   }
 });
 
@@ -278,6 +381,22 @@ entriesContainer.addEventListener('change', (e) => {
   if (e.target.classList.contains('for-job-select')) {
     entry.forJobId = e.target.value;
     updateSubmitState();
+    return;
+  }
+  if (e.target.classList.contains('split-partner-select')) {
+    entry.splitPartnerId = e.target.value;
+    updateSubmitState();
+    return;
+  }
+  const splitRow = e.target.closest('[data-split-uid]');
+  if (splitRow && (e.target.classList.contains('split-size-select') || e.target.classList.contains('split-sched-select'))) {
+    const line = entry.splitLines.find(x => x.uid === splitRow.dataset.splitUid);
+    if (line) {
+      if (e.target.classList.contains('split-size-select')) line.nominal = e.target.value;
+      if (e.target.classList.contains('split-sched-select')) line.schedule = e.target.value;
+    }
+    recalcEntry(entryEl);
+    recalcGrand();
   }
 });
 
@@ -313,6 +432,22 @@ entriesContainer.addEventListener('click', async (e) => {
     entryEl.querySelector('[data-misc-body]').innerHTML = entry.miscRows.map(miscRowHtml).join('');
     recalcEntry(entryEl);
     recalcGrand();
+    return;
+  }
+  if (e.target.closest('[data-action="add-split"]')) {
+    entry.splitLines.push(newSplitLine());
+    entryEl.querySelector('[data-split-body]').innerHTML = entry.splitLines.map(splitLineHtml).join('');
+    recalcEntry(entryEl);
+    recalcGrand();
+    return;
+  }
+  const removeSplitBtn = e.target.closest('[data-action="remove-split"]');
+  if (removeSplitBtn) {
+    const row = e.target.closest('[data-split-uid]');
+    entry.splitLines = entry.splitLines.filter(x => x.uid !== row.dataset.splitUid);
+    entryEl.querySelector('[data-split-body]').innerHTML = entry.splitLines.map(splitLineHtml).join('');
+    recalcEntry(entryEl);
+    recalcGrand();
   }
 });
 
@@ -336,13 +471,16 @@ async function loadReportsForDate() {
 
   if (data && data.length) {
     data.forEach(row => {
+      const splitItems = (row.breakdown || []).filter(b => b.partnerId);
       const entry = {
         uid: uid(),
         rowId: row.id,
         jobId: row.job_id || 'other',
         oneOffName: row.one_off_name || '',
         forJobId: row.for_job_id || '',
-        miscRows: (row.misc_items && row.misc_items.length) ? row.misc_items.map(m => newMiscRow(m.description, m.inches)) : [newMiscRow()]
+        miscRows: (row.misc_items && row.misc_items.length) ? row.misc_items.map(m => newMiscRow(m.description, m.inches)) : [newMiscRow()],
+        splitPartnerId: splitItems.length ? splitItems[0].partnerId : '',
+        splitLines: splitItems.length ? splitItems.map(b => newSplitLine(b.nominal, b.schedule, b.qty)) : []
       };
       entries.push(entry);
       appendEntryCard(entry, row.breakdown || []);
@@ -380,6 +518,9 @@ submitBtn.addEventListener('click', async () => {
         continue;
       }
 
+      const partner = entry.splitPartnerId ? weldersList.find(w => w.id === entry.splitPartnerId) : null;
+      const partnerName = partner ? partner.full_name : '';
+
       const payload = {
         welder_id: currentUser.id,
         report_date: date,
@@ -390,7 +531,7 @@ submitBtn.addEventListener('click', async () => {
         olet_inches: totals.oletTotal,
         misc_inches: totals.miscTotal,
         total_inches: totals.grand,
-        breakdown: buildBreakdownForEntry(entryEl),
+        breakdown: buildBreakdownForEntry(entryEl, entry.splitPartnerId || null, partnerName),
         misc_items: buildMiscItemsForEntry(entry),
         updated_at: new Date().toISOString()
       };
@@ -402,6 +543,31 @@ submitBtn.addEventListener('click', async () => {
         const { data, error } = await sb.from('weld_reports').insert(payload).select().single();
         if (error) throw error;
         entry.rowId = data.id;
+      }
+
+      if (entry.splitPartnerId) {
+        const splitItems = buildSplitItemsForPartner(entryEl, currentProfile ? currentProfile.full_name : currentUser.email);
+        if (splitItems.length) {
+          const { data: { session } } = await sb.auth.getSession();
+          try {
+            const res = await fetch(SPLIT_FN_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+              body: JSON.stringify({
+                partnerWelderId: entry.splitPartnerId,
+                reportDate: date,
+                jobId: other ? null : entry.jobId,
+                oneOffName: other ? entry.oneOffName.trim() : null,
+                forJobId: yard ? entry.forJobId : null,
+                items: splitItems
+              })
+            });
+            const resJson = await res.json();
+            if (!res.ok || !resJson.ok) console.error('Split credit failed:', resJson);
+          } catch (splitErr) {
+            console.error('Split credit request failed:', splitErr);
+          }
+        }
       }
     }
 
@@ -454,8 +620,12 @@ async function requireAuth() {
   dateInput.value = todayIso();
   dateInput.max = todayIso();
 
-  const { data: jobsData } = await sb.from('jobs').select('*').eq('active', true).order('name');
+  const [{ data: jobsData }, { data: weldersData }] = await Promise.all([
+    sb.from('jobs').select('*').eq('active', true).order('name'),
+    sb.from('welders_public').select('*').order('full_name')
+  ]);
   jobs = jobsData || [];
+  weldersList = weldersData || [];
 
   await loadReportsForDate();
 })();

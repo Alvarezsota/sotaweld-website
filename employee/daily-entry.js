@@ -14,7 +14,10 @@ const submitBtn = document.getElementById('submitBtn');
 const addJobBtn = document.getElementById('addJobBtn');
 const dateInput = document.getElementById('dateInput');
 
-function todayIso() { return new Date().toISOString().slice(0, 10); }
+function todayIso() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
 function selectedDateLabel() {
   const val = dateInput.value || todayIso();
   const [y, m, d] = val.split('-').map(Number);
@@ -42,7 +45,7 @@ function getMonday(d) {
   return date;
 }
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
-function ymd(d) { return d.toISOString().slice(0, 10); }
+function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function dayLabel(dateStr) {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
