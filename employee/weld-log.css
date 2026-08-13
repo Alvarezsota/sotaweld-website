@@ -16,6 +16,8 @@
 .wl-email-ok { color: var(--ok); }
 .wl-email-err { color: #e0554f; }
 
+.wl-new-report-btn { display: block; width: 100%; padding: 13px; margin-bottom: 22px; border-radius: 12px; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+
 .wl-welder-card { margin-bottom: 18px; }
 .wl-welder-head { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
 .wl-welder-name { font-size: 17px; font-weight: 800; }

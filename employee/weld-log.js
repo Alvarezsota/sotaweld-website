@@ -178,16 +178,18 @@ function miscRowHtml(r) {
 function editCardHtml(state) {
   const other = state.jobId === 'other';
   const yard = isYardJob(state.jobId);
+  const isNew = state.id === 'new';
   return `
     <div class="job-card wl-edit-card" data-report-id="${state.id}">
       <div class="job-card-top">
-        <span class="job-idx">Editing</span>
+        <span class="job-idx">${isNew ? 'New weld report' : 'Editing'}</span>
         <button type="button" class="remove-job" data-action="cancel-edit">&times; Cancel</button>
       </div>
       <div class="wl-edit-row">
         <div class="wl-edit-field">
           <label class="field-label">Welder</label>
           <select class="input edit-welder-select">
+            ${isNew ? '<option value="">Pick welder…</option>' : ''}
             ${weldersAll.map(w => `<option value="${esc(w.id)}" ${w.id === state.welderId ? 'selected' : ''}>${esc(w.full_name)}</option>`).join('')}
           </select>
         </div>
@@ -258,10 +260,27 @@ function editCardHtml(state) {
 
       <div class="wr-entry-total-row"><span>Report total</span><span data-entry-total>0 in</span></div>
       <div class="edit-card-footer">
-        <button type="button" class="btn2 btn2-line small" data-action="delete-report">Delete report</button>
-        <button type="button" class="btn2 btn2-solid small" data-action="save-edit">Save changes</button>
+        ${isNew ? '' : '<button type="button" class="btn2 btn2-line small" data-action="delete-report">Delete report</button>'}
+        <button type="button" class="btn2 btn2-solid small" data-action="save-edit">${isNew ? 'Submit report' : 'Save changes'}</button>
       </div>
     </div>`;
+}
+
+function emptyNewReportState() {
+  return {
+    id: 'new',
+    welderId: '',
+    reportDate: todayIso(),
+    jobId: '',
+    oneOffName: '',
+    forJobId: '',
+    miscRows: [newMiscRow()],
+    splitItems: [],
+    splitPartnerId: '',
+    splitLines: [],
+    _chartBreakdown: [],
+    _splitTotal: 0
+  };
 }
 
 function recalcEditCard(cardEl, preservedSplitTotal) {
@@ -375,6 +394,7 @@ function startEdit(reportId) {
 async function saveEdit(reportId) {
   const cardEl = document.querySelector(`[data-report-id="${reportId}"]`);
   if (!cardEl) return;
+  const isNew = reportId === 'new';
   const other = editState.jobId === 'other';
   const yard = isYardJob(editState.jobId);
 
@@ -392,6 +412,8 @@ async function saveEdit(reportId) {
   const myName = (weldersAll.find(w => w.id === welderId) || {}).full_name || 'Unknown welder';
 
   const totals = recalcEditCard(cardEl, editState._splitTotal);
+  if (isNew && totals.grand <= 0) { alert('Enter at least some weld inches before submitting.'); return; }
+
   const newSplitBreakdown = partner ? buildNewSplitBreakdown(cardEl, partner.id, partner.full_name) : [];
   const breakdown = [...buildEditBreakdown(cardEl), ...editState.splitItems, ...newSplitBreakdown];
   const miscItems = editState.miscRows
@@ -413,7 +435,9 @@ async function saveEdit(reportId) {
     updated_at: new Date().toISOString()
   };
 
-  const { error } = await sb.from('weld_reports').update(payload).eq('id', reportId);
+  const { error } = isNew
+    ? await sb.from('weld_reports').insert(payload)
+    : await sb.from('weld_reports').update(payload).eq('id', reportId);
   if (error) { alert('Could not save: ' + error.message); return; }
 
   if (partner) {
@@ -459,13 +483,14 @@ async function deleteReport(reportId) {
 
 function renderBody(jobGroups) {
   const body = document.getElementById('weldLogBody');
+  const newReportHtml = editingReportId === 'new' ? editCardHtml(editState) : '';
 
   if (!jobGroups.length) {
-    body.innerHTML = '<div class="card"><p class="empty-state2">No weld reports for this week.</p></div>';
+    body.innerHTML = newReportHtml + '<div class="card"><p class="empty-state2">No weld reports for this week.</p></div>';
     return;
   }
 
-  body.innerHTML = jobGroups.map(jg => {
+  body.innerHTML = newReportHtml + jobGroups.map(jg => {
     const dayList = Object.values(jg.days).sort((a, b) => a.dateStr.localeCompare(b.dateStr));
     return `
       <div class="card wl-welder-card">
@@ -680,6 +705,14 @@ document.getElementById('sendLogEmailBtn').addEventListener('click', async () =>
 
   btn.disabled = false;
   btn.textContent = 'Send';
+});
+
+document.getElementById('newReportBtn').addEventListener('click', () => {
+  editingReportId = 'new';
+  editState = emptyNewReportState();
+  renderBody(buildJobGroups(allReports));
+  const cardEl = document.querySelector('[data-report-id="new"]');
+  if (cardEl) cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
 (async function init() {
