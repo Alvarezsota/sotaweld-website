@@ -38,12 +38,22 @@
 
 .p-head, .p-row { display: grid; grid-template-columns: 2.2fr 1fr 1fr 1fr .8fr; align-items: center; gap: 8px; }
 .helpers-row-grid { grid-template-columns: 2.2fr 1fr 1fr 1fr .8fr 20px; }
+.welders-row-grid { grid-template-columns: 2.2fr 1fr 1fr 1fr .8fr 110px; }
 .p-head { padding: 6px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); font-weight: 700; }
 .p-row { background: var(--steel-850); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: 7px; }
 .rate { gap: 0; }
 .rd { color: var(--dim); font-size: 13px; }
 .margin-cell { font-weight: 800; color: var(--molten-2); }
 .admin-tag { font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--arc); background: rgba(255,255,255,.12); padding: 3px 7px; border-radius: 5px; }
+
+.pw-btn { background: none; border: 1px solid var(--line); color: var(--arc); font-size: 11px; font-weight: 700; padding: 6px 10px; border-radius: 7px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+.pw-panel { background: var(--steel-800); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: -3px 0 10px; }
+.pw-panel-row { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+.pw-input { flex: 1; }
+.pw-note { font-size: 11px; color: var(--dim2); margin: 8px 0 0; line-height: 1.4; }
+.pw-status { font-size: 12px; font-weight: 600; margin: 6px 0 0; min-height: 1em; }
+.pw-ok { color: var(--ok); }
+.pw-err { color: #e0554f; }
 
 @media (max-width: 640px) {
   .jt-head span:nth-child(3), .jt-row > *:nth-child(3),
@@ -53,4 +63,5 @@
   .p-head span:nth-child(2), .p-row > *:nth-child(2) { display: none; }
   .p-head, .p-row { grid-template-columns: 1.8fr 1fr 1fr .8fr; }
   .helpers-row-grid { grid-template-columns: 1.8fr 1fr 1fr .8fr 20px !important; }
+  .welders-row-grid { grid-template-columns: 1.8fr 1fr 1fr .8fr 100px !important; }
 }

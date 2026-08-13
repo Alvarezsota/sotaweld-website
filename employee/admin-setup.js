@@ -104,11 +104,14 @@ document.getElementById('addJobBtn').addEventListener('click', async () => {
 });
 
 // ---------- Welders (profiles) ----------
+let passwordEditId = null;
+const ADMIN_SET_PASSWORD_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/admin-set-password';
+
 function renderWelders() {
   const table = document.getElementById('weldersTable');
   document.getElementById('welderCount').textContent = weldersList.length;
   table.innerHTML = weldersList.map(p => `
-    <div class="p-row" data-profile-id="${p.id}">
+    <div class="p-row welders-row-grid" data-profile-id="${p.id}">
       <div>
         <input class="cell-in strong welder-name" value="${escAttr(p.full_name)}" placeholder="Name">
       </div>
@@ -116,9 +119,69 @@ function renderWelders() {
       <div class="c rate"><span class="rd">$</span><input class="cell-in num welder-bill" value="${escAttr(p.bill_rate)}"></div>
       <span class="c margin-cell">$${(num(p.bill_rate) - num(p.pay_rate)).toFixed(0)}</span>
       <span class="c">${p.role === 'admin' ? '<span class="admin-tag">Admin</span>' : ''}</span>
+      <span class="c"><button type="button" class="pw-btn" data-action="toggle-password">${passwordEditId === p.id ? 'Cancel' : 'Set password'}</button></span>
     </div>
+    ${passwordEditId === p.id ? `
+      <div class="pw-panel" data-profile-id="${p.id}">
+        <label class="field-label">New password for ${esc(p.full_name)}</label>
+        <div class="pw-panel-row">
+          <input type="text" class="input pw-input" placeholder="At least 6 characters" autocomplete="off">
+          <button type="button" class="btn2 btn2-solid small" data-action="save-password">Save</button>
+        </div>
+        <p class="pw-note">They can log in with this right away — no email or link needed. Tell them the new password directly.</p>
+        <p class="pw-status"></p>
+      </div>` : ''}
   `).join('');
 }
+
+document.getElementById('weldersTable').addEventListener('click', async (e) => {
+  const toggleBtn = e.target.closest('[data-action="toggle-password"]');
+  if (toggleBtn) {
+    const row = e.target.closest('[data-profile-id]');
+    passwordEditId = passwordEditId === row.dataset.profileId ? null : row.dataset.profileId;
+    renderWelders();
+    return;
+  }
+  const saveBtn = e.target.closest('[data-action="save-password"]');
+  if (saveBtn) {
+    const panel = e.target.closest('[data-profile-id]');
+    const welderId = panel.dataset.profileId;
+    const input = panel.querySelector('.pw-input');
+    const statusEl = panel.querySelector('.pw-status');
+    const newPassword = input.value;
+
+    if (newPassword.length < 6) {
+      statusEl.textContent = 'Password must be at least 6 characters.';
+      statusEl.className = 'pw-status pw-err';
+      return;
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+    statusEl.textContent = '';
+
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const res = await fetch(ADMIN_SET_PASSWORD_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ welderId, newPassword })
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to set password');
+
+      statusEl.textContent = 'Password set. They can log in with it now.';
+      statusEl.className = 'pw-status pw-ok';
+      saveBtn.textContent = 'Save';
+      saveBtn.disabled = false;
+    } catch (err) {
+      statusEl.textContent = 'Could not set password: ' + err.message;
+      statusEl.className = 'pw-status pw-err';
+      saveBtn.textContent = 'Save';
+      saveBtn.disabled = false;
+    }
+  }
+});
 
 async function loadWelders() {
   const { data } = await sb.from('profiles').select('*').order('full_name');
