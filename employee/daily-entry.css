@@ -81,9 +81,9 @@
 .pd-on .pd-knob::after { left: 23px; background: var(--ok); }
 
 .stainless-toggle { width: 96px; flex-shrink: 0; border: 2px solid var(--line); background: var(--steel-800); border-radius: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 10px 6px; color: var(--dim2); transition: background .15s, border-color .15s; font-family: inherit; }
-.stainless-on { color: var(--arc); background: rgba(154,161,171,.16); border-color: var(--arc); }
-.stainless-on .pd-knob { background: rgba(154,161,171,.4); }
-.stainless-on .pd-knob::after { left: 23px; background: var(--arc); }
+.stainless-on { color: var(--ok); background: rgba(87,201,140,.14); border-color: var(--ok); }
+.stainless-on .pd-knob { background: rgba(87,201,140,.35); }
+.stainless-on .pd-knob::after { left: 23px; background: var(--ok); }
 
 .helper-block { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--steel-800); border: 1px dashed var(--steel-600); }
 .helper-top { display: flex; gap: 8px; align-items: center; }

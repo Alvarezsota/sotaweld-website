@@ -360,6 +360,7 @@ weekPanelBody.addEventListener('change', (e) => {
     if (editState.jobId !== 'other') editState.oneOffName = '';
     if (!isYard(editState.jobId)) editState.forJobId = '';
     if (!hoursTracked(editState.jobId)) editState.hours = 0;
+    editState.stainless = false;
     renderWeekPanelBody();
     return;
   }
@@ -687,6 +688,7 @@ entriesContainer.addEventListener('change', (e) => {
     if (entry.jobId !== 'other') entry.oneOffName = '';
     if (!isYard(entry.jobId)) entry.forJobId = '';
     if (!hoursTracked(entry.jobId)) entry.hours = 0;
+    entry.stainless = false;
     render();
     return;
   }
