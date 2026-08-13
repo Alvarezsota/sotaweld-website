@@ -8,7 +8,7 @@
 .section-note2 span { font-size: 13px; color: var(--dim); font-weight: 500; line-height: 1.5; }
 .btn2.small { font-size: 13px; padding: 8px 14px; white-space: nowrap; }
 
-.jt-head, .jt-row { display: grid; grid-template-columns: 2.2fr 1.2fr 1.4fr .8fr .7fr .7fr .7fr 36px; align-items: center; gap: 8px; }
+.jt-head, .jt-row { display: grid; grid-template-columns: 2.2fr 1.2fr 1.4fr .8fr .8fr .7fr .7fr .7fr 36px; align-items: center; gap: 8px; }
 .jt-head { padding: 6px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); font-weight: 700; }
 .jt-head .c { text-align: center; }
 .jt-row { background: var(--steel-850); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; margin-bottom: 7px; }
@@ -47,7 +47,8 @@
 
 @media (max-width: 640px) {
   .jt-head span:nth-child(3), .jt-row > *:nth-child(3),
-  .jt-head span:nth-child(4), .jt-row .pd-cell { display: none; }
+  .jt-head span:nth-child(4), .jt-row .pd-cell,
+  .jt-head span:nth-child(5), .jt-row .stainless-cell { display: none; }
   .jt-head, .jt-row { grid-template-columns: 1.6fr .8fr .7fr .7fr .7fr 36px; }
   .p-head span:nth-child(2), .p-row > *:nth-child(2) { display: none; }
   .p-head, .p-row { grid-template-columns: 1.8fr 1fr 1fr .8fr; }

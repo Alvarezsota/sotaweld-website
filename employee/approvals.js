@@ -38,19 +38,21 @@ async function requireAuth() {
   return session.user;
 }
 
-function personLine(role, name, hours, payRate, billRate, perDiemAmt, perDiem, entryId, helperRowId, description, realJobId, realOneOffName, helperId, perDiemFlag, parts, welderId, entryDate, forJobId) {
+function personLine(role, name, hours, payRate, billRate, perDiemAmt, perDiem, entryId, helperRowId, description, realJobId, realOneOffName, helperId, perDiemFlag, parts, welderId, entryDate, forJobId, isStainless, stainlessRate) {
   const pd = perDiem ? perDiemAmt : 0;
   const isFlat = Array.isArray(parts);
   const partsSum = isFlat ? parts.reduce((s, p) => s + Number(p.quantity) * Number(p.rate), 0) : 0;
-  const revenue = (isFlat ? partsSum : hours * billRate) + pd;
+  const effectiveBillRate = (isStainless && !isFlat) ? stainlessRate : billRate;
+  const revenue = (isFlat ? partsSum : hours * effectiveBillRate) + pd;
   const cost = hours * payRate + pd;
   return {
-    role, name, hours, billRate, pd: perDiem ? pd : null, revenue, cost, margin: revenue - cost,
+    role, name, hours, billRate: effectiveBillRate, pd: perDiem ? pd : null, revenue, cost, margin: revenue - cost,
     entryId, helperRowId, description: description || '',
     realJobId: realJobId || null, realOneOffName: realOneOffName || '',
     helperId: helperId || null, perDiemFlag: !!perDiemFlag,
     parts: isFlat ? parts : null,
-    welderId: welderId || null, entryDate: entryDate || null, forJobId: forJobId || null
+    welderId: welderId || null, entryDate: entryDate || null, forJobId: forJobId || null,
+    isStainless: !!isStainless
   };
 }
 
@@ -80,7 +82,8 @@ function buildJobGroups(entries, jobs) {
     const prof = e.profiles || {};
     const perDiemAmt = effectiveJob ? Number(effectiveJob.per_diem) : 0;
     const isFlatJob = effectiveJob && effectiveJob.billing_type === 'flat';
-    d.lines.push(personLine('welder', prof.full_name || '—', Number(e.hours), Number(prof.pay_rate || 0), Number(prof.bill_rate || 0), perDiemAmt, e.per_diem, e.id, null, e.description, e.job_id, e.one_off_name, null, e.per_diem, isFlatJob ? (e.daily_entry_parts || []) : undefined, e.welder_id, e.entry_date, e.for_job_id));
+    const stainlessRate = effectiveJob ? Number(effectiveJob.stainless_bill_rate || 125) : 125;
+    d.lines.push(personLine('welder', prof.full_name || '—', Number(e.hours), Number(prof.pay_rate || 0), Number(prof.bill_rate || 0), perDiemAmt, e.per_diem, e.id, null, e.description, e.job_id, e.one_off_name, null, e.per_diem, isFlatJob ? (e.daily_entry_parts || []) : undefined, e.welder_id, e.entry_date, e.for_job_id, e.is_stainless, stainlessRate));
     if (e.description) d.descs.push(e.description);
 
     (e.daily_entry_helpers || []).forEach(dh => {
@@ -212,7 +215,7 @@ function renderDetail(groupId) {
             <tbody>
               ${d.lines.map((l, li) => `
                 <tr data-entry-id="${esc(l.entryId)}" data-helper-row-id="${l.helperRowId ? esc(l.helperRowId) : ''}" data-line-key="${dateStr}-${li}">
-                  <td class="l-name">${esc(l.name)}<span class="role-tag2">${l.role}</span>${l.role === 'welder' && l.description ? `<div class="line-desc">${esc(l.description)}</div>` : ''}${l.parts ? `<div class="line-desc flat-tag">Flat rate</div>${l.parts.map(p => `<div class="line-desc part-line-desc">${esc(p.description)} — ${p.quantity} &times; $${p.rate} = ${money(Number(p.quantity) * Number(p.rate))}</div>`).join('')}` : ''}</td>
+                  <td class="l-name">${esc(l.name)}<span class="role-tag2">${l.role}</span>${l.role === 'welder' && l.description ? `<div class="line-desc">${esc(l.description)}</div>` : ''}${l.isStainless ? `<div class="line-desc stainless-tag">Stainless</div>` : ''}${l.parts ? `<div class="line-desc flat-tag">Flat rate</div>${l.parts.map(p => `<div class="line-desc part-line-desc">${esc(p.description)} — ${p.quantity} &times; $${p.rate} = ${money(Number(p.quantity) * Number(p.rate))}</div>`).join('')}` : ''}</td>
                   <td class="l-num line-hours">${l.hours}</td>
                   <td class="l-num dim">${l.parts ? '—' : '$' + l.billRate}</td>
                   <td class="l-num dim">${l.pd ? money(l.pd) : '—'}</td>
@@ -391,6 +394,9 @@ function startEditLine(row, line, groupId) {
         <div class="edit-field edit-field-sm edit-field-pd">
           <label><input type="checkbox" class="edit-pd-input" ${line.perDiemFlag ? 'checked' : ''}> Per diem</label>
         </div>
+        <div class="edit-field edit-field-sm edit-field-pd">
+          <label><input type="checkbox" class="edit-stainless-input" ${line.isStainless ? 'checked' : ''}> Stainless</label>
+        </div>
         <div class="edit-field edit-flat-wrap" style="display:${startsFlat ? 'block' : 'none'};">
           <label>Parts billed (qty &times; rate)</label>
           <div class="edit-parts-wrap">${editPartsHtml()}</div>
@@ -455,7 +461,8 @@ function startEditLine(row, line, groupId) {
       for_job_id: yardNow ? (row.querySelector('.edit-forjob-select').value || null) : null,
       description: row.querySelector('.edit-desc-input').value.trim(),
       hours: Number(row.querySelector('.edit-hours-input').value),
-      per_diem: row.querySelector('.edit-pd-input').checked
+      per_diem: row.querySelector('.edit-pd-input').checked,
+      is_stainless: row.querySelector('.edit-stainless-input').checked
     };
     await sb.from('daily_entries').update(patch).eq('id', line.entryId);
 

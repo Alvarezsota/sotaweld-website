@@ -51,7 +51,7 @@
 
     <div class="card wl-email-card">
       <div class="wl-email-head">Email a daily log</div>
-      <p class="wl-email-note">Send the daily weld inch summary for any date to any email address — yourself, an accountant, a customer, anyone.</p>
+      <p class="wl-email-note">Send the daily weld inch summary for any date to any email address — yourself, an accountant, a customer, anyone. Add more recipients with CC so it goes out to everyone in one send.</p>
       <div class="wl-email-row">
         <div class="wl-email-field">
           <label class="field-label">Date</label>
@@ -62,6 +62,12 @@
           <input type="email" class="input" id="emailToInput" placeholder="name@example.com">
         </div>
         <button type="button" class="btn2 btn2-solid" id="sendLogEmailBtn">Send</button>
+      </div>
+      <div class="wl-email-row">
+        <div class="wl-email-field wl-email-field-grow">
+          <label class="field-label">CC (comma-separate multiple)</label>
+          <input type="text" class="input" id="emailCcInput" placeholder="accountant@example.com, customer@example.com">
+        </div>
       </div>
       <p class="wl-email-status" id="emailStatus"></p>
     </div>

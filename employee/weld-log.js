@@ -474,6 +474,7 @@ document.getElementById('sendLogEmailBtn').addEventListener('click', async () =>
   const statusEl = document.getElementById('emailStatus');
   const date = document.getElementById('emailDateInput').value;
   const to = document.getElementById('emailToInput').value.trim();
+  const cc = document.getElementById('emailCcInput').value.trim();
 
   if (!date || !to) {
     statusEl.textContent = 'Pick a date and enter an email address.';
@@ -490,7 +491,7 @@ document.getElementById('sendLogEmailBtn').addEventListener('click', async () =>
     const res = await fetch(WELD_DIGEST_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-      body: JSON.stringify({ date, to })
+      body: JSON.stringify({ date, to, cc })
     });
     const json = await res.json();
     if (!res.ok || !json.ok) throw new Error(json.error || 'Send failed');
@@ -499,7 +500,8 @@ document.getElementById('sendLogEmailBtn').addEventListener('click', async () =>
       statusEl.textContent = `No weld reports found for ${date} — nothing to send.`;
       statusEl.className = 'wl-email-status wl-email-err';
     } else {
-      statusEl.textContent = `Sent — ${json.grandTotal.toFixed(2)} in across ${json.welders} welder(s) to ${to}.`;
+      const ccNote = json.ccList && json.ccList.length ? ` (cc: ${json.ccList.join(', ')})` : '';
+      statusEl.textContent = `Sent — ${json.grandTotal.toFixed(2)} in across ${json.welders} welder(s) to ${to}${ccNote}.`;
       statusEl.className = 'wl-email-status wl-email-ok';
     }
   } catch (err) {

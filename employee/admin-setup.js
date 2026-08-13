@@ -29,6 +29,7 @@ function renderJobs() {
       <input class="cell-in job-operator" value="${escAttr(j.operator || '')}" placeholder="Operator">
       <input class="cell-in job-bill" value="${escAttr(j.bill_to || '')}" placeholder="Set bill-to…">
       <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num job-pd" value="${escAttr(j.per_diem)}"></div>
+      <div class="c pd-cell stainless-cell"><span class="pd-dollar">$</span><input class="cell-in num job-stainless" value="${escAttr(j.stainless_bill_rate)}" title="Bill rate per hour when a welder flags stainless work on this job"></div>
       <div class="c"><button type="button" class="toggle2${j.billing_type === 'flat' ? ' ton' : ''}" data-action="toggle-flat" title="Flat rate job (billed a flat dollar amount instead of by the hour)"><span class="tk2"></span></button></div>
       <div class="c"><button type="button" class="toggle2${j.track_hours ? ' ton' : ''}" data-action="toggle-hours" title="Track hours on this job's daily log"><span class="tk2"></span></button></div>
       <div class="c"><button type="button" class="toggle2${j.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>
@@ -55,6 +56,7 @@ document.getElementById('jobsTable').addEventListener('blur', async (e) => {
   else if (e.target.classList.contains('job-operator')) patch = { operator: e.target.value.trim() };
   else if (e.target.classList.contains('job-bill')) patch = { bill_to: e.target.value.trim() };
   else if (e.target.classList.contains('job-pd')) patch = { per_diem: num(e.target.value) };
+  else if (e.target.classList.contains('job-stainless')) patch = { stainless_bill_rate: num(e.target.value) };
   if (!patch) return;
 
   Object.assign(job, patch);
@@ -95,7 +97,7 @@ document.getElementById('jobsTable').addEventListener('click', async (e) => {
 });
 
 document.getElementById('addJobBtn').addEventListener('click', async () => {
-  const { data, error } = await sb.from('jobs').insert({ name: 'New Job', per_diem: 100 }).select().single();
+  const { data, error } = await sb.from('jobs').insert({ name: 'New Job', per_diem: 100, stainless_bill_rate: 125 }).select().single();
   if (error) { console.error(error); return; }
   jobsList.push(data);
   renderJobs();

@@ -143,7 +143,7 @@ function weekEntryHtml(d) {
     <div class="week-entry" data-entry-id="${e.id}">
       <div class="week-entry-row">
         <span class="week-entry-name">${esc(jobLabelFor(e))}</span>
-        <span class="week-entry-hrs">${hoursTracked(e.job_id) ? e.hours + ' hrs' : ''}${e.per_diem ? ' · PD' : ''}</span>
+        <span class="week-entry-hrs">${hoursTracked(e.job_id) ? e.hours + ' hrs' : ''}${e.per_diem ? ' · PD' : ''}${e.is_stainless ? ' · Stainless' : ''}</span>
       </div>
       ${e.description ? `<div class="week-entry-desc">${esc(e.description)}</div>` : ''}
       ${d.parts.map(p => `<div class="week-entry-helper">&#8618; ${esc(p.description)} (${p.quantity} &times; $${p.rate}) — $${(Number(p.quantity) * Number(p.rate)).toLocaleString()}</div>`).join('')}
@@ -177,6 +177,7 @@ function startEditEntry(entryId) {
     description: e.description || '',
     hours: Number(e.hours) || 0,
     perDiem: !!e.per_diem,
+    stainless: !!e.is_stainless,
     helpers: found.helpers.map(h => ({ uid: uid(), helperId: h.helper_id, hours: Number(h.hours), perDiem: !!h.per_diem })),
     parts: found.parts.length ? found.parts.map(p => ({ uid: uid(), name: p.description, qty: p.quantity, rate: p.rate })) : [newPart()]
   };
@@ -207,7 +208,8 @@ async function saveEditEntry(entryId) {
       for_job_id: yard ? editState.forJobId : null,
       description: editState.description.trim(),
       hours: editState.hours,
-      per_diem: editState.perDiem
+      per_diem: editState.perDiem,
+      is_stainless: editState.stainless
     }).eq('id', entryId);
     if (upErr) throw upErr;
 
@@ -333,6 +335,12 @@ weekPanelBody.addEventListener('click', async (e) => {
     renderWeekPanelBody();
     return;
   }
+  const stainlessToggle = e.target.closest('.stainless-toggle');
+  if (stainlessToggle) {
+    editState.stainless = !editState.stainless;
+    renderWeekPanelBody();
+    return;
+  }
   const removeHelperBtn = e.target.closest('[data-action="remove-helper"]');
   if (removeHelperBtn) {
     const helperEl = e.target.closest('[data-helper-uid]');
@@ -393,7 +401,7 @@ function esc(str) {
 function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
 
 function newEntry() {
-  return { uid: uid(), jobId: '', oneOffName: '', forJobId: '', description: '', hours: 10, perDiem: true, helpers: [], parts: [newPart()] };
+  return { uid: uid(), jobId: '', oneOffName: '', forJobId: '', description: '', hours: 10, perDiem: true, stainless: false, helpers: [], parts: [newPart()] };
 }
 function newHelperRow() {
   return { uid: uid(), helperId: '', hours: 10, perDiem: true };
@@ -434,6 +442,9 @@ function stepperHtml(label, value) {
 }
 function pdToggleHtml(on) {
   return `<button type="button" class="pd-toggle${on ? ' pd-on' : ''}"><span class="pd-knob"></span><span class="pd-text">Per diem<br><b>${on ? 'ON' : 'OFF'}</b></span></button>`;
+}
+function stainlessToggleHtml(on) {
+  return `<button type="button" class="stainless-toggle${on ? ' stainless-on' : ''}" data-action="toggle-stainless"><span class="pd-knob"></span><span class="pd-text">Stainless<br><b>${on ? 'ON' : 'OFF'}</b></span></button>`;
 }
 function partRowHtml(p) {
   return `
@@ -512,6 +523,7 @@ function editCardHtml(entry) {
       <div class="you-row">
         ${hrsOn ? stepperHtml('Your hours', entry.hours) : ''}
         ${pdToggleHtml(entry.perDiem)}
+        ${stainlessToggleHtml(entry.stainless)}
       </div>
       ${entry.helpers.map(h => helperBlockHtml(h)).join('')}
       <button type="button" class="add-helper" data-action="add-helper">+ Add helper</button>
@@ -572,6 +584,7 @@ function entryCardHtml(entry, idx) {
       <div class="you-row">
         ${hrsOn ? stepperHtml('Your hours', entry.hours) : ''}
         ${pdToggleHtml(entry.perDiem)}
+        ${stainlessToggleHtml(entry.stainless)}
       </div>
       ${entry.helpers.map(h => helperBlockHtml(h)).join('')}
       <button type="button" class="add-helper" data-action="add-helper">+ Add helper</button>
@@ -643,6 +656,13 @@ entriesContainer.addEventListener('click', (e) => {
     const helperEl = e.target.closest('[data-helper-uid]');
     const target = helperEl ? entry.helpers.find(x => x.uid === helperEl.dataset.helperUid) : entry;
     target.perDiem = !target.perDiem;
+    render();
+    return;
+  }
+
+  const stainlessToggle = e.target.closest('.stainless-toggle');
+  if (stainlessToggle) {
+    entry.stainless = !entry.stainless;
     render();
     return;
   }
@@ -781,7 +801,8 @@ async function handleSubmit() {
         for_job_id: yard ? entry.forJobId : null,
         description: entry.description.trim(),
         hours: entry.hours,
-        per_diem: entry.perDiem
+        per_diem: entry.perDiem,
+        is_stainless: entry.stainless
       }).select().single();
 
       if (deError) throw deError;
@@ -843,7 +864,7 @@ function showSuccess() {
       <div class="receipt-job2">
         <div class="receipt-row2">
           <span class="rj-name2">${esc(jobName(e))}${isYard(e.jobId) && e.forJobId ? ' &rarr; ' + esc(jobs.find(j => j.id === e.forJobId)?.name || '') : ''}</span>
-          <span class="rj-hrs2">${hoursTracked(e.jobId) ? e.hours + ' hrs' : ''}${e.perDiem ? ' · PD' : ''}</span>
+          <span class="rj-hrs2">${hoursTracked(e.jobId) ? e.hours + ' hrs' : ''}${e.perDiem ? ' · PD' : ''}${e.stainless ? ' · Stainless' : ''}</span>
         </div>
         ${isFlat(e.jobId) ? e.parts.filter(p => p.name.trim() && Number(p.qty) > 0 && Number(p.rate) > 0).map(p => `
           <div class="receipt-row2 receipt-helper2"><span>&#8618; ${esc(p.name)} (${p.qty} &times; $${p.rate})</span><span>$${partTotal(p).toLocaleString()}</span></div>
