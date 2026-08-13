@@ -11,6 +11,19 @@
 .ws-div { width: 1px; height: 30px; background: var(--line); }
 .ws-margin .ws-num { color: var(--molten-2); }
 
+.wl-new-report-btn { display: block; width: 100%; padding: 13px; margin-bottom: 22px; border-radius: 12px; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+
+.new-ticket-card { background: var(--steel-850); border: 1px solid var(--line); border-radius: 16px; padding: 16px 14px 14px; margin-bottom: 22px; }
+.new-ticket-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.new-ticket-title { font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--arc); background: rgba(255,255,255,.08); padding: 4px 9px; border-radius: 6px; }
+.new-ticket-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.new-ticket-field { flex: 1; min-width: 160px; }
+.new-ticket-field-sm { flex: 0 0 140px; }
+.new-ticket-field label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--dim2); margin-bottom: 5px; }
+.new-ticket-checks { display: flex; gap: 18px; margin-top: 4px; }
+.new-ticket-checks label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); font-weight: 600; }
+.new-ticket-footer { display: flex; justify-content: flex-end; margin-top: 14px; }
+
 .job-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
 .job-tile { text-align: left; cursor: pointer; background: var(--steel-850); border: 1px solid var(--line); border-radius: 16px; padding: 18px; font-family: inherit; color: inherit; transition: border-color .15s, transform .1s; }
 .job-tile:hover { border-color: var(--steel-600); transform: translateY(-2px); }

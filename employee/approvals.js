@@ -517,6 +517,235 @@ async function setJobWeekStatus(groupId, status) {
   renderDetail(groupId);
 }
 
+// ---------- Submit a brand-new ticket ----------
+let newTicketState = null;
+
+function emptyNewTicketState() {
+  return { welderId: '', entryDate: ymd(new Date()), jobId: '', oneOffName: '', forJobId: '', description: '', hours: 8, perDiem: true, stainless: false, parts: [{ id: null, description: '', quantity: 1, rate: '' }] };
+}
+
+function newTicketPartsHtml(state) {
+  return `
+    <div class="edit-parts-list">
+      ${state.parts.map((p, pi) => `
+        <div class="edit-part-row" data-part-idx="${pi}">
+          <input type="text" class="input nt-part-desc" placeholder="Part" value="${esc(p.description)}">
+          <input type="number" step="1" min="0" class="input nt-part-qty" placeholder="Qty" value="${esc(p.quantity)}">
+          <span class="part-x">&times;</span>
+          <input type="number" step="0.01" min="0" class="input nt-part-rate" placeholder="Rate $" value="${esc(p.rate)}">
+          <button type="button" class="remove-part" data-action="remove-new-part">&times;</button>
+        </div>
+      `).join('')}
+    </div>
+    <button type="button" class="add-part" data-action="add-new-part">+ Add part</button>`;
+}
+
+function newTicketCardHtml(state) {
+  const other = state.jobId === 'other';
+  const allJobs = Object.values(jobsById).sort((a, b) => a.name.localeCompare(b.name));
+  const job = jobsById[state.jobId];
+  const yard = !!(job && job.is_yard);
+  const flat = !!(job && job.billing_type === 'flat');
+  return `
+    <div class="new-ticket-card">
+      <div class="new-ticket-top">
+        <span class="new-ticket-title">New ticket</span>
+        <button type="button" class="remove-job" data-action="cancel-new-ticket">&times; Cancel</button>
+      </div>
+      <div class="new-ticket-row">
+        <div class="new-ticket-field">
+          <label>Welder</label>
+          <select class="input nt-welder-select">
+            <option value="">Pick welder…</option>
+            ${weldersList.map(w => `<option value="${esc(w.id)}" ${w.id === state.welderId ? 'selected' : ''}>${esc(w.full_name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="new-ticket-field new-ticket-field-sm">
+          <label>Date</label>
+          <input type="date" class="input nt-date-input" value="${esc(state.entryDate)}">
+        </div>
+      </div>
+      <div class="new-ticket-row">
+        <div class="new-ticket-field">
+          <label>Job</label>
+          <select class="input nt-job-select">
+            <option value="">Pick job…</option>
+            ${allJobs.map(j => `<option value="${esc(j.id)}" ${j.id === state.jobId ? 'selected' : ''}>${esc(j.name)}${j.is_yard ? ' (yard)' : ''}</option>`).join('')}
+            <option value="other" ${other ? 'selected' : ''}>Other / one-off…</option>
+          </select>
+        </div>
+      </div>
+      ${other ? `
+        <div class="new-ticket-row">
+          <div class="new-ticket-field">
+            <label>One-off job name</label>
+            <input type="text" class="input nt-oneoff-input" value="${esc(state.oneOffName)}">
+          </div>
+        </div>` : ''}
+      ${yard ? `
+        <div class="new-ticket-row">
+          <div class="new-ticket-field">
+            <label>Which job is this yard work for?</label>
+            <select class="input nt-forjob-select">
+              <option value="">Pick the job it's for…</option>
+              ${allJobs.filter(j => !j.is_yard).map(j => `<option value="${esc(j.id)}" ${j.id === state.forJobId ? 'selected' : ''}>${esc(j.name)}</option>`).join('')}
+            </select>
+          </div>
+        </div>` : ''}
+      <div class="new-ticket-row">
+        <div class="new-ticket-field">
+          <label>Description</label>
+          <textarea class="input nt-desc-input">${esc(state.description)}</textarea>
+        </div>
+      </div>
+      <div class="new-ticket-row">
+        <div class="new-ticket-field new-ticket-field-sm">
+          <label>Hours</label>
+          <input type="number" step="0.5" min="0" class="input nt-hours-input" value="${esc(state.hours)}">
+        </div>
+      </div>
+      <div class="new-ticket-checks">
+        <label><input type="checkbox" class="nt-pd-input" ${state.perDiem ? 'checked' : ''}> Per diem</label>
+        <label><input type="checkbox" class="nt-stainless-input" ${state.stainless ? 'checked' : ''}> Stainless</label>
+      </div>
+      ${flat ? `
+        <div class="new-ticket-row" style="margin-top:12px;">
+          <div class="new-ticket-field" style="flex-basis:100%;">
+            <label>Parts billed (qty &times; rate)</label>
+            <div class="nt-parts-wrap">${newTicketPartsHtml(state)}</div>
+          </div>
+        </div>` : ''}
+      <div class="new-ticket-footer">
+        <button type="button" class="btn2 btn2-solid small" data-action="save-new-ticket">Submit ticket</button>
+      </div>
+    </div>`;
+}
+
+function renderNewTicketCard() {
+  document.getElementById('newTicketCard').innerHTML = newTicketState ? newTicketCardHtml(newTicketState) : '';
+}
+
+function syncNewTicketPartsFromDom() {
+  document.querySelectorAll('#newTicketCard .edit-part-row').forEach((el, pi) => {
+    if (!newTicketState.parts[pi]) return;
+    newTicketState.parts[pi].description = el.querySelector('.nt-part-desc').value;
+    newTicketState.parts[pi].quantity = el.querySelector('.nt-part-qty').value;
+    newTicketState.parts[pi].rate = el.querySelector('.nt-part-rate').value;
+  });
+}
+
+document.getElementById('newTicketBtn').addEventListener('click', () => {
+  newTicketState = newTicketState ? null : emptyNewTicketState();
+  renderNewTicketCard();
+});
+
+document.getElementById('newTicketCard').addEventListener('click', async (e) => {
+  if (!newTicketState) return;
+  if (e.target.closest('[data-action="cancel-new-ticket"]')) { newTicketState = null; renderNewTicketCard(); return; }
+  if (e.target.closest('[data-action="add-new-part"]')) {
+    syncNewTicketPartsFromDom();
+    newTicketState.parts.push({ id: null, description: '', quantity: 1, rate: '' });
+    renderNewTicketCard();
+    return;
+  }
+  const removePartBtn = e.target.closest('[data-action="remove-new-part"]');
+  if (removePartBtn) {
+    syncNewTicketPartsFromDom();
+    const idx = Number(removePartBtn.closest('[data-part-idx]').dataset.partIdx);
+    newTicketState.parts.splice(idx, 1);
+    if (!newTicketState.parts.length) newTicketState.parts.push({ id: null, description: '', quantity: 1, rate: '' });
+    renderNewTicketCard();
+    return;
+  }
+  if (e.target.closest('[data-action="save-new-ticket"]')) { await saveNewTicket(); }
+});
+
+document.getElementById('newTicketCard').addEventListener('change', (e) => {
+  if (!newTicketState) return;
+  if (e.target.classList.contains('nt-welder-select')) { newTicketState.welderId = e.target.value; return; }
+  if (e.target.classList.contains('nt-date-input')) { newTicketState.entryDate = e.target.value; return; }
+  if (e.target.classList.contains('nt-job-select')) {
+    newTicketState.jobId = e.target.value;
+    if (newTicketState.jobId !== 'other') newTicketState.oneOffName = '';
+    const j = jobsById[newTicketState.jobId];
+    if (!(j && j.is_yard)) newTicketState.forJobId = '';
+    syncNewTicketPartsFromDom();
+    renderNewTicketCard();
+    return;
+  }
+  if (e.target.classList.contains('nt-forjob-select')) { newTicketState.forJobId = e.target.value; return; }
+  if (e.target.classList.contains('nt-pd-input')) { newTicketState.perDiem = e.target.checked; return; }
+  if (e.target.classList.contains('nt-stainless-input')) { newTicketState.stainless = e.target.checked; return; }
+});
+
+document.getElementById('newTicketCard').addEventListener('input', (e) => {
+  if (!newTicketState) return;
+  if (e.target.classList.contains('nt-oneoff-input')) { newTicketState.oneOffName = e.target.value; return; }
+  if (e.target.classList.contains('nt-desc-input')) { newTicketState.description = e.target.value; return; }
+  if (e.target.classList.contains('nt-hours-input')) { newTicketState.hours = e.target.value; return; }
+  const partRow = e.target.closest('[data-part-idx]');
+  if (partRow) {
+    const idx = Number(partRow.dataset.partIdx);
+    if (!newTicketState.parts[idx]) return;
+    if (e.target.classList.contains('nt-part-desc')) newTicketState.parts[idx].description = e.target.value;
+    if (e.target.classList.contains('nt-part-qty')) newTicketState.parts[idx].quantity = e.target.value;
+    if (e.target.classList.contains('nt-part-rate')) newTicketState.parts[idx].rate = e.target.value;
+  }
+});
+
+async function saveNewTicket() {
+  syncNewTicketPartsFromDom();
+  const s = newTicketState;
+  const other = s.jobId === 'other';
+  const job = jobsById[s.jobId];
+  const yard = !!(job && job.is_yard);
+  const flat = !!(job && job.billing_type === 'flat');
+
+  if (!s.welderId || !s.entryDate || !s.jobId) { alert('Welder, date, and job are all required.'); return; }
+  if (other && !s.oneOffName.trim()) { alert('Name the one-off job.'); return; }
+  if (yard && !s.forJobId) { alert("Pick which job the yard work is for."); return; }
+  if (!s.description.trim()) { alert('Add a description.'); return; }
+  if (flat && !s.parts.some(p => p.description.trim() && Number(p.quantity) > 0 && Number(p.rate) > 0)) {
+    alert('Add at least one part with a quantity and rate.');
+    return;
+  }
+
+  const btn = document.querySelector('#newTicketCard [data-action="save-new-ticket"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+  try {
+    const { data, error } = await sb.from('daily_entries').insert({
+      welder_id: s.welderId,
+      entry_date: s.entryDate,
+      job_id: other ? null : s.jobId,
+      one_off_name: other ? s.oneOffName.trim() : null,
+      for_job_id: yard ? s.forJobId : null,
+      description: s.description.trim(),
+      hours: Number(s.hours) || 0,
+      per_diem: s.perDiem,
+      is_stainless: s.stainless
+    }).select().single();
+    if (error) throw error;
+
+    if (flat) {
+      const validParts = s.parts
+        .filter(p => p.description.trim() && Number(p.quantity) > 0 && Number(p.rate) > 0)
+        .map(p => ({ daily_entry_id: data.id, description: p.description.trim(), quantity: Number(p.quantity), rate: Number(p.rate) }));
+      if (validParts.length) {
+        const { error: partsErr } = await sb.from('daily_entry_parts').insert(validParts);
+        if (partsErr) throw partsErr;
+      }
+    }
+
+    newTicketState = null;
+    renderNewTicketCard();
+    await loadWeek();
+  } catch (err) {
+    alert('Could not submit ticket: ' + err.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit ticket'; }
+  }
+}
+
 document.getElementById('prevWeekBtn').addEventListener('click', () => { weekStart = addDays(weekStart, -7); openJobId = null; document.getElementById('jobDetail').style.display = 'none'; document.getElementById('jobGrid').style.display = 'grid'; loadWeek(); });
 document.getElementById('nextWeekBtn').addEventListener('click', () => { weekStart = addDays(weekStart, 7); openJobId = null; document.getElementById('jobDetail').style.display = 'none'; document.getElementById('jobGrid').style.display = 'grid'; loadWeek(); });
 
