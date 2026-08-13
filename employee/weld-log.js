@@ -15,6 +15,10 @@ const OLET = [[0.5,5.28],[0.75,6.66],[1,8.23],[2,14.95],[3,21.98],[4,28.26],[6,4
 
 function fmt(n) { return Math.round(n * 100) / 100; }
 function uid() { return Math.random().toString(36).slice(2); }
+function todayIso() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
 function esc(str) {
   const div = document.createElement('div');
   div.textContent = str == null ? '' : String(str);
@@ -64,21 +68,23 @@ function jobLabelFor(row) {
   return row.one_off_name || 'One-off job';
 }
 
-function buildWelderGroups(reports) {
-  const byWelder = {};
+function buildJobGroups(reports) {
+  const byJob = {};
   reports.forEach(r => {
-    const wid = r.welder_id;
-    if (!byWelder[wid]) {
-      byWelder[wid] = { welderId: wid, name: (r.profiles && r.profiles.full_name) || 'Unknown welder', total: 0, days: {} };
+    const j = effectiveJobFor(r);
+    const jobKey = j ? j.id : (r.job_id || `oneoff:${r.one_off_name}`);
+    const jobName = j ? j.name : (r.one_off_name || 'One-off job');
+    if (!byJob[jobKey]) {
+      byJob[jobKey] = { jobKey, jobName, total: 0, days: {} };
     }
-    const wg = byWelder[wid];
-    wg.total += Number(r.total_inches);
-    if (!wg.days[r.report_date]) wg.days[r.report_date] = { dateStr: r.report_date, total: 0, jobs: [] };
-    const day = wg.days[r.report_date];
+    const jg = byJob[jobKey];
+    jg.total += Number(r.total_inches);
+    if (!jg.days[r.report_date]) jg.days[r.report_date] = { dateStr: r.report_date, total: 0, rows: [] };
+    const day = jg.days[r.report_date];
     day.total += Number(r.total_inches);
-    day.jobs.push(r);
+    day.rows.push(r);
   });
-  return Object.values(byWelder).sort((a, b) => b.total - a.total);
+  return Object.values(byJob).sort((a, b) => b.total - a.total);
 }
 
 function lineItemsHtml(r) {
@@ -186,15 +192,6 @@ function editCardHtml(state) {
         </div>
       </div>
       <div class="wr-section-inner">
-        <div class="wr-section-head"><span>Olet Welds</span><span class="wr-section-total" data-olet-sub>0 in</span></div>
-        <div class="wr-table-scroll">
-          <table class="wr-table">
-            <thead><tr><th class="wr-l">Olet Size</th><th>Std /weld</th><th>Qty</th><th>Sch 80 /weld</th><th>Qty</th><th>Weld In.</th></tr></thead>
-            <tbody data-olet-body>${oletRowsHtml()}</tbody>
-          </table>
-        </div>
-      </div>
-      <div class="wr-section-inner">
         <div class="wr-section-head"><span>Miscellaneous / Off-chart</span><span class="wr-section-total" data-misc-sub>0 in</span></div>
         <div data-misc-body>${state.miscRows.map(miscRowHtml).join('')}</div>
         <button type="button" class="add-part" data-action="add-misc">+ Add line</button>
@@ -204,6 +201,15 @@ function editCardHtml(state) {
           <div class="wr-section-head"><span>Split credit (preserved as-is)</span></div>
           ${state.splitItems.map(b => `<div class="wl-item">${esc(b.label)} &times; ${b.qty} <span class="wl-item-in">${Number(b.total).toFixed(2)} in</span></div>`).join('')}
         </div>` : ''}
+      <div class="wr-section-inner">
+        <div class="wr-section-head"><span>Olet Welds</span><span class="wr-section-total" data-olet-sub>0 in</span></div>
+        <div class="wr-table-scroll">
+          <table class="wr-table">
+            <thead><tr><th class="wr-l">Olet Size</th><th>Std /weld</th><th>Qty</th><th>Sch 80 /weld</th><th>Qty</th><th>Weld In.</th></tr></thead>
+            <tbody data-olet-body>${oletRowsHtml()}</tbody>
+          </table>
+        </div>
+      </div>
 
       <div class="wr-entry-total-row"><span>Report total</span><span data-entry-total>0 in</span></div>
       <div class="edit-card-footer">
@@ -264,7 +270,7 @@ function startEdit(reportId) {
     _chartBreakdown: chartBreakdown,
     _splitTotal: splitItems.reduce((s, b) => s + Number(b.total), 0)
   };
-  renderBody(buildWelderGroups(allReports));
+  renderBody(buildJobGroups(allReports));
   const cardEl = document.querySelector(`[data-report-id="${reportId}"]`);
   if (cardEl) {
     editState._chartBreakdown.forEach(item => {
@@ -327,29 +333,29 @@ async function deleteReport(reportId) {
 
 // ---------- Render ----------
 
-function renderBody(welderGroups) {
+function renderBody(jobGroups) {
   const body = document.getElementById('weldLogBody');
 
-  if (!welderGroups.length) {
+  if (!jobGroups.length) {
     body.innerHTML = '<div class="card"><p class="empty-state2">No weld reports for this week.</p></div>';
     return;
   }
 
-  body.innerHTML = welderGroups.map(wg => {
-    const dayList = Object.values(wg.days).sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+  body.innerHTML = jobGroups.map(jg => {
+    const dayList = Object.values(jg.days).sort((a, b) => a.dateStr.localeCompare(b.dateStr));
     return `
       <div class="card wl-welder-card">
         <div class="wl-welder-head">
-          <span class="wl-welder-name">${esc(wg.name)}</span>
-          <span class="wl-welder-total">${wg.total.toFixed(2)} in this week</span>
+          <span class="wl-welder-name">${esc(jg.jobName)}</span>
+          <span class="wl-welder-total">${jg.total.toFixed(2)} in this week</span>
         </div>
         ${dayList.map(day => `
           <div class="wl-day">
             <div class="wl-day-head">${esc(dayLabel(day.dateStr))} <span class="wl-day-total">${day.total.toFixed(2)} in</span></div>
-            ${day.jobs.map(r => editingReportId === r.id ? editCardHtml(editState) : `
+            ${day.rows.map(r => editingReportId === r.id ? editCardHtml(editState) : `
               <div class="wl-job">
                 <div class="wl-job-head">
-                  <span class="wl-job-name">${esc(jobLabelFor(r))}</span>
+                  <span class="wl-job-name">${esc((r.profiles && r.profiles.full_name) || 'Unknown welder')}</span>
                   <span class="wl-job-total">${Number(r.total_inches).toFixed(2)} in</span>
                 </div>
                 <div class="wl-items">${lineItemsHtml(r)}</div>
@@ -373,7 +379,7 @@ document.getElementById('weldLogBody').addEventListener('click', async (e) => {
   if (delInlineBtn) { await deleteReport(delInlineBtn.dataset.reportId); return; }
 
   const cancelBtn = e.target.closest('[data-action="cancel-edit"]');
-  if (cancelBtn) { editingReportId = null; editState = null; renderBody(buildWelderGroups(allReports)); return; }
+  if (cancelBtn) { editingReportId = null; editState = null; renderBody(buildJobGroups(allReports)); return; }
 
   const cardEl = e.target.closest('[data-report-id]');
   if (!cardEl || !editState) return;
@@ -413,7 +419,7 @@ document.getElementById('weldLogBody').addEventListener('change', (e) => {
     editState.jobId = e.target.value;
     if (editState.jobId !== 'other') editState.oneOffName = '';
     if (!isYardJob(editState.jobId)) editState.forJobId = '';
-    renderBody(buildWelderGroups(allReports));
+    renderBody(buildJobGroups(allReports));
     const newCard = document.querySelector(`[data-report-id="${editState.id}"]`);
     if (newCard) {
       editState._chartBreakdown.forEach(item => {
@@ -448,17 +454,62 @@ async function loadWeek() {
   editingReportId = null;
   editState = null;
 
-  const welderGroups = buildWelderGroups(allReports);
-  const weekTotal = welderGroups.reduce((s, w) => s + w.total, 0);
-  document.getElementById('weekSummary').textContent = welderGroups.length
-    ? `${weekTotal.toFixed(2)} in total · ${welderGroups.length} welder${welderGroups.length === 1 ? '' : 's'} reported`
+  const jobGroups = buildJobGroups(allReports);
+  const weekTotal = jobGroups.reduce((s, j) => s + j.total, 0);
+  const welderCount = new Set(allReports.map(r => r.welder_id)).size;
+  document.getElementById('weekSummary').textContent = jobGroups.length
+    ? `${weekTotal.toFixed(2)} in total · ${jobGroups.length} job${jobGroups.length === 1 ? '' : 's'} · ${welderCount} welder${welderCount === 1 ? '' : 's'} reported`
     : '';
 
-  renderBody(welderGroups);
+  renderBody(jobGroups);
 }
 
 document.getElementById('prevWeekBtn').addEventListener('click', () => { weekStart = addDays(weekStart, -7); loadWeek(); });
 document.getElementById('nextWeekBtn').addEventListener('click', () => { weekStart = addDays(weekStart, 7); loadWeek(); });
+
+const WELD_DIGEST_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/weld-digest';
+
+document.getElementById('sendLogEmailBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('sendLogEmailBtn');
+  const statusEl = document.getElementById('emailStatus');
+  const date = document.getElementById('emailDateInput').value;
+  const to = document.getElementById('emailToInput').value.trim();
+
+  if (!date || !to) {
+    statusEl.textContent = 'Pick a date and enter an email address.';
+    statusEl.className = 'wl-email-status wl-email-err';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  statusEl.textContent = '';
+
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(WELD_DIGEST_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ date, to })
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error || 'Send failed');
+
+    if (json.skipped) {
+      statusEl.textContent = `No weld reports found for ${date} — nothing to send.`;
+      statusEl.className = 'wl-email-status wl-email-err';
+    } else {
+      statusEl.textContent = `Sent — ${json.grandTotal.toFixed(2)} in across ${json.welders} welder(s) to ${to}.`;
+      statusEl.className = 'wl-email-status wl-email-ok';
+    }
+  } catch (err) {
+    statusEl.textContent = 'Could not send: ' + err.message;
+    statusEl.className = 'wl-email-status wl-email-err';
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Send';
+});
 
 (async function init() {
   currentUser = await requireAuth();
@@ -479,6 +530,9 @@ document.getElementById('nextWeekBtn').addEventListener('click', () => { weekSta
     await sb.auth.signOut();
     window.location.href = 'login.html';
   });
+
+  document.getElementById('emailDateInput').value = todayIso();
+  document.getElementById('emailToInput').value = currentUser.email;
 
   await loadWeek();
 })();

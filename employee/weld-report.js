@@ -171,18 +171,6 @@ function entryCardHtml(entry) {
       </div>
 
       <div class="wr-section-inner">
-        <div class="wr-section-head"><span>Olet Welds</span><span class="wr-section-total" data-olet-sub>0 in</span></div>
-        <div class="wr-table-scroll">
-          <table class="wr-table">
-            <thead>
-              <tr><th class="wr-l">Olet Size</th><th>Std /weld</th><th>Qty</th><th>Sch 80 /weld</th><th>Qty</th><th>Weld In.</th></tr>
-            </thead>
-            <tbody data-olet-body>${oletRowsHtml()}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="wr-section-inner">
         <div class="wr-section-head"><span>Miscellaneous / Off-chart</span><span class="wr-section-total" data-misc-sub>0 in</span></div>
         <div data-misc-body>${entry.miscRows.map(miscRowHtml).join('')}</div>
         <button type="button" class="add-part" data-action="add-misc">+ Add line</button>
@@ -198,6 +186,18 @@ function entryCardHtml(entry) {
         </select>
         <div data-split-body>${entry.splitLines.map(splitLineHtml).join('')}</div>
         <button type="button" class="add-part" data-action="add-split">+ Add split weld</button>
+      </div>
+
+      <div class="wr-section-inner">
+        <div class="wr-section-head"><span>Olet Welds</span><span class="wr-section-total" data-olet-sub>0 in</span></div>
+        <div class="wr-table-scroll">
+          <table class="wr-table">
+            <thead>
+              <tr><th class="wr-l">Olet Size</th><th>Std /weld</th><th>Qty</th><th>Sch 80 /weld</th><th>Qty</th><th>Weld In.</th></tr>
+            </thead>
+            <tbody data-olet-body>${oletRowsHtml()}</tbody>
+          </table>
+        </div>
       </div>
 
       <div class="wr-entry-total-row"><span>Job total</span><span data-entry-total>0 in</span></div>
