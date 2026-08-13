@@ -469,6 +469,16 @@ document.getElementById('nextWeekBtn').addEventListener('click', () => { weekSta
 
 const WELD_DIGEST_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/weld-digest';
 
+document.getElementById('emailCcPreset').addEventListener('change', (e) => {
+  const email = e.target.value;
+  if (!email) return;
+  const ccInput = document.getElementById('emailCcInput');
+  const current = ccInput.value.split(',').map(s => s.trim()).filter(Boolean);
+  if (!current.includes(email)) current.push(email);
+  ccInput.value = current.join(', ');
+  e.target.value = '';
+});
+
 document.getElementById('sendLogEmailBtn').addEventListener('click', async () => {
   const btn = document.getElementById('sendLogEmailBtn');
   const statusEl = document.getElementById('emailStatus');
