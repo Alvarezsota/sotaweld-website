@@ -19,7 +19,7 @@ const PIPE = [[2,2.38],[3,3.5],[4,4.5],[5,5.56],[6,6.63],[8,8.63],[10,10.75],[12
 // [size, Std weld inches] (Sch 80 = Std * 1.4)
 const OLET = [[0.5,5.28],[0.75,6.66],[1,8.23],[2,14.95],[3,21.98],[4,28.26],[6,41.64],[8,54.2],[10,67.51]];
 // Big pipe (14"+) can be split between two welders working the same weld
-const BIG_PIPE = PIPE.filter(([nom]) => nom > 12);
+const BIG_PIPE = PIPE.filter(([nom]) => nom >= 12);
 function pipeWeldInches(nominal, schedule) {
   const row = PIPE.find(([nom]) => nom === Number(nominal));
   if (!row) return 0;
@@ -177,7 +177,7 @@ function entryCardHtml(entry) {
       </div>
 
       <div class="wr-section-inner wr-split-section">
-        <div class="wr-section-head"><span>Split Welds (14&Prime;+ with a partner)</span><span class="wr-section-total" data-split-sub>0 in (your half)</span></div>
+        <div class="wr-section-head"><span>Split Welds (12&Prime;+ with a partner)</span><span class="wr-section-total" data-split-sub>0 in (your half)</span></div>
         <span class="oneoff-note" style="display:block;margin-bottom:10px;">For big pipe where two welders worked the same weld together — pick who you split it with. They're automatically credited their half too, no need for them to log it separately.</span>
         <label class="field-label">Split with</label>
         <select class="input split-partner-select">
