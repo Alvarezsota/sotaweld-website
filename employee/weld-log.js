@@ -12,6 +12,20 @@ const PIPE = [[2,2.38],[3,3.5],[4,4.5],[5,5.56],[6,6.63],[8,8.63],[10,10.75],[12
               [14,14],[16,16],[18,18],[20,20],[22,22],[24,24],[26,26],[28,28],[30,30],
               [32,32],[34,34],[36,36],[38,38],[40,40]];
 const OLET = [[0.5,5.28],[0.75,6.66],[1,8.23],[2,14.95],[3,21.98],[4,28.26],[6,41.64],[8,54.2],[10,67.51]];
+const BIG_PIPE = PIPE.filter(([nom]) => nom >= 12);
+const SPLIT_FN_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/weld-split-credit';
+
+function pipeWeldInches(nominal, schedule) {
+  const row = PIPE.find(([nom]) => nom === Number(nominal));
+  if (!row) return 0;
+  const std = row[1] * PI;
+  if (schedule === 'sch80') return std * 1.4;
+  if (schedule === 'sch100') return std * 1.6;
+  return std;
+}
+function schedLabel(schedule) {
+  return schedule === 'sch80' ? 'Sch80' : schedule === 'sch100' ? 'Sch100+' : 'Std';
+}
 
 function fmt(n) { return Math.round(n * 100) / 100; }
 function uid() { return Math.random().toString(36).slice(2); }
@@ -132,6 +146,26 @@ function oletRowsHtml() {
 function newMiscRow(desc, inches) {
   return { uid: uid(), desc: desc || '', inches: inches != null ? inches : '' };
 }
+function newSplitLine(nominal, schedule, qty) {
+  return { uid: uid(), nominal: nominal || '', schedule: schedule || 'std', qty: qty != null ? qty : 1 };
+}
+function splitLineHtml(line) {
+  return `
+    <div class="wr-split-row" data-split-uid="${line.uid}">
+      <select class="input split-size-select">
+        <option value="">Size…</option>
+        ${BIG_PIPE.map(([nom]) => `<option value="${nom}" ${Number(line.nominal) === nom ? 'selected' : ''}>${nom}"</option>`).join('')}
+      </select>
+      <select class="input split-sched-select">
+        <option value="std" ${line.schedule === 'std' ? 'selected' : ''}>Std</option>
+        <option value="sch80" ${line.schedule === 'sch80' ? 'selected' : ''}>Sch 80</option>
+        <option value="sch100" ${line.schedule === 'sch100' ? 'selected' : ''}>Sch 100+</option>
+      </select>
+      <input type="number" min="0" step="1" class="input split-qty-input" placeholder="Qty" value="${escAttr(line.qty)}">
+      <span class="split-line-total" data-split-uid="${line.uid}">0 in (half each)</span>
+      <button type="button" class="row-x" data-action="remove-split">&times;</button>
+    </div>`;
+}
 function miscRowHtml(r) {
   return `
     <div class="wr-misc-row" data-misc-uid="${r.uid}">
@@ -198,9 +232,20 @@ function editCardHtml(state) {
       </div>
       ${state.splitItems.length ? `
         <div class="wr-section-inner wl-split-preserved">
-          <div class="wr-section-head"><span>Split credit (preserved as-is)</span></div>
+          <div class="wr-section-head"><span>Split credit (already applied)</span></div>
           ${state.splitItems.map(b => `<div class="wl-item">${esc(b.label)} &times; ${b.qty} <span class="wl-item-in">${Number(b.total).toFixed(2)} in</span></div>`).join('')}
         </div>` : ''}
+      <div class="wr-section-inner wr-split-section">
+        <div class="wr-section-head"><span>Split Welds (12&Prime;+ with a partner)</span><span class="wr-section-total" data-newsplit-sub>0 in (half each)</span></div>
+        <span class="oneoff-note" style="display:block;margin-bottom:10px;">Fixing a ticket that should have been split? Add it here — the partner welder gets their half credited automatically to their own log.</span>
+        <label class="field-label">Split with</label>
+        <select class="input split-partner-select">
+          <option value="">Pick the other welder…</option>
+          ${weldersAll.filter(w => w.id !== state.welderId).map(w => `<option value="${w.id}" ${state.splitPartnerId === w.id ? 'selected' : ''}>${esc(w.full_name)}</option>`).join('')}
+        </select>
+        <div data-split-body>${state.splitLines.map(splitLineHtml).join('')}</div>
+        <button type="button" class="add-part" data-action="add-split">+ Add split weld</button>
+      </div>
       <div class="wr-section-inner">
         <div class="wr-section-head"><span>Olet Welds</span><span class="wr-section-total" data-olet-sub>0 in</span></div>
         <div class="wr-table-scroll">
@@ -219,7 +264,7 @@ function editCardHtml(state) {
     </div>`;
 }
 
-function recalcEditCard(cardEl, splitTotal) {
+function recalcEditCard(cardEl, preservedSplitTotal) {
   let pipeTotal = 0, oletTotal = 0, miscTotal = 0;
   cardEl.querySelectorAll('[data-pipe-body] tr').forEach(tr => {
     let t = 0;
@@ -235,12 +280,27 @@ function recalcEditCard(cardEl, splitTotal) {
   });
   cardEl.querySelectorAll('.wr-misc-in').forEach(m => { miscTotal += Number(m.value) || 0; });
 
-  const grand = pipeTotal + oletTotal + miscTotal + (splitTotal || 0);
-  cardEl.querySelector('[data-pipe-sub]').textContent = fmt(pipeTotal + (splitTotal || 0)) + ' in';
+  let newSplitTotal = 0;
+  cardEl.querySelectorAll('.wr-split-row').forEach(row => {
+    const nominal = row.querySelector('.split-size-select').value;
+    const schedule = row.querySelector('.split-sched-select').value;
+    const qty = Number(row.querySelector('.split-qty-input').value) || 0;
+    const half = nominal ? pipeWeldInches(nominal, schedule) / 2 : 0;
+    const lineTotal = half * qty;
+    const totalEl = row.querySelector('.split-line-total');
+    if (totalEl) totalEl.textContent = fmt(lineTotal) + ' in (half each)';
+    newSplitTotal += lineTotal;
+  });
+  const newSplitSubEl = cardEl.querySelector('[data-newsplit-sub]');
+  if (newSplitSubEl) newSplitSubEl.textContent = fmt(newSplitTotal) + ' in (half each)';
+
+  const splitTotal = (preservedSplitTotal || 0) + newSplitTotal;
+  const grand = pipeTotal + oletTotal + miscTotal + splitTotal;
+  cardEl.querySelector('[data-pipe-sub]').textContent = fmt(pipeTotal + splitTotal) + ' in';
   cardEl.querySelector('[data-olet-sub]').textContent = fmt(oletTotal) + ' in';
   cardEl.querySelector('[data-misc-sub]').textContent = fmt(miscTotal) + ' in';
   cardEl.querySelector('[data-entry-total]').textContent = fmt(grand) + ' in';
-  return { pipeTotal: fmt(pipeTotal + (splitTotal || 0)), oletTotal: fmt(oletTotal), miscTotal: fmt(miscTotal), grand: fmt(grand) };
+  return { pipeTotal: fmt(pipeTotal + splitTotal), oletTotal: fmt(oletTotal), miscTotal: fmt(miscTotal), newSplitTotal: fmt(newSplitTotal), grand: fmt(grand) };
 }
 
 function buildEditBreakdown(cardEl) {
@@ -250,6 +310,35 @@ function buildEditBreakdown(cardEl) {
     if (v > 0) breakdown.push({ label: q.dataset.lbl, qty: v, total: fmt(v * Number(q.dataset.val)) });
   });
   return breakdown;
+}
+
+function buildNewSplitBreakdown(cardEl, partnerId, partnerName) {
+  const items = [];
+  cardEl.querySelectorAll('.wr-split-row').forEach(row => {
+    const nominal = row.querySelector('.split-size-select').value;
+    const schedule = row.querySelector('.split-sched-select').value;
+    const qty = Number(row.querySelector('.split-qty-input').value) || 0;
+    if (!nominal || qty <= 0) return;
+    const half = pipeWeldInches(nominal, schedule) / 2;
+    items.push({
+      label: `${nominal}" ${schedLabel(schedule)} (split w/ ${partnerName})`,
+      qty, total: fmt(half * qty),
+      nominal: Number(nominal), schedule, partnerId
+    });
+  });
+  return items;
+}
+function buildSplitItemsForPartner(cardEl, myName) {
+  const items = [];
+  cardEl.querySelectorAll('.wr-split-row').forEach(row => {
+    const nominal = row.querySelector('.split-size-select').value;
+    const schedule = row.querySelector('.split-sched-select').value;
+    const qty = Number(row.querySelector('.split-qty-input').value) || 0;
+    if (!nominal || qty <= 0) return;
+    const half = pipeWeldInches(nominal, schedule) / 2;
+    items.push({ label: `${nominal}" ${schedLabel(schedule)} (split w/ ${myName})`, qty, total: fmt(half * qty) });
+  });
+  return items;
 }
 
 function startEdit(reportId) {
@@ -267,6 +356,8 @@ function startEdit(reportId) {
     forJobId: row.for_job_id || '',
     miscRows: (row.misc_items && row.misc_items.length) ? row.misc_items.map(m => newMiscRow(m.description, m.inches)) : [newMiscRow()],
     splitItems,
+    splitPartnerId: '',
+    splitLines: [],
     _chartBreakdown: chartBreakdown,
     _splitTotal: splitItems.reduce((s, b) => s + Number(b.total), 0)
   };
@@ -293,8 +384,16 @@ async function saveEdit(reportId) {
   if (other && !cardEl.querySelector('.edit-oneoff-input').value.trim()) { alert('Name the one-off job.'); return; }
   if (yard && !cardEl.querySelector('.edit-forjob-select').value) { alert("Pick which job the yard work is for."); return; }
 
+  const hasNewSplitQty = [...cardEl.querySelectorAll('.wr-split-row')].some(row =>
+    row.querySelector('.split-size-select').value && Number(row.querySelector('.split-qty-input').value) > 0);
+  if (hasNewSplitQty && !editState.splitPartnerId) { alert('Pick who this split weld was shared with.'); return; }
+
+  const partner = editState.splitPartnerId ? weldersAll.find(w => w.id === editState.splitPartnerId) : null;
+  const myName = (weldersAll.find(w => w.id === welderId) || {}).full_name || 'Unknown welder';
+
   const totals = recalcEditCard(cardEl, editState._splitTotal);
-  const breakdown = [...buildEditBreakdown(cardEl), ...editState.splitItems];
+  const newSplitBreakdown = partner ? buildNewSplitBreakdown(cardEl, partner.id, partner.full_name) : [];
+  const breakdown = [...buildEditBreakdown(cardEl), ...editState.splitItems, ...newSplitBreakdown];
   const miscItems = editState.miscRows
     .filter(r => r.desc.trim() || Number(r.inches) > 0)
     .map(r => ({ description: r.desc.trim() || '(no description)', inches: Number(r.inches) || 0 }));
@@ -316,6 +415,31 @@ async function saveEdit(reportId) {
 
   const { error } = await sb.from('weld_reports').update(payload).eq('id', reportId);
   if (error) { alert('Could not save: ' + error.message); return; }
+
+  if (partner) {
+    const splitItems = buildSplitItemsForPartner(cardEl, myName);
+    if (splitItems.length) {
+      const { data: { session } } = await sb.auth.getSession();
+      try {
+        const res = await fetch(SPLIT_FN_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({
+            partnerWelderId: partner.id,
+            reportDate,
+            jobId: other ? null : editState.jobId,
+            oneOffName: other ? cardEl.querySelector('.edit-oneoff-input').value.trim() : null,
+            forJobId: yard ? (cardEl.querySelector('.edit-forjob-select').value || null) : null,
+            items: splitItems
+          })
+        });
+        const resJson = await res.json();
+        if (!res.ok || !resJson.ok) alert('Ticket saved, but crediting the partner failed: ' + (resJson.error || 'unknown error'));
+      } catch (splitErr) {
+        alert('Ticket saved, but crediting the partner failed: ' + splitErr.message);
+      }
+    }
+  }
 
   editingReportId = null;
   editState = null;
@@ -400,14 +524,34 @@ document.getElementById('weldLogBody').addEventListener('click', async (e) => {
     if (!editState.miscRows.length) editState.miscRows.push(newMiscRow());
     cardEl.querySelector('[data-misc-body]').innerHTML = editState.miscRows.map(miscRowHtml).join('');
     recalcEditCard(cardEl, editState._splitTotal);
+    return;
+  }
+
+  if (e.target.closest('[data-action="add-split"]')) {
+    editState.splitLines.push(newSplitLine());
+    cardEl.querySelector('[data-split-body]').innerHTML = editState.splitLines.map(splitLineHtml).join('');
+    recalcEditCard(cardEl, editState._splitTotal);
+    return;
+  }
+  const removeSplitBtn = e.target.closest('[data-action="remove-split"]');
+  if (removeSplitBtn) {
+    const row = e.target.closest('[data-split-uid]');
+    editState.splitLines = editState.splitLines.filter(x => x.uid !== row.dataset.splitUid);
+    cardEl.querySelector('[data-split-body]').innerHTML = editState.splitLines.map(splitLineHtml).join('');
+    recalcEditCard(cardEl, editState._splitTotal);
   }
 });
 
 document.getElementById('weldLogBody').addEventListener('input', (e) => {
   const cardEl = e.target.closest('[data-report-id]');
   if (!cardEl || !editState) return;
-  if (e.target.classList.contains('wr-qty-input') || e.target.classList.contains('wr-misc-in')) {
+  if (e.target.classList.contains('wr-qty-input') || e.target.classList.contains('wr-misc-in') || e.target.classList.contains('split-qty-input')) {
     recalcEditCard(cardEl, editState._splitTotal);
+  }
+  const splitRow = e.target.closest('[data-split-uid]');
+  if (splitRow && e.target.classList.contains('split-qty-input')) {
+    const line = editState.splitLines.find(x => x.uid === splitRow.dataset.splitUid);
+    if (line) line.qty = e.target.value;
   }
 });
 
@@ -428,6 +572,21 @@ document.getElementById('weldLogBody').addEventListener('change', (e) => {
       });
       recalcEditCard(newCard, editState._splitTotal);
     }
+    return;
+  }
+
+  if (e.target.classList.contains('split-partner-select')) {
+    editState.splitPartnerId = e.target.value;
+    return;
+  }
+  const splitRow = e.target.closest('[data-split-uid]');
+  if (splitRow && (e.target.classList.contains('split-size-select') || e.target.classList.contains('split-sched-select'))) {
+    const line = editState.splitLines.find(x => x.uid === splitRow.dataset.splitUid);
+    if (line) {
+      if (e.target.classList.contains('split-size-select')) line.nominal = e.target.value;
+      if (e.target.classList.contains('split-sched-select')) line.schedule = e.target.value;
+    }
+    recalcEditCard(cardEl, editState._splitTotal);
   }
 });
 
