@@ -12,6 +12,7 @@ function esc(str) {
   div.textContent = str == null ? '' : String(str);
   return div.innerHTML;
 }
+function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
 function money(n) { return '$' + Math.round(n).toLocaleString(); }
 function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function getMonday(d) {
@@ -96,9 +97,12 @@ function buildJobGroups(entries, jobs) {
   });
 
   return Object.values(groups).map(g => {
-    let hours = 0, revenue = 0, cost = 0;
-    Object.values(g.days).forEach(d => d.lines.forEach(l => { hours += l.hours; revenue += l.revenue; cost += l.cost; }));
-    return { ...g, hours, revenue, cost, margin: revenue - cost, marginPct: revenue ? Math.round((revenue - cost) / revenue * 100) : 0 };
+    let hours = 0, welderHours = 0, helperHours = 0, revenue = 0, cost = 0;
+    Object.values(g.days).forEach(d => d.lines.forEach(l => {
+      hours += l.hours; revenue += l.revenue; cost += l.cost;
+      if (l.role === 'helper') helperHours += l.hours; else welderHours += l.hours;
+    }));
+    return { ...g, hours, welderHours, helperHours, revenue, cost, margin: revenue - cost, marginPct: revenue ? Math.round((revenue - cost) / revenue * 100) : 0 };
   }).sort((a, b) => b.revenue - a.revenue);
 }
 
@@ -236,7 +240,8 @@ function renderDetail(groupId) {
     </div>
 
     <div class="totals2">
-      <div class="tot-item2"><span class="tot-lbl2">Hours</span><span class="tot-num2">${g.hours}</span></div>
+      <div class="tot-item2"><span class="tot-lbl2">Welder hrs</span><span class="tot-num2">${g.welderHours}</span></div>
+      <div class="tot-item2"><span class="tot-lbl2">Helper hrs</span><span class="tot-num2">${g.helperHours}</span></div>
       <div class="tot-item2"><span class="tot-lbl2">Invoice (revenue)</span><span class="tot-num2">${money(g.revenue)}</span></div>
       <div class="tot-item2"><span class="tot-lbl2">Labor cost</span><span class="tot-num2 tot-cost2">${money(g.cost)}</span></div>
       <div class="tot-item2 tot-margin2"><span class="tot-lbl2">Job margin</span><span class="tot-num2">${money(g.margin)} (${g.marginPct}%)</span></div>
