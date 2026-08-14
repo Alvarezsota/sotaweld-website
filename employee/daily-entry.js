@@ -6,6 +6,7 @@ let entries = [];
 let gasFlag = '';
 let extFlag = '';
 let needGloves = false;
+let gloveSize = '';
 let needShields = false;
 
 const entriesContainer = document.getElementById('entriesContainer');
@@ -603,7 +604,7 @@ function updateSubmitState() {
     if (e.jobId === 'other' && !e.oneOffName.trim()) return false;
     if (isYard(e.jobId) && !e.forJobId) return false;
     return true;
-  });
+  }) && (!needGloves || !!gloveSize);
   submitBtn.disabled = !canSubmit;
 }
 
@@ -772,6 +773,19 @@ document.querySelectorAll('#extOpts .gear-btn').forEach(btn => {
 document.getElementById('glovesBtn').addEventListener('click', () => {
   needGloves = !needGloves;
   document.getElementById('glovesBtn').classList.toggle('sel', needGloves);
+  document.getElementById('gloveSizeRow').style.display = needGloves ? 'flex' : 'none';
+  if (!needGloves) {
+    gloveSize = '';
+    document.querySelectorAll('.glove-size-btn').forEach(b => b.classList.remove('sel'));
+  }
+  updateSubmitState();
+});
+document.querySelectorAll('.glove-size-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    gloveSize = btn.dataset.size;
+    document.querySelectorAll('.glove-size-btn').forEach(b => b.classList.toggle('sel', b === btn));
+    updateSubmitState();
+  });
 });
 document.getElementById('shieldsBtn').addEventListener('click', () => {
   needShields = !needShields;
@@ -831,6 +845,7 @@ async function handleSubmit() {
         gas_flag: gasFlag || null,
         ext_flag: extFlag || null,
         need_gloves: needGloves,
+        gloves_size: needGloves ? gloveSize : null,
         need_shields: needShields
       });
     }
@@ -881,7 +896,7 @@ function showSuccess() {
         <div class="alert-sent-head2">Office notified</div>
         ${gasFlag ? `<div class="alert-line2">4-gas monitor — ${gasFlag === 'bump' ? 'needs bump test' : 'out of date, needs replacing'}</div>` : ''}
         ${extFlag ? `<div class="alert-line2">Fire extinguisher — ${extFlag === 'inspect' ? 'needs inspection' : 'no good, needs replacing'}</div>` : ''}
-        ${(needGloves || needShields) ? `<div class="alert-line2">Helper PPE needed — ${[needGloves && 'gloves', needShields && 'face shields'].filter(Boolean).join(' & ')}</div>` : ''}
+        ${(needGloves || needShields) ? `<div class="alert-line2">Helper PPE needed — ${[needGloves && `gloves (size ${gloveSize})`, needShields && 'face shields'].filter(Boolean).join(' & ')}</div>` : ''}
       </div>`;
   } else {
     alertBox.innerHTML = '';
@@ -893,12 +908,15 @@ document.getElementById('logAnotherBtn').addEventListener('click', () => {
   gasFlag = '';
   extFlag = '';
   needGloves = false;
+  gloveSize = '';
   needShields = false;
   document.querySelectorAll('#gasOpts .gear-btn, #extOpts .gear-btn').forEach(b => b.classList.remove('sel'));
   document.querySelector('#gasOpts .gear-btn[data-val=""]').classList.add('sel');
   document.querySelector('#extOpts .gear-btn[data-val=""]').classList.add('sel');
   document.getElementById('glovesBtn').classList.remove('sel');
   document.getElementById('shieldsBtn').classList.remove('sel');
+  document.getElementById('gloveSizeRow').style.display = 'none';
+  document.querySelectorAll('.glove-size-btn').forEach(b => b.classList.remove('sel'));
   submitBtn.textContent = "Submit work";
   dateInput.value = todayIso();
   document.getElementById('successScreen').style.display = 'none';

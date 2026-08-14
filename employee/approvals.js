@@ -323,7 +323,8 @@ function startEditLine(row, line, groupId) {
         hours: Number(row.querySelector('.edit-hours-input').value),
         per_diem: row.querySelector('.edit-pd-input').checked
       };
-      await sb.from('daily_entry_helpers').update(patch).eq('id', line.helperRowId);
+      const { error } = await sb.from('daily_entry_helpers').update(patch).eq('id', line.helperRowId);
+      if (error) { alert('Could not save: ' + error.message); return; }
       await loadWeek();
     });
     return;
@@ -467,14 +468,18 @@ function startEditLine(row, line, groupId) {
       per_diem: row.querySelector('.edit-pd-input').checked,
       is_stainless: row.querySelector('.edit-stainless-input').checked
     };
-    await sb.from('daily_entries').update(patch).eq('id', line.entryId);
+    const { error: entryErr } = await sb.from('daily_entries').update(patch).eq('id', line.entryId);
+    if (entryErr) { alert('Could not save: ' + entryErr.message); return; }
 
     if (flatNow) {
       await sb.from('daily_entry_parts').delete().eq('daily_entry_id', line.entryId);
       const validParts = editParts
         .filter(p => p.description.trim() && Number(p.quantity) > 0 && Number(p.rate) > 0)
         .map(p => ({ daily_entry_id: line.entryId, description: p.description.trim(), quantity: Number(p.quantity), rate: Number(p.rate) }));
-      if (validParts.length) await sb.from('daily_entry_parts').insert(validParts);
+      if (validParts.length) {
+        const { error: partsErr } = await sb.from('daily_entry_parts').insert(validParts);
+        if (partsErr) { alert('Entry saved, but parts could not be saved: ' + partsErr.message); return; }
+      }
     } else if (line.parts) {
       await sb.from('daily_entry_parts').delete().eq('daily_entry_id', line.entryId);
     }

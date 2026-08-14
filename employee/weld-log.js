@@ -595,6 +595,14 @@ document.getElementById('weldLogBody').addEventListener('input', (e) => {
   if (e.target.classList.contains('wr-qty-input') || e.target.classList.contains('wr-misc-in') || e.target.classList.contains('split-qty-input')) {
     recalcEditCard(cardEl, editState._splitTotal);
   }
+  const miscRow = e.target.closest('[data-misc-uid]');
+  if (miscRow) {
+    const r = editState.miscRows.find(x => x.uid === miscRow.dataset.miscUid);
+    if (r) {
+      if (e.target.classList.contains('wr-misc-desc')) r.desc = e.target.value;
+      if (e.target.classList.contains('wr-misc-in')) r.inches = e.target.value;
+    }
+  }
   const splitRow = e.target.closest('[data-split-uid]');
   if (splitRow && e.target.classList.contains('split-qty-input')) {
     const line = editState.splitLines.find(x => x.uid === splitRow.dataset.splitUid);
