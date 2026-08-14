@@ -598,14 +598,21 @@ function updateSubmitState() {
   const total = entries.reduce((sum, e) => sum + Number(e.hours) + e.helpers.reduce((s, h) => s + (h.helperId ? Number(h.hours) : 0), 0), 0);
   totalHoursEl.textContent = total;
 
-  const canSubmit = !!dateInput.value && entries.every(e => {
-    if (!e.jobId) return false;
-    if (!e.description.trim()) return false;
-    if (e.jobId === 'other' && !e.oneOffName.trim()) return false;
-    if (isYard(e.jobId) && !e.forJobId) return false;
-    return true;
-  }) && (!needGloves || !!gloveSize);
-  submitBtn.disabled = !canSubmit;
+  let missing = '';
+  if (!dateInput.value) missing = 'Pick a date.';
+  else {
+    for (const e of entries) {
+      if (!e.jobId) { missing = 'Pick a jobsite for every entry.'; break; }
+      if (e.jobId === 'other' && !e.oneOffName.trim()) { missing = 'Name the one-off job.'; break; }
+      if (isYard(e.jobId) && !e.forJobId) { missing = 'Pick which job the yard work is for.'; break; }
+      if (!e.description.trim()) { missing = 'Add a description of the work for every entry.'; break; }
+    }
+    if (!missing && needGloves && !gloveSize) missing = 'Pick a glove size.';
+  }
+
+  submitBtn.disabled = !!missing;
+  const hintEl = document.getElementById('submitHint');
+  if (hintEl) hintEl.textContent = missing;
 }
 
 entriesContainer.addEventListener('click', (e) => {
