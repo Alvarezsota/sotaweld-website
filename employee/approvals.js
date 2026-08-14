@@ -217,24 +217,26 @@ function renderDetail(groupId) {
             <span class="day-date2">${dayLabel(dateStr)}</span>
             <span class="day-desc2">${esc(d.descs.join(' · '))}</span>
           </div>
-          <table class="lines2">
-            <thead><tr><th class="l-name">Person</th><th>Hrs</th><th>Rate</th><th>PD</th><th>Bill</th><th>Margin</th><th></th></tr></thead>
-            <tbody>
-              ${d.lines.map((l, li) => `
-                <tr data-entry-id="${esc(l.entryId)}" data-helper-row-id="${l.helperRowId ? esc(l.helperRowId) : ''}" data-line-key="${dateStr}-${li}">
-                  <td class="l-name">${esc(l.name)}<span class="role-tag2">${l.role}</span>${l.role === 'welder' && l.description ? `<div class="line-desc">${esc(l.description)}</div>` : ''}${l.isStainless ? `<div class="line-desc stainless-tag">Stainless</div>` : ''}${l.parts ? `<div class="line-desc flat-tag">Flat rate</div>${l.parts.map(p => `<div class="line-desc part-line-desc">${esc(p.description)} — ${p.quantity} &times; $${p.rate} = ${money(Number(p.quantity) * Number(p.rate))}</div>`).join('')}` : ''}</td>
-                  <td class="l-num line-hours">${l.hours}</td>
-                  <td class="l-num dim">${l.parts ? '—' : '$' + l.billRate}</td>
-                  <td class="l-num dim">${l.pd ? money(l.pd) : '—'}</td>
-                  <td class="l-num">${money(l.revenue)}</td>
-                  <td class="l-num pos">${money(l.margin)}</td>
-                  <td class="l-num line-actions">
-                    <button type="button" class="row-edit" data-action="edit-line">Edit</button>
-                    <button type="button" class="row-del" data-action="delete-line">Delete</button>
-                  </td>
-                </tr>`).join('')}
-            </tbody>
-          </table>
+          <div class="lines2-scroll">
+            <table class="lines2">
+              <thead><tr><th class="l-name">Person</th><th>Hrs</th><th>Rate</th><th>PD</th><th>Bill</th><th>Margin</th><th></th></tr></thead>
+              <tbody>
+                ${d.lines.map((l, li) => `
+                  <tr data-entry-id="${esc(l.entryId)}" data-helper-row-id="${l.helperRowId ? esc(l.helperRowId) : ''}" data-line-key="${dateStr}-${li}">
+                    <td class="l-name">${esc(l.name)}<span class="role-tag2">${l.role}</span>${l.role === 'welder' && l.description ? `<div class="line-desc">${esc(l.description)}</div>` : ''}${l.isStainless ? `<div class="line-desc stainless-tag">Stainless</div>` : ''}${l.parts ? `<div class="line-desc flat-tag">Flat rate</div>${l.parts.map(p => `<div class="line-desc part-line-desc">${esc(p.description)} — ${p.quantity} &times; $${p.rate} = ${money(Number(p.quantity) * Number(p.rate))}</div>`).join('')}` : ''}</td>
+                    <td class="l-num line-hours">${l.hours}</td>
+                    <td class="l-num dim">${l.parts ? '—' : '$' + l.billRate}</td>
+                    <td class="l-num dim">${l.pd ? money(l.pd) : '—'}</td>
+                    <td class="l-num">${money(l.revenue)}</td>
+                    <td class="l-num pos">${money(l.margin)}</td>
+                    <td class="l-num line-actions">
+                      <button type="button" class="row-edit" data-action="edit-line">Edit</button>
+                      <button type="button" class="row-del" data-action="delete-line">Delete</button>
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
         </div>`;
       }).join('')}
     </div>

@@ -59,19 +59,26 @@
 .day-date2 { font-size: 14px; font-weight: 800; }
 .day-desc2 { font-size: 13px; color: var(--dim); font-weight: 600; }
 
-.lines2 { width: 100%; border-collapse: collapse; }
+.lines2-scroll { overflow-x: auto; }
+.lines2 { width: 100%; min-width: 560px; border-collapse: collapse; table-layout: fixed; }
 .lines2 th { text-align: right; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); font-weight: 700; padding: 8px 16px; }
 .lines2 th.l-name { text-align: left; }
-.lines2 td { padding: 9px 16px; font-size: 14px; border-top: 1px solid rgba(51,58,68,.5); }
-.l-name { text-align: left; font-weight: 600; }
+.lines2 td { padding: 9px 16px; font-size: 14px; border-top: 1px solid rgba(51,58,68,.5); vertical-align: top; }
+.l-name { text-align: left; font-weight: 600; overflow-wrap: break-word; word-break: break-word; }
 .l-num { text-align: right; white-space: nowrap; }
+.lines2 th:nth-child(2), .lines2 td:nth-child(2) { width: 60px; }
+.lines2 th:nth-child(3), .lines2 td:nth-child(3) { width: 70px; }
+.lines2 th:nth-child(4), .lines2 td:nth-child(4) { width: 60px; }
+.lines2 th:nth-child(5), .lines2 td:nth-child(5) { width: 90px; }
+.lines2 th:nth-child(6), .lines2 td:nth-child(6) { width: 90px; }
+.lines2 th:nth-child(7), .lines2 td:nth-child(7) { width: 110px; }
 .lines2 td.dim { color: var(--dim); }
 .pos { color: var(--ok); font-weight: 700; }
 .role-tag2 { margin-left: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); font-weight: 700; }
-.line-desc { font-size: 12px; color: var(--dim2); font-weight: 400; margin-top: 3px; }
+.line-desc { font-size: 12px; color: var(--dim2); font-weight: 400; margin-top: 3px; white-space: normal; overflow-wrap: break-word; word-break: break-word; }
 .flat-tag { color: var(--ok); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 10px; margin-top: 4px; }
 .stainless-tag { color: var(--arc); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 10px; margin-top: 4px; }
-.part-line-desc { margin-top: 2px; }
+.part-line-desc { margin-top: 2px; white-space: normal; overflow-wrap: break-word; word-break: break-word; }
 .line-actions { white-space: nowrap; }
 .row-edit, .row-del { border: none; background: none; cursor: pointer; font-size: 11px; font-weight: 700; padding: 4px 7px; border-radius: 5px; font-family: inherit; }
 .row-edit { color: var(--dim); }
