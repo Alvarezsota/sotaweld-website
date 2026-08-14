@@ -98,6 +98,9 @@
 .edit-part-row .edit-part-rate { width: 76px; flex: 0 0 auto; text-align: center; }
 .edit-part-row .part-x { color: var(--dim2); font-weight: 700; font-size: 12px; }
 .edit-part-row .remove-part { width: 30px; height: 30px; flex: 0 0 auto; border-radius: 7px; background: var(--steel-700); border: 1px solid var(--line); color: var(--danger); font-size: 15px; cursor: pointer; }
+.edit-part-row .nt-helper-select { flex: 1; min-width: 120px; }
+.edit-part-row .nt-helper-hours { width: 64px; flex: 0 0 auto; text-align: center; }
+.new-ticket-helper-pd { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--dim); white-space: nowrap; flex: 0 0 auto; }
 .edit-parts-wrap .add-part { padding: 8px; font-size: 12px; border-radius: 8px; background: none; border: 1px dashed rgba(87,201,140,.45); color: var(--ok); cursor: pointer; font-family: inherit; font-weight: 700; }
 .edit-field-actions { display: flex; gap: 8px; margin-left: auto; }
 .edit-field-actions .row-edit, .edit-field-actions .row-del { padding: 9px 14px; font-size: 12px; border: 1px solid var(--line); }

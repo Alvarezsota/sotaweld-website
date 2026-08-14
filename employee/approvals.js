@@ -531,7 +531,25 @@ async function setJobWeekStatus(groupId, status) {
 let newTicketState = null;
 
 function emptyNewTicketState() {
-  return { welderId: '', entryDate: ymd(new Date()), jobId: '', oneOffName: '', forJobId: '', description: '', hours: 8, perDiem: true, stainless: false, parts: [{ id: null, description: '', quantity: 1, rate: '' }] };
+  return { welderId: '', entryDate: ymd(new Date()), jobId: '', oneOffName: '', forJobId: '', description: '', hours: 8, perDiem: true, stainless: false, parts: [{ id: null, description: '', quantity: 1, rate: '' }], helpers: [] };
+}
+
+function newTicketHelpersHtml(state) {
+  return `
+    <div class="edit-parts-list">
+      ${state.helpers.map((h, hi) => `
+        <div class="edit-part-row" data-helper-idx="${hi}">
+          <select class="input nt-helper-select">
+            <option value="">Pick helper…</option>
+            ${helpersList.map(hp => `<option value="${esc(hp.id)}" ${h.helperId === hp.id ? 'selected' : ''}>${esc(hp.name)}</option>`).join('')}
+          </select>
+          <input type="number" step="0.5" min="0" class="input nt-helper-hours" placeholder="Hours" value="${esc(h.hours)}">
+          <label class="new-ticket-helper-pd"><input type="checkbox" class="nt-helper-pd" ${h.perDiem ? 'checked' : ''}> PD</label>
+          <button type="button" class="remove-part" data-action="remove-new-helper">&times;</button>
+        </div>
+      `).join('')}
+    </div>
+    <button type="button" class="add-part" data-action="add-new-helper">+ Add helper</button>`;
 }
 
 function newTicketPartsHtml(state) {
@@ -618,6 +636,12 @@ function newTicketCardHtml(state) {
         <label><input type="checkbox" class="nt-pd-input" ${state.perDiem ? 'checked' : ''}> Per diem</label>
         <label><input type="checkbox" class="nt-stainless-input" ${state.stainless ? 'checked' : ''}> Stainless</label>
       </div>
+      <div class="new-ticket-row" style="margin-top:12px;">
+        <div class="new-ticket-field" style="flex-basis:100%;">
+          <label>Helpers on this job</label>
+          <div class="nt-helpers-wrap">${newTicketHelpersHtml(state)}</div>
+        </div>
+      </div>
       ${flat ? `
         <div class="new-ticket-row" style="margin-top:12px;">
           <div class="new-ticket-field" style="flex-basis:100%;">
@@ -644,6 +668,15 @@ function syncNewTicketPartsFromDom() {
   });
 }
 
+function syncNewTicketHelpersFromDom() {
+  document.querySelectorAll('#newTicketCard [data-helper-idx]').forEach((el, hi) => {
+    if (!newTicketState.helpers[hi]) return;
+    newTicketState.helpers[hi].helperId = el.querySelector('.nt-helper-select').value;
+    newTicketState.helpers[hi].hours = el.querySelector('.nt-helper-hours').value;
+    newTicketState.helpers[hi].perDiem = el.querySelector('.nt-helper-pd').checked;
+  });
+}
+
 document.getElementById('newTicketBtn').addEventListener('click', () => {
   newTicketState = newTicketState ? null : emptyNewTicketState();
   renderNewTicketCard();
@@ -667,6 +700,20 @@ document.getElementById('newTicketCard').addEventListener('click', async (e) => 
     renderNewTicketCard();
     return;
   }
+  if (e.target.closest('[data-action="add-new-helper"]')) {
+    syncNewTicketHelpersFromDom();
+    newTicketState.helpers.push({ helperId: '', hours: 8, perDiem: false });
+    renderNewTicketCard();
+    return;
+  }
+  const removeHelperBtn = e.target.closest('[data-action="remove-new-helper"]');
+  if (removeHelperBtn) {
+    syncNewTicketHelpersFromDom();
+    const idx = Number(removeHelperBtn.closest('[data-helper-idx]').dataset.helperIdx);
+    newTicketState.helpers.splice(idx, 1);
+    renderNewTicketCard();
+    return;
+  }
   if (e.target.closest('[data-action="save-new-ticket"]')) { await saveNewTicket(); }
 });
 
@@ -686,6 +733,13 @@ document.getElementById('newTicketCard').addEventListener('change', (e) => {
   if (e.target.classList.contains('nt-forjob-select')) { newTicketState.forJobId = e.target.value; return; }
   if (e.target.classList.contains('nt-pd-input')) { newTicketState.perDiem = e.target.checked; return; }
   if (e.target.classList.contains('nt-stainless-input')) { newTicketState.stainless = e.target.checked; return; }
+  const helperRow = e.target.closest('[data-helper-idx]');
+  if (helperRow) {
+    const idx = Number(helperRow.dataset.helperIdx);
+    if (!newTicketState.helpers[idx]) return;
+    if (e.target.classList.contains('nt-helper-select')) newTicketState.helpers[idx].helperId = e.target.value;
+    if (e.target.classList.contains('nt-helper-pd')) newTicketState.helpers[idx].perDiem = e.target.checked;
+  }
 });
 
 document.getElementById('newTicketCard').addEventListener('input', (e) => {
@@ -701,10 +755,16 @@ document.getElementById('newTicketCard').addEventListener('input', (e) => {
     if (e.target.classList.contains('nt-part-qty')) newTicketState.parts[idx].quantity = e.target.value;
     if (e.target.classList.contains('nt-part-rate')) newTicketState.parts[idx].rate = e.target.value;
   }
+  const helperRow = e.target.closest('[data-helper-idx]');
+  if (helperRow && e.target.classList.contains('nt-helper-hours')) {
+    const idx = Number(helperRow.dataset.helperIdx);
+    if (newTicketState.helpers[idx]) newTicketState.helpers[idx].hours = e.target.value;
+  }
 });
 
 async function saveNewTicket() {
   syncNewTicketPartsFromDom();
+  syncNewTicketHelpersFromDom();
   const s = newTicketState;
   const other = s.jobId === 'other';
   const job = jobsById[s.jobId];
@@ -741,6 +801,14 @@ async function saveNewTicket() {
         const { error: partsErr } = await sb.from('daily_entry_parts').insert(validParts);
         if (partsErr) throw partsErr;
       }
+    }
+
+    const validHelpers = s.helpers
+      .filter(h => h.helperId)
+      .map(h => ({ daily_entry_id: data.id, helper_id: h.helperId, hours: Number(h.hours) || 0, per_diem: h.perDiem }));
+    if (validHelpers.length) {
+      const { error: helpersErr } = await sb.from('daily_entry_helpers').insert(validHelpers);
+      if (helpersErr) throw helpersErr;
     }
 
     newTicketState = null;
