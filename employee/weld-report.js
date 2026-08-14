@@ -260,6 +260,7 @@ function entrySplitLinesValid(entryEl) {
 
 function updateSubmitState() {
   const grand = [...entriesContainer.querySelectorAll('.wr-entry')].reduce((s, el) => s + Number(el.dataset.grand || 0), 0);
+  const hasMiscDesc = [...entriesContainer.querySelectorAll('.wr-misc-desc')].some(el => el.value.trim());
   const jobsOk = entries.length > 0 && entries.every(e => {
     if (!e.jobId) return false;
     if (e.jobId === 'other' && !e.oneOffName.trim()) return false;
@@ -267,7 +268,7 @@ function updateSubmitState() {
     return true;
   });
   const splitsOk = [...entriesContainer.querySelectorAll('.wr-entry')].every(entrySplitLinesValid);
-  submitBtn.disabled = !(jobsOk && splitsOk && grand > 0);
+  submitBtn.disabled = !(jobsOk && splitsOk && (grand > 0 || hasMiscDesc));
 }
 
 function buildBreakdownForEntry(entryEl, partnerId, partnerName) {
@@ -509,7 +510,12 @@ submitBtn.addEventListener('click', async () => {
       const other = entry.jobId === 'other';
       const yard = isYard(entry.jobId);
 
-      if (totals.grand <= 0) {
+      const partner = entry.splitPartnerId ? weldersList.find(w => w.id === entry.splitPartnerId) : null;
+      const partnerName = partner ? partner.full_name : '';
+      const breakdown = buildBreakdownForEntry(entryEl, entry.splitPartnerId || null, partnerName);
+      const miscItems = buildMiscItemsForEntry(entry);
+
+      if (totals.grand <= 0 && !breakdown.length && !miscItems.length) {
         if (entry.rowId) {
           const { error } = await sb.from('weld_reports').delete().eq('id', entry.rowId);
           if (error) throw error;
@@ -517,9 +523,6 @@ submitBtn.addEventListener('click', async () => {
         }
         continue;
       }
-
-      const partner = entry.splitPartnerId ? weldersList.find(w => w.id === entry.splitPartnerId) : null;
-      const partnerName = partner ? partner.full_name : '';
 
       const payload = {
         welder_id: currentUser.id,
@@ -531,8 +534,8 @@ submitBtn.addEventListener('click', async () => {
         olet_inches: totals.oletTotal,
         misc_inches: totals.miscTotal,
         total_inches: totals.grand,
-        breakdown: buildBreakdownForEntry(entryEl, entry.splitPartnerId || null, partnerName),
-        misc_items: buildMiscItemsForEntry(entry),
+        breakdown,
+        misc_items: miscItems,
         updated_at: new Date().toISOString()
       };
 

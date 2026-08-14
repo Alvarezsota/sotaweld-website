@@ -450,13 +450,14 @@ async function saveEdit(reportId) {
   const myName = (weldersAll.find(w => w.id === welderId) || {}).full_name || 'Unknown welder';
 
   const totals = recalcEditCard(cardEl, editState._splitTotal);
-  if (isNew && totals.grand <= 0) { alert('Enter at least some weld inches before submitting.'); return; }
 
   const newSplitBreakdown = partner ? buildNewSplitBreakdown(cardEl, partner.id, partner.full_name) : [];
   const breakdown = [...buildEditBreakdown(cardEl), ...editState.splitItems, ...newSplitBreakdown];
   const miscItems = editState.miscRows
     .filter(r => r.desc.trim() || Number(r.inches) > 0)
     .map(r => ({ description: r.desc.trim() || '(no description)', inches: Number(r.inches) || 0 }));
+
+  if (isNew && totals.grand <= 0 && !breakdown.length && !miscItems.length) { alert('Enter at least some weld inches or an off-chart line before submitting.'); return; }
 
   const payload = {
     welder_id: welderId,
