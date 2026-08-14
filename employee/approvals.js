@@ -538,7 +538,7 @@ function newTicketHelpersHtml(state) {
   return `
     <div class="edit-parts-list">
       ${state.helpers.map((h, hi) => `
-        <div class="edit-part-row" data-helper-idx="${hi}">
+        <div class="edit-part-row nt-helper-row" data-helper-idx="${hi}">
           <select class="input nt-helper-select">
             <option value="">Pick helper…</option>
             ${helpersList.map(hp => `<option value="${esc(hp.id)}" ${h.helperId === hp.id ? 'selected' : ''}>${esc(hp.name)}</option>`).join('')}
@@ -660,7 +660,7 @@ function renderNewTicketCard() {
 }
 
 function syncNewTicketPartsFromDom() {
-  document.querySelectorAll('#newTicketCard .edit-part-row').forEach((el, pi) => {
+  document.querySelectorAll('#newTicketCard [data-part-idx]').forEach((el, pi) => {
     if (!newTicketState.parts[pi]) return;
     newTicketState.parts[pi].description = el.querySelector('.nt-part-desc').value;
     newTicketState.parts[pi].quantity = el.querySelector('.nt-part-qty').value;
