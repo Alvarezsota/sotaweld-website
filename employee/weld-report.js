@@ -13,7 +13,7 @@ const SPLIT_FN_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/weld
 
 const PI = 3.14;
 // [nominal, OD] from the shop weld inch chart
-const PIPE = [[2,2.38],[3,3.5],[4,4.5],[5,5.56],[6,6.63],[8,8.63],[10,10.75],[12,12.75],
+const PIPE = [[1.5,1.63],[2,2.38],[3,3.5],[4,4.5],[5,5.56],[6,6.63],[8,8.63],[10,10.75],[12,12.75],
               [14,14],[16,16],[18,18],[20,20],[22,22],[24,24],[26,26],[28,28],[30,30],
               [32,32],[34,34],[36,36],[38,38],[40,40]];
 // [size, Std weld inches] (Sch 80 = Std * 1.4)
