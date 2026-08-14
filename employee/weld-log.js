@@ -545,7 +545,7 @@ function renderBody(dayGroups) {
           <div class="wl-job">
             <div class="wl-job-head">
               <span class="wl-job-name">${esc((r.profiles && r.profiles.full_name) || 'Unknown welder')}</span>
-              <span class="wl-job-total">${Number(r.total_inches).toFixed(2)} in${hrsWorked != null ? ` <span class="wl-job-hours">&middot; ${hrsWorked} hrs logged</span>` : ''}</span>
+              <span class="wl-job-total">${Number(r.total_inches).toFixed(2)} in ${hrsWorked != null ? `<span class="wl-job-hours">&middot; ${hrsWorked} hrs logged</span>` : `<span class="wl-job-hours wl-job-hours-missing">&middot; no hours logged</span>`}</span>
             </div>
             <div class="wl-job-sub">${esc(jobLabelFor(r))}</div>
             <div class="wl-items">${lineItemsHtml(r)}</div>
