@@ -6,6 +6,7 @@ let weldersAll = [];
 let allReports = [];
 let editingReportId = null;
 let editState = null;
+let hoursByWelderDate = {};
 
 const PI = 3.14;
 const PIPE = [[1.5,1.63],[2,2.38],[3,3.5],[4,4.5],[5,5.56],[6,6.63],[8,8.63],[10,10.75],[12,12.75],
@@ -536,11 +537,15 @@ function renderBody(dayGroups) {
           <span class="wl-welder-name">${esc(dayLabel(day.dateStr))}</span>
           <span class="wl-welder-total">${day.total.toFixed(2)} in this day</span>
         </div>
-        ${rows.map(r => editingReportId === r.id ? editCardHtml(editState) : `
+        ${rows.map(r => {
+          if (editingReportId === r.id) return editCardHtml(editState);
+          const hrsKey = `${r.welder_id}_${r.report_date}`;
+          const hrsWorked = hoursByWelderDate[hrsKey];
+          return `
           <div class="wl-job">
             <div class="wl-job-head">
               <span class="wl-job-name">${esc((r.profiles && r.profiles.full_name) || 'Unknown welder')}</span>
-              <span class="wl-job-total">${Number(r.total_inches).toFixed(2)} in</span>
+              <span class="wl-job-total">${Number(r.total_inches).toFixed(2)} in${hrsWorked != null ? ` <span class="wl-job-hours">&middot; ${hrsWorked} hrs logged</span>` : ''}</span>
             </div>
             <div class="wl-job-sub">${esc(jobLabelFor(r))}</div>
             <div class="wl-items">${lineItemsHtml(r)}</div>
@@ -550,7 +555,8 @@ function renderBody(dayGroups) {
               <button type="button" class="we-del-btn" data-action="delete-report-inline" data-report-id="${r.id}">Delete</button>
             </div>
           </div>
-        `).join('')}
+        `;
+        }).join('')}
       </div>`;
   }).join('');
 }
@@ -687,13 +693,16 @@ async function loadWeek() {
   document.getElementById('weekLabel').textContent = formatWeekLabel(weekStart);
   document.getElementById('weldLogBody').innerHTML = '<div class="card"><p class="empty-state2">Loading…</p></div>';
 
-  const [{ data: reports }, { data: jobs }, { data: welders }] = await Promise.all([
+  const [{ data: reports }, { data: jobs }, { data: welders }, { data: entries }] = await Promise.all([
     sb.from('weld_reports')
       .select('*, profiles(full_name)')
       .gte('report_date', start).lte('report_date', end)
       .order('report_date'),
     sb.from('jobs').select('*'),
-    sb.from('profiles').select('id, full_name').order('full_name')
+    sb.from('profiles').select('id, full_name').order('full_name'),
+    sb.from('daily_entries')
+      .select('welder_id, entry_date, hours')
+      .gte('entry_date', start).lte('entry_date', end)
   ]);
 
   jobsById = {};
@@ -703,6 +712,12 @@ async function loadWeek() {
   allReports = reports || [];
   editingReportId = null;
   editState = null;
+
+  hoursByWelderDate = {};
+  (entries || []).forEach(e => {
+    const key = `${e.welder_id}_${e.entry_date}`;
+    hoursByWelderDate[key] = (hoursByWelderDate[key] || 0) + Number(e.hours);
+  });
 
   const dayGroups = buildDayGroups(allReports);
   const weekTotal = dayGroups.reduce((s, d) => s + d.total, 0);

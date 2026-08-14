@@ -84,6 +84,7 @@
 .wl-split-preserved-item { align-items: center; gap: 8px; }
 .wl-split-preserved-item .row-x { width: 26px; height: 26px; flex: 0 0 auto; font-size: 14px; }
 .wl-job-sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
+.wl-job-hours { color: var(--dim2); font-weight: 600; }
 
 .wr-split-section { padding: 12px; border-radius: 12px; background: rgba(233,158,63,.07); border: 1px solid rgba(233,158,63,.3); }
 .wr-split-section .wr-section-head { border-bottom: none; padding: 0 0 4px; }
