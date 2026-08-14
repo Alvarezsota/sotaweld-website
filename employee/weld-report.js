@@ -353,7 +353,7 @@ entriesContainer.addEventListener('input', (e) => {
   if (row) {
     const r = entry.miscRows.find(x => x.uid === row.dataset.miscUid);
     if (r) {
-      if (e.target.classList.contains('wr-misc-desc')) r.desc = e.target.value;
+      if (e.target.classList.contains('wr-misc-desc')) { r.desc = e.target.value; updateSubmitState(); }
       if (e.target.classList.contains('wr-misc-in')) r.inches = e.target.value;
     }
   }
