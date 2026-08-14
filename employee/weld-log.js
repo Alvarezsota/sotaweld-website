@@ -82,23 +82,15 @@ function jobLabelFor(row) {
   return row.one_off_name || 'One-off job';
 }
 
-function buildJobGroups(reports) {
-  const byJob = {};
+function buildDayGroups(reports) {
+  const byDay = {};
   reports.forEach(r => {
-    const j = effectiveJobFor(r);
-    const jobKey = j ? j.id : (r.job_id || `oneoff:${r.one_off_name}`);
-    const jobName = j ? j.name : (r.one_off_name || 'One-off job');
-    if (!byJob[jobKey]) {
-      byJob[jobKey] = { jobKey, jobName, total: 0, days: {} };
-    }
-    const jg = byJob[jobKey];
-    jg.total += Number(r.total_inches);
-    if (!jg.days[r.report_date]) jg.days[r.report_date] = { dateStr: r.report_date, total: 0, rows: [] };
-    const day = jg.days[r.report_date];
+    if (!byDay[r.report_date]) byDay[r.report_date] = { dateStr: r.report_date, total: 0, rows: [] };
+    const day = byDay[r.report_date];
     day.total += Number(r.total_inches);
     day.rows.push(r);
   });
-  return Object.values(byJob).sort((a, b) => b.total - a.total);
+  return Object.values(byDay).sort((a, b) => a.dateStr.localeCompare(b.dateStr));
 }
 
 function lineItemsHtml(r) {
@@ -256,7 +248,12 @@ function editCardHtml(state) {
       ${state.splitItems.length ? `
         <div class="wr-section-inner wl-split-preserved">
           <div class="wr-section-head"><span>Split credit (already applied)</span></div>
-          ${state.splitItems.map(b => `<div class="wl-item">${esc(b.label)} &times; ${b.qty} <span class="wl-item-in">${Number(b.total).toFixed(2)} in</span></div>`).join('')}
+          <span class="oneoff-note" style="display:block;margin-bottom:10px;">Wrong partner or qty? Remove it here (also pulls it off their log), then add the corrected split below.</span>
+          ${state.splitItems.map((b, i) => `
+            <div class="wl-item wl-split-preserved-item" data-preserved-idx="${i}">
+              <span>${esc(b.label)} &times; ${b.qty} <span class="wl-item-in">${Number(b.total).toFixed(2)} in</span></span>
+              <button type="button" class="row-x" data-action="remove-preserved-split" data-preserved-idx="${i}">&times;</button>
+            </div>`).join('')}
         </div>` : ''}
       <div class="wr-section-inner wr-split-section">
         <div class="wr-section-head"><span>Split Welds (12&Prime;+ with a partner)</span><span class="wr-section-total" data-newsplit-sub>0 in (half each)</span></div>
@@ -381,6 +378,25 @@ function buildSplitItemsForPartner(cardEl, myName) {
   return items;
 }
 
+async function removePreservedSplit(item, myName, reportDate) {
+  const { data: partnerReports } = await sb.from('weld_reports')
+    .select('*')
+    .eq('welder_id', item.partnerId)
+    .eq('report_date', reportDate);
+  const label = `${item.nominal}" ${schedLabel(item.schedule)} (split w/ ${myName})`;
+  const match = (partnerReports || []).find(pr => (pr.breakdown || []).some(b => b.label === label));
+  if (!match) return;
+  const removed = match.breakdown.find(b => b.label === label);
+  const newBreakdown = match.breakdown.filter(b => b.label !== label);
+  const newTotal = fmt(Number(match.total_inches) - Number(removed.total));
+  const newPipe = fmt(Number(match.pipe_inches) - Number(removed.total));
+  await sb.from('weld_reports').update({
+    breakdown: newBreakdown,
+    total_inches: newTotal,
+    pipe_inches: newPipe
+  }).eq('id', match.id);
+}
+
 function startEdit(reportId) {
   const row = allReports.find(r => r.id === reportId);
   if (!row) return;
@@ -401,7 +417,7 @@ function startEdit(reportId) {
     _chartBreakdown: chartBreakdown,
     _splitTotal: splitItems.reduce((s, b) => s + Number(b.total), 0)
   };
-  renderBody(buildJobGroups(allReports));
+  renderBody(buildDayGroups(allReports));
   const cardEl = document.querySelector(`[data-report-id="${reportId}"]`);
   if (cardEl) {
     editState._chartBreakdown.forEach(item => {
@@ -502,40 +518,37 @@ async function deleteReport(reportId) {
 
 // ---------- Render ----------
 
-function renderBody(jobGroups) {
+function renderBody(dayGroups) {
   const body = document.getElementById('weldLogBody');
   const newReportHtml = editingReportId === 'new' ? editCardHtml(editState) : '';
 
-  if (!jobGroups.length) {
+  if (!dayGroups.length) {
     body.innerHTML = newReportHtml + '<div class="card"><p class="empty-state2">No weld reports for this week.</p></div>';
     return;
   }
 
-  body.innerHTML = newReportHtml + jobGroups.map(jg => {
-    const dayList = Object.values(jg.days).sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+  body.innerHTML = newReportHtml + dayGroups.map(day => {
+    const rows = [...day.rows].sort((a, b) =>
+      ((a.profiles && a.profiles.full_name) || '').localeCompare((b.profiles && b.profiles.full_name) || ''));
     return `
       <div class="card wl-welder-card">
         <div class="wl-welder-head">
-          <span class="wl-welder-name">${esc(jg.jobName)}</span>
-          <span class="wl-welder-total">${jg.total.toFixed(2)} in this week</span>
+          <span class="wl-welder-name">${esc(dayLabel(day.dateStr))}</span>
+          <span class="wl-welder-total">${day.total.toFixed(2)} in this day</span>
         </div>
-        ${dayList.map(day => `
-          <div class="wl-day">
-            <div class="wl-day-head">${esc(dayLabel(day.dateStr))} <span class="wl-day-total">${day.total.toFixed(2)} in</span></div>
-            ${day.rows.map(r => editingReportId === r.id ? editCardHtml(editState) : `
-              <div class="wl-job">
-                <div class="wl-job-head">
-                  <span class="wl-job-name">${esc((r.profiles && r.profiles.full_name) || 'Unknown welder')}</span>
-                  <span class="wl-job-total">${Number(r.total_inches).toFixed(2)} in</span>
-                </div>
-                <div class="wl-items">${lineItemsHtml(r)}</div>
-                ${submissionMetaHtml(r)}
-                <div class="wl-job-actions">
-                  <button type="button" class="we-edit-btn" data-action="edit-report" data-report-id="${r.id}">Edit</button>
-                  <button type="button" class="we-del-btn" data-action="delete-report-inline" data-report-id="${r.id}">Delete</button>
-                </div>
-              </div>
-            `).join('')}
+        ${rows.map(r => editingReportId === r.id ? editCardHtml(editState) : `
+          <div class="wl-job">
+            <div class="wl-job-head">
+              <span class="wl-job-name">${esc((r.profiles && r.profiles.full_name) || 'Unknown welder')}</span>
+              <span class="wl-job-total">${Number(r.total_inches).toFixed(2)} in</span>
+            </div>
+            <div class="wl-job-sub">${esc(jobLabelFor(r))}</div>
+            <div class="wl-items">${lineItemsHtml(r)}</div>
+            ${submissionMetaHtml(r)}
+            <div class="wl-job-actions">
+              <button type="button" class="we-edit-btn" data-action="edit-report" data-report-id="${r.id}">Edit</button>
+              <button type="button" class="we-del-btn" data-action="delete-report-inline" data-report-id="${r.id}">Delete</button>
+            </div>
           </div>
         `).join('')}
       </div>`;
@@ -550,7 +563,7 @@ document.getElementById('weldLogBody').addEventListener('click', async (e) => {
   if (delInlineBtn) { await deleteReport(delInlineBtn.dataset.reportId); return; }
 
   const cancelBtn = e.target.closest('[data-action="cancel-edit"]');
-  if (cancelBtn) { editingReportId = null; editState = null; renderBody(buildJobGroups(allReports)); return; }
+  if (cancelBtn) { editingReportId = null; editState = null; renderBody(buildDayGroups(allReports)); return; }
 
   const cardEl = e.target.closest('[data-report-id]');
   if (!cardEl || !editState) return;
@@ -558,6 +571,29 @@ document.getElementById('weldLogBody').addEventListener('click', async (e) => {
 
   if (e.target.closest('[data-action="save-edit"]')) { await saveEdit(reportId); return; }
   if (e.target.closest('[data-action="delete-report"]')) { await deleteReport(reportId); return; }
+
+  const removePreservedBtn = e.target.closest('[data-action="remove-preserved-split"]');
+  if (removePreservedBtn) {
+    const idx = Number(removePreservedBtn.dataset.preservedIdx);
+    const item = editState.splitItems[idx];
+    const partnerName = (weldersAll.find(w => w.id === item.partnerId) || {}).full_name || 'the partner';
+    if (!confirm(`Remove this split credit? This also pulls ${item.qty} × ${item.nominal}" ${schedLabel(item.schedule)} off ${partnerName}'s log.`)) return;
+    const myWelderId = cardEl.querySelector('.edit-welder-select').value;
+    const myName = (weldersAll.find(w => w.id === myWelderId) || {}).full_name || 'Unknown welder';
+    editState.splitItems.splice(idx, 1);
+    editState._splitTotal = editState.splitItems.reduce((s, b) => s + Number(b.total), 0);
+    await removePreservedSplit(item, myName, editState.reportDate);
+    renderBody(buildDayGroups(allReports));
+    const newCard = document.querySelector(`[data-report-id="${editState.id}"]`);
+    if (newCard) {
+      editState._chartBreakdown.forEach(chartItem => {
+        const input = newCard.querySelector(`.wr-qty-input[data-lbl="${cssEscape(chartItem.label)}"]`);
+        if (input) input.value = chartItem.qty;
+      });
+      recalcEditCard(newCard, editState._splitTotal);
+    }
+    return;
+  }
 
   if (e.target.closest('[data-action="add-misc"]')) {
     editState.miscRows.push(newMiscRow());
@@ -618,7 +654,7 @@ document.getElementById('weldLogBody').addEventListener('change', (e) => {
     editState.jobId = e.target.value;
     if (editState.jobId !== 'other') editState.oneOffName = '';
     if (!isYardJob(editState.jobId)) editState.forJobId = '';
-    renderBody(buildJobGroups(allReports));
+    renderBody(buildDayGroups(allReports));
     const newCard = document.querySelector(`[data-report-id="${editState.id}"]`);
     if (newCard) {
       editState._chartBreakdown.forEach(item => {
@@ -668,14 +704,18 @@ async function loadWeek() {
   editingReportId = null;
   editState = null;
 
-  const jobGroups = buildJobGroups(allReports);
-  const weekTotal = jobGroups.reduce((s, j) => s + j.total, 0);
+  const dayGroups = buildDayGroups(allReports);
+  const weekTotal = dayGroups.reduce((s, d) => s + d.total, 0);
   const welderCount = new Set(allReports.map(r => r.welder_id)).size;
-  document.getElementById('weekSummary').textContent = jobGroups.length
-    ? `${weekTotal.toFixed(2)} in total · ${jobGroups.length} job${jobGroups.length === 1 ? '' : 's'} · ${welderCount} welder${welderCount === 1 ? '' : 's'} reported`
+  const jobCount = new Set(allReports.map(r => {
+    const j = effectiveJobFor(r);
+    return j ? j.id : (r.job_id || `oneoff:${r.one_off_name}`);
+  })).size;
+  document.getElementById('weekSummary').textContent = dayGroups.length
+    ? `${weekTotal.toFixed(2)} in total · ${jobCount} job${jobCount === 1 ? '' : 's'} · ${welderCount} welder${welderCount === 1 ? '' : 's'} reported`
     : '';
 
-  renderBody(jobGroups);
+  renderBody(dayGroups);
 }
 
 document.getElementById('prevWeekBtn').addEventListener('click', () => { weekStart = addDays(weekStart, -7); loadWeek(); });
@@ -740,7 +780,7 @@ document.getElementById('sendLogEmailBtn').addEventListener('click', async () =>
 document.getElementById('newReportBtn').addEventListener('click', () => {
   editingReportId = 'new';
   editState = emptyNewReportState();
-  renderBody(buildJobGroups(allReports));
+  renderBody(buildDayGroups(allReports));
   const cardEl = document.querySelector('[data-report-id="new"]');
   if (cardEl) cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
