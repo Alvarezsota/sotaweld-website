@@ -38,6 +38,9 @@
 .wl-item-misc { font-style: italic; }
 .wl-item-in { color: var(--dim2); font-variant-numeric: tabular-nums; }
 
+.wl-submit-meta { font-size: 11px; color: var(--dim2); margin-top: 6px; font-style: italic; }
+.wl-submit-mismatch { color: #e0a83f; font-weight: 700; font-style: normal; background: rgba(224,168,63,.12); border: 1px solid rgba(224,168,63,.35); border-radius: 6px; padding: 4px 8px; display: inline-block; }
+
 .wl-job-actions { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
 .we-edit-btn, .we-del-btn { background: none; border: none; font-size: 12px; font-weight: 700; cursor: pointer; padding: 3px 0; font-family: inherit; }
 .we-edit-btn { color: var(--arc); }

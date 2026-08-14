@@ -193,10 +193,6 @@ async function saveEditEntry(entryId) {
   if (!editState.description.trim()) { alert('Add a description.'); return; }
   if (other && !editState.oneOffName.trim()) { alert('Name the one-off job.'); return; }
   if (yard && !editState.forJobId) { alert('Pick which job this yard work is for.'); return; }
-  if (flat && !editState.parts.some(p => p.name.trim() && Number(p.qty) > 0 && Number(p.rate) > 0)) {
-    alert('Add at least one part with a quantity and rate.');
-    return;
-  }
 
   const saveBtn = weekPanelBody.querySelector('[data-action="save-edit"]');
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
@@ -606,7 +602,6 @@ function updateSubmitState() {
     if (!e.description.trim()) return false;
     if (e.jobId === 'other' && !e.oneOffName.trim()) return false;
     if (isYard(e.jobId) && !e.forJobId) return false;
-    if (isFlat(e.jobId) && !e.parts.some(p => p.name.trim() && Number(p.qty) > 0 && Number(p.rate) > 0)) return false;
     return true;
   });
   submitBtn.disabled = !canSubmit;

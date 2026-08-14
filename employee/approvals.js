@@ -705,10 +705,6 @@ async function saveNewTicket() {
   if (other && !s.oneOffName.trim()) { alert('Name the one-off job.'); return; }
   if (yard && !s.forJobId) { alert("Pick which job the yard work is for."); return; }
   if (!s.description.trim()) { alert('Add a description.'); return; }
-  if (flat && !s.parts.some(p => p.description.trim() && Number(p.quantity) > 0 && Number(p.rate) > 0)) {
-    alert('Add at least one part with a quantity and rate.');
-    return;
-  }
 
   const btn = document.querySelector('#newTicketCard [data-action="save-new-ticket"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }

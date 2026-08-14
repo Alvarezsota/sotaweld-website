@@ -110,6 +110,27 @@ function lineItemsHtml(r) {
   return lines.join('');
 }
 
+function localDateStr(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function submissionMetaHtml(r) {
+  if (!r.created_at) return '';
+  const created = new Date(r.created_at);
+  const submittedDateStr = localDateStr(created);
+  const mismatch = submittedDateStr !== r.report_date;
+  const timeStr = created.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  let editedNote = '';
+  if (r.updated_at) {
+    const updated = new Date(r.updated_at);
+    if (Math.abs(updated - created) > 60000) {
+      editedNote = ` &middot; edited ${updated.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+    }
+  }
+
+  return `<div class="wl-submit-meta${mismatch ? ' wl-submit-mismatch' : ''}">${mismatch ? '&#9888; ' : ''}Submitted ${timeStr}${mismatch ? ` for ${dayLabel(r.report_date)}` : ''}${editedNote}</div>`;
+}
+
 // ---------- Edit form ----------
 
 function pipeRowsHtml() {
@@ -508,6 +529,7 @@ function renderBody(jobGroups) {
                   <span class="wl-job-total">${Number(r.total_inches).toFixed(2)} in</span>
                 </div>
                 <div class="wl-items">${lineItemsHtml(r)}</div>
+                ${submissionMetaHtml(r)}
                 <div class="wl-job-actions">
                   <button type="button" class="we-edit-btn" data-action="edit-report" data-report-id="${r.id}">Edit</button>
                   <button type="button" class="we-del-btn" data-action="delete-report-inline" data-report-id="${r.id}">Delete</button>
