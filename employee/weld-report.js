@@ -258,14 +258,26 @@ function entrySplitLinesValid(entryEl) {
 function updateSubmitState() {
   const grand = [...entriesContainer.querySelectorAll('.wr-entry')].reduce((s, el) => s + Number(el.dataset.grand || 0), 0);
   const hasMiscDesc = [...entriesContainer.querySelectorAll('.wr-misc-desc')].some(el => el.value.trim());
-  const jobsOk = entries.length > 0 && entries.every(e => {
-    if (!e.jobId) return false;
-    if (e.jobId === 'other' && !e.oneOffName.trim()) return false;
-    if (isYard(e.jobId) && !e.forJobId) return false;
-    return true;
-  });
-  const splitsOk = [...entriesContainer.querySelectorAll('.wr-entry')].every(entrySplitLinesValid);
-  submitBtn.disabled = !(jobsOk && splitsOk && (grand > 0 || hasMiscDesc));
+
+  let missing = '';
+  if (!entries.length) {
+    missing = 'Add at least one job.';
+  } else {
+    for (const e of entries) {
+      if (!e.jobId) { missing = 'Pick a jobsite for every job.'; break; }
+      if (e.jobId === 'other' && !e.oneOffName.trim()) { missing = 'Name the one-off job.'; break; }
+      if (isYard(e.jobId) && !e.forJobId) { missing = 'Pick which job the yard work is for.'; break; }
+    }
+    if (!missing) {
+      const badSplit = [...entriesContainer.querySelectorAll('.wr-entry')].find(el => !entrySplitLinesValid(el));
+      if (badSplit) missing = 'Pick who a split weld was shared with.';
+    }
+    if (!missing && !(grand > 0 || hasMiscDesc)) missing = 'Enter at least some weld inches, or a description under Miscellaneous / Off-chart.';
+  }
+
+  submitBtn.disabled = !!missing;
+  const hintEl = document.getElementById('submitHint');
+  if (hintEl) hintEl.textContent = missing;
 }
 
 function buildBreakdownForEntry(entryEl, partnerId, partnerName) {
