@@ -600,6 +600,7 @@ function updateSubmitState() {
 
   let missing = '';
   if (!dateInput.value) missing = 'Pick a date.';
+  else if (dateInput.value < dateInput.min || dateInput.value > dateInput.max) missing = 'Pick a date within this work week.';
   else {
     for (const e of entries) {
       if (!e.jobId) { missing = 'Pick a jobsite for every entry.'; break; }
@@ -926,6 +927,8 @@ document.getElementById('logAnotherBtn').addEventListener('click', () => {
   document.querySelectorAll('.glove-size-btn').forEach(b => b.classList.remove('sel'));
   submitBtn.textContent = "Submit work";
   dateInput.value = todayIso();
+  dateInput.max = todayIso();
+  dateInput.min = ymd(getMonday(new Date()));
   document.getElementById('successScreen').style.display = 'none';
   document.getElementById('entryScreen').style.display = 'block';
   render();
@@ -960,6 +963,7 @@ async function requireAuth() {
 
   dateInput.value = todayIso();
   dateInput.max = todayIso();
+  dateInput.min = ymd(getMonday(new Date()));
 
   const [{ data: jobsData }, { data: helpersData }] = await Promise.all([
     sb.from('jobs').select('*').eq('active', true).order('name'),
