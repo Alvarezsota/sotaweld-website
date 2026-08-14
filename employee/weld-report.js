@@ -51,8 +51,8 @@ function isYard(jobId) {
   return !!(j && j.is_yard);
 }
 
-function newMiscRow(desc, inches) {
-  return { uid: uid(), desc: desc || '', inches: inches != null ? inches : '' };
+function newMiscRow(desc) {
+  return { uid: uid(), desc: desc || '' };
 }
 function newSplitLine(nominal, schedule, qty) {
   return { uid: uid(), nominal: nominal || '', schedule: schedule || 'std', qty: qty != null ? qty : 1 };
@@ -64,8 +64,7 @@ function newEntry() {
 function miscRowHtml(r) {
   return `
     <div class="wr-misc-row" data-misc-uid="${r.uid}">
-      <input type="text" class="input wr-misc-desc" placeholder="Description (pipe supports, tacks, repairs…)" value="${escAttr(r.desc)}">
-      <input type="number" step="0.1" min="0" class="input wr-misc-in" placeholder="in" value="${escAttr(r.inches)}">
+      <input type="text" class="input wr-misc-desc" placeholder="Description (pipe supports, structural steel…)" value="${escAttr(r.desc)}">
       <button type="button" class="row-x" data-action="remove-misc">&times;</button>
     </div>`;
 }
@@ -171,7 +170,7 @@ function entryCardHtml(entry) {
       </div>
 
       <div class="wr-section-inner">
-        <div class="wr-section-head"><span>Miscellaneous / Off-chart</span><span class="wr-section-total" data-misc-sub>0 in</span></div>
+        <div class="wr-section-head"><span>Miscellaneous / Off-chart</span></div>
         <div data-misc-body>${entry.miscRows.map(miscRowHtml).join('')}</div>
         <button type="button" class="add-part" data-action="add-misc">+ Add line</button>
       </div>
@@ -218,7 +217,6 @@ function recalcEntry(entryEl) {
     tr.querySelector('[data-rowtot]').textContent = fmt(t);
     oletTotal += t;
   });
-  entryEl.querySelectorAll('.wr-misc-in').forEach(m => { miscTotal += Number(m.value) || 0; });
 
   let splitTotal = 0;
   entryEl.querySelectorAll('.wr-split-row').forEach(row => {
@@ -237,7 +235,6 @@ function recalcEntry(entryEl) {
   const grand = pipeTotal + oletTotal + miscTotal + splitTotal;
   entryEl.querySelector('[data-pipe-sub]').textContent = fmt(pipeTotal) + ' in';
   entryEl.querySelector('[data-olet-sub]').textContent = fmt(oletTotal) + ' in';
-  entryEl.querySelector('[data-misc-sub]').textContent = fmt(miscTotal) + ' in';
   entryEl.querySelector('[data-entry-total]').textContent = fmt(grand) + ' in';
   entryEl.dataset.grand = fmt(grand);
   return { pipeTotal: fmt(pipeTotal + splitTotal), oletTotal: fmt(oletTotal), miscTotal: fmt(miscTotal), splitTotal: fmt(splitTotal), grand: fmt(grand) };
@@ -305,8 +302,8 @@ function buildSplitItemsForPartner(entryEl, myName) {
 }
 function buildMiscItemsForEntry(entry) {
   return entry.miscRows
-    .filter(r => r.desc.trim() || Number(r.inches) > 0)
-    .map(r => ({ description: r.desc.trim() || '(no description)', inches: Number(r.inches) || 0 }));
+    .filter(r => r.desc.trim())
+    .map(r => ({ description: r.desc.trim(), inches: 0 }));
 }
 
 function appendEntryCard(entry, breakdown) {
@@ -341,7 +338,7 @@ entriesContainer.addEventListener('input', (e) => {
   const entry = entries.find(x => x.uid === entryEl.dataset.entryUid);
   if (!entry) return;
 
-  if (e.target.classList.contains('wr-qty-input') || e.target.classList.contains('wr-misc-in') || e.target.classList.contains('split-qty-input')) {
+  if (e.target.classList.contains('wr-qty-input') || e.target.classList.contains('split-qty-input')) {
     recalcEntry(entryEl);
     recalcGrand();
   }
@@ -352,10 +349,7 @@ entriesContainer.addEventListener('input', (e) => {
   const row = e.target.closest('[data-misc-uid]');
   if (row) {
     const r = entry.miscRows.find(x => x.uid === row.dataset.miscUid);
-    if (r) {
-      if (e.target.classList.contains('wr-misc-desc')) { r.desc = e.target.value; updateSubmitState(); }
-      if (e.target.classList.contains('wr-misc-in')) r.inches = e.target.value;
-    }
+    if (r && e.target.classList.contains('wr-misc-desc')) { r.desc = e.target.value; updateSubmitState(); }
   }
   const splitRow = e.target.closest('[data-split-uid]');
   if (splitRow && e.target.classList.contains('split-qty-input')) {
@@ -479,7 +473,7 @@ async function loadReportsForDate() {
         jobId: row.job_id || 'other',
         oneOffName: row.one_off_name || '',
         forJobId: row.for_job_id || '',
-        miscRows: (row.misc_items && row.misc_items.length) ? row.misc_items.map(m => newMiscRow(m.description, m.inches)) : [newMiscRow()],
+        miscRows: (row.misc_items && row.misc_items.length) ? row.misc_items.map(m => newMiscRow(m.description)) : [newMiscRow()],
         splitPartnerId: splitItems.length ? splitItems[0].partnerId : '',
         splitLines: splitItems.length ? splitItems.map(b => newSplitLine(b.nominal, b.schedule, b.qty)) : []
       };

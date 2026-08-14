@@ -157,8 +157,8 @@ function oletRowsHtml() {
       </tr>`;
   }).join('');
 }
-function newMiscRow(desc, inches) {
-  return { uid: uid(), desc: desc || '', inches: inches != null ? inches : '' };
+function newMiscRow(desc) {
+  return { uid: uid(), desc: desc || '' };
 }
 function newSplitLine(nominal, schedule, qty) {
   return { uid: uid(), nominal: nominal || '', schedule: schedule || 'std', qty: qty != null ? qty : 1 };
@@ -184,7 +184,6 @@ function miscRowHtml(r) {
   return `
     <div class="wr-misc-row" data-misc-uid="${r.uid}">
       <input type="text" class="input wr-misc-desc" placeholder="Description" value="${escAttr(r.desc)}">
-      <input type="number" step="0.1" min="0" class="input wr-misc-in" placeholder="in" value="${escAttr(r.inches)}">
       <button type="button" class="row-x" data-action="remove-misc">&times;</button>
     </div>`;
 }
@@ -242,7 +241,7 @@ function editCardHtml(state) {
         </div>
       </div>
       <div class="wr-section-inner">
-        <div class="wr-section-head"><span>Miscellaneous / Off-chart</span><span class="wr-section-total" data-misc-sub>0 in</span></div>
+        <div class="wr-section-head"><span>Miscellaneous / Off-chart</span></div>
         <div data-misc-body>${state.miscRows.map(miscRowHtml).join('')}</div>
         <button type="button" class="add-part" data-action="add-misc">+ Add line</button>
       </div>
@@ -316,8 +315,6 @@ function recalcEditCard(cardEl, preservedSplitTotal) {
     tr.querySelector('[data-rowtot]').textContent = fmt(t);
     oletTotal += t;
   });
-  cardEl.querySelectorAll('.wr-misc-in').forEach(m => { miscTotal += Number(m.value) || 0; });
-
   let newSplitTotal = 0;
   cardEl.querySelectorAll('.wr-split-row').forEach(row => {
     const nominal = row.querySelector('.split-size-select').value;
@@ -336,7 +333,6 @@ function recalcEditCard(cardEl, preservedSplitTotal) {
   const grand = pipeTotal + oletTotal + miscTotal + splitTotal;
   cardEl.querySelector('[data-pipe-sub]').textContent = fmt(pipeTotal + splitTotal) + ' in';
   cardEl.querySelector('[data-olet-sub]').textContent = fmt(oletTotal) + ' in';
-  cardEl.querySelector('[data-misc-sub]').textContent = fmt(miscTotal) + ' in';
   cardEl.querySelector('[data-entry-total]').textContent = fmt(grand) + ' in';
   return { pipeTotal: fmt(pipeTotal + splitTotal), oletTotal: fmt(oletTotal), miscTotal: fmt(miscTotal), newSplitTotal: fmt(newSplitTotal), grand: fmt(grand) };
 }
@@ -411,7 +407,7 @@ function startEdit(reportId) {
     jobId: row.job_id || (row.one_off_name ? 'other' : ''),
     oneOffName: row.one_off_name || '',
     forJobId: row.for_job_id || '',
-    miscRows: (row.misc_items && row.misc_items.length) ? row.misc_items.map(m => newMiscRow(m.description, m.inches)) : [newMiscRow()],
+    miscRows: (row.misc_items && row.misc_items.length) ? row.misc_items.map(m => newMiscRow(m.description)) : [newMiscRow()],
     splitItems,
     splitPartnerId: '',
     splitLines: [],
@@ -454,8 +450,8 @@ async function saveEdit(reportId) {
   const newSplitBreakdown = partner ? buildNewSplitBreakdown(cardEl, partner.id, partner.full_name) : [];
   const breakdown = [...buildEditBreakdown(cardEl), ...editState.splitItems, ...newSplitBreakdown];
   const miscItems = editState.miscRows
-    .filter(r => r.desc.trim() || Number(r.inches) > 0)
-    .map(r => ({ description: r.desc.trim() || '(no description)', inches: Number(r.inches) || 0 }));
+    .filter(r => r.desc.trim())
+    .map(r => ({ description: r.desc.trim(), inches: 0 }));
 
   if (isNew && totals.grand <= 0 && !breakdown.length && !miscItems.length) { alert('Enter at least some weld inches or an off-chart line before submitting.'); return; }
 
@@ -635,16 +631,13 @@ document.getElementById('weldLogBody').addEventListener('click', async (e) => {
 document.getElementById('weldLogBody').addEventListener('input', (e) => {
   const cardEl = e.target.closest('[data-report-id]');
   if (!cardEl || !editState) return;
-  if (e.target.classList.contains('wr-qty-input') || e.target.classList.contains('wr-misc-in') || e.target.classList.contains('split-qty-input')) {
+  if (e.target.classList.contains('wr-qty-input') || e.target.classList.contains('split-qty-input')) {
     recalcEditCard(cardEl, editState._splitTotal);
   }
   const miscRow = e.target.closest('[data-misc-uid]');
   if (miscRow) {
     const r = editState.miscRows.find(x => x.uid === miscRow.dataset.miscUid);
-    if (r) {
-      if (e.target.classList.contains('wr-misc-desc')) r.desc = e.target.value;
-      if (e.target.classList.contains('wr-misc-in')) r.inches = e.target.value;
-    }
+    if (r && e.target.classList.contains('wr-misc-desc')) r.desc = e.target.value;
   }
   const splitRow = e.target.closest('[data-split-uid]');
   if (splitRow && e.target.classList.contains('split-qty-input')) {

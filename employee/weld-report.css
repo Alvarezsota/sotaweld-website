@@ -32,7 +32,6 @@
 .wr-misc-row { display: flex; gap: 8px; align-items: center; padding: 10px 2px; border-bottom: 1px solid rgba(69,77,89,.4); }
 .wr-misc-row:last-of-type { border-bottom: none; }
 .wr-misc-desc { flex: 1; }
-.wr-misc-in { width: 76px; flex: 0 0 auto; text-align: center; }
 .row-x { width: 32px; height: 32px; flex: 0 0 auto; border-radius: 8px; background: var(--steel-700); border: 1px solid var(--line); color: var(--danger); font-size: 16px; cursor: pointer; }
 .add-part { width: 100%; margin-top: 10px; padding: 11px; border-radius: 10px; background: none; border: 1px dashed rgba(87,201,140,.45); color: var(--ok); font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
 
