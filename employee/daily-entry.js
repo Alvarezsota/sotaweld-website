@@ -180,7 +180,12 @@ function startEditEntry(entryId) {
     perDiem: !!e.per_diem,
     stainless: !!e.is_stainless,
     helpers: found.helpers.map(h => ({ uid: uid(), helperId: h.helper_id, hours: Number(h.hours), perDiem: !!h.per_diem })),
-    parts: found.parts.length ? found.parts.map(p => ({ uid: uid(), name: p.description, qty: p.quantity, rate: p.rate })) : [newPart()]
+    parts: found.parts.length ? found.parts.map(p => ({ uid: uid(), name: p.description, qty: p.quantity, rate: p.rate })) : [newPart()],
+    // How many child rows are on this ticket in the database right now. Saving
+    // clears them and re-inserts; if the clear removes fewer than this, we must
+    // not insert or the helper/part lines get duplicated.
+    savedHelperCount: found.helpers.length,
+    savedPartCount: found.parts.length
   };
   renderWeekPanelBody();
 }
@@ -210,7 +215,14 @@ async function saveEditEntry(entryId) {
     }).eq('id', entryId);
     if (upErr) throw upErr;
 
-    await sb.from('daily_entry_helpers').delete().eq('daily_entry_id', entryId);
+    // Clear the old helper rows before re-inserting. If this removes fewer rows
+    // than the ticket actually has, the clear was refused — bail out rather than
+    // insert, or every helper line ends up on the ticket twice.
+    const { data: delHelpers, error: dhErr } = await sb.from('daily_entry_helpers')
+      .delete().eq('daily_entry_id', entryId).select('id');
+    if (dhErr) throw dhErr;
+    if ((delHelpers || []).length < (editState.savedHelperCount || 0)) throw new Error('CHILD_DELETE_BLOCKED');
+
     const helperRows = editState.helpers
       .filter(h => h.helperId)
       .map(h => ({ daily_entry_id: entryId, helper_id: h.helperId, hours: h.hours, per_diem: h.perDiem }));
@@ -219,7 +231,11 @@ async function saveEditEntry(entryId) {
       if (heErr) throw heErr;
     }
 
-    await sb.from('daily_entry_parts').delete().eq('daily_entry_id', entryId);
+    const { data: delParts, error: dpErr } = await sb.from('daily_entry_parts')
+      .delete().eq('daily_entry_id', entryId).select('id');
+    if (dpErr) throw dpErr;
+    if ((delParts || []).length < (editState.savedPartCount || 0)) throw new Error('CHILD_DELETE_BLOCKED');
+
     if (flat) {
       const partRows = editState.parts
         .filter(p => p.name.trim() && Number(p.qty) > 0 && Number(p.rate) > 0)
@@ -235,6 +251,12 @@ async function saveEditEntry(entryId) {
     loadWeekPanel();
   } catch (err) {
     console.error(err);
+    if (err && err.message === 'CHILD_DELETE_BLOCKED') {
+      alert("Your hours were saved, but the helper and parts lines could not be changed.\n\n"
+        + "Nothing was doubled up — we stopped before that could happen. Ask the office to fix the helper or parts lines on this ticket.");
+      loadWeekPanel();
+      return;
+    }
     alert('Could not save changes. Please try again.');
     if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save changes'; }
   }
