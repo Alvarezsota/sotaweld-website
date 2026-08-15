@@ -1,2 +1,5 @@
 .DS_Store
 Thumbs.db
+
+# Brochure originals: already deduped into assets/img/work, OneDrive backs these up
+_source/brochure-images/

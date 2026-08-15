@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>State of the Arc Welding & Services LLC | Industrial Welding, Fabrication &amp; CNC Fiber Laser Cutting | Odessa, TX</title>
+<meta name="description" content="Permian Basin industrial welding, structural steel fabrication, equipment skids, process piping, mechanical installation and CNC fiber laser cutting. Odessa, Texas. Established 2011.">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+--ink:#0A0C0F; --panel:#12161C; --panel2:#181E27; --line:rgba(255,255,255,.10);
+--steel:#98A1AE; --white:#EEF2F7; --gold:#E9A23B; --gold-hi:#FFC96E; --spark:#FF6A1A;
+--disp:"Archivo Black","Arial Black","Helvetica Neue",Helvetica,"Liberation Sans",Arial,sans-serif;
+--body:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Liberation Sans",sans-serif;
+}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--ink);color:var(--white);font-family:var(--body);
+ font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+img{display:block;max-width:100%}
+a{color:inherit}
+.wrap{max-width:1220px;margin:0 auto;padding:0 22px}
+h1,h2,h3{font-family:var(--disp);font-weight:900;letter-spacing:-.01em;margin:0;line-height:1.04;text-transform:uppercase}
+p{margin:0}
+
+/* ---------- top bar ---------- */
+.bar{position:sticky;top:0;z-index:50;background:rgba(10,12,15,.94);
+ backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.bar-in{max-width:1220px;margin:0 auto;padding:9px 22px;display:flex;align-items:center;gap:18px}
+.bar img{height:44px;width:auto;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6))}
+.bar-txt{line-height:1.15}
+.bar-txt b{font-family:var(--disp);font-size:13.5px;letter-spacing:.02em;display:block}
+.bar-txt span{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold)}
+.bar nav{margin-left:auto;display:flex;align-items:center;gap:24px}
+.bar nav a{font-size:12.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+ text-decoration:none;color:var(--steel);white-space:nowrap}
+.bar nav a:hover{color:var(--gold)}
+.btn{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(180deg,var(--gold-hi),var(--gold));
+ color:#150F04;font-family:var(--disp);font-size:13.5px;letter-spacing:.04em;text-transform:uppercase;
+ padding:11px 18px;border-radius:3px;text-decoration:none;white-space:nowrap;
+ box-shadow:0 6px 20px -8px rgba(233,162,59,.9)}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;color:var(--white);border:1px solid rgba(255,255,255,.28);box-shadow:none}
+.btn.ghost:hover{border-color:var(--gold);color:var(--gold)}
+@media(max-width:980px){.bar nav a:not(.btn){display:none}}
+
+/* ---------- hero ---------- */
+.hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+.hero-bg{position:absolute;inset:0;background:url("[[IMG_00]]") center 30%/cover no-repeat;
+ transform:scale(1.04)}
+.hero-bg::after{content:"";position:absolute;inset:0;
+ background:linear-gradient(100deg,rgba(6,8,11,.96) 0%,rgba(6,8,11,.86) 42%,rgba(6,8,11,.42) 72%,rgba(6,8,11,.62) 100%)}
+.hero-in{position:relative;max-width:1220px;margin:0 auto;padding:62px 22px 0}
+.kicker{display:inline-flex;align-items:center;gap:10px;font-size:11.5px;font-weight:800;letter-spacing:.2em;
+ text-transform:uppercase;color:var(--gold);margin-bottom:16px}
+.kicker::before{content:"";width:34px;height:2px;background:var(--gold)}
+.hero h1{font-size:clamp(36px,5.6vw,66px);max-width:15ch;letter-spacing:-.02em}
+.hero h1 em{font-style:normal;color:var(--gold);display:block}
+.hero-sub{margin-top:18px;max-width:56ch;font-size:17.5px;color:#C6CDD8}
+.tagline{margin-top:22px;font-family:var(--disp);font-size:15px;letter-spacing:.22em;color:var(--white);
+ text-transform:uppercase;opacity:.85}
+.hero-cta{margin-top:26px;display:flex;flex-wrap:wrap;gap:12px}
+.stats{position:relative;margin-top:52px;display:grid;grid-template-columns:repeat(4,1fr);
+ border-top:1px solid var(--line);background:rgba(9,11,14,.55)}
+.stat{padding:20px 22px;border-right:1px solid var(--line)}
+.stat:last-child{border-right:0}
+.stat b{display:block;font-family:var(--disp);font-size:clamp(26px,3.4vw,40px);color:var(--gold);line-height:1;white-space:nowrap}
+.stat b.sm{font-size:clamp(20px,2.5vw,29px)}
+.stat span{display:block;margin-top:7px;font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--steel)}
+@media(max-width:760px){.stats{grid-template-columns:repeat(2,1fr)}.stat{border-bottom:1px solid var(--line)}
+ .hero-in{padding-top:40px}}
+
+/* ---------- sections ---------- */
+section{padding:64px 0}
+.sec-head{display:flex;align-items:flex-end;gap:26px;margin-bottom:32px;flex-wrap:wrap}
+.sec-head h2{font-size:clamp(27px,3.6vw,42px);letter-spacing:-.015em}
+.sec-head p{color:var(--steel);max-width:46ch;font-size:15.5px;margin-left:auto}
+.eyebrow{font-size:11.5px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);
+ margin-bottom:10px;display:block}
+
+/* trusted by */
+.trust{background:var(--panel2);border-bottom:1px solid var(--line)}
+.trust-in{display:flex;align-items:center;gap:22px;flex-wrap:wrap;padding-top:16px;padding-bottom:16px}
+.tl{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--steel);font-weight:700}
+.cli{font-family:var(--disp);font-size:20px;text-transform:uppercase;color:var(--white);letter-spacing:.01em}
+.cli+.cli{border-left:1px solid var(--line);padding-left:22px}
+
+/* one stop chain */
+#onestop{background:var(--ink)}
+.lns{display:grid;grid-template-columns:repeat(6,1fr);gap:0;border:1px solid var(--line)}
+.ln{padding:24px 18px 26px;border-right:1px solid var(--line);background:var(--panel)}
+.ln:last-child{border-right:0}
+.ln:nth-child(6){background:linear-gradient(180deg,rgba(233,162,59,.14),var(--panel))}
+.lnn{font-family:var(--disp);font-size:12px;color:var(--gold);display:block;margin-bottom:10px}
+.ln h3{font-size:16px;letter-spacing:0;margin-bottom:8px}
+.ln p{font-size:13.5px;color:var(--steel);line-height:1.45}
+@media(max-width:1080px){.lns{grid-template-columns:repeat(3,1fr)}
+ .ln:nth-child(3){border-right:0}}
+@media(max-width:620px){.lns{grid-template-columns:1fr}.ln{border-right:0;border-bottom:1px solid var(--line)}}
+
+/* qualifications */
+#quals{background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.qc{display:grid;grid-template-columns:1fr 1.15fr;gap:40px}
+.qc-h{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:800;
+ margin-bottom:14px}
+.qs{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.q{border:1px solid var(--line);border-top:2px solid var(--gold);background:var(--panel2);padding:14px 16px}
+.q b{display:block;font-family:var(--disp);font-size:15px;text-transform:uppercase}
+.q span{display:block;font-size:12.5px;color:var(--steel);margin-top:5px;line-height:1.4}
+.cps{display:grid;grid-template-columns:1fr 1fr;gap:12px 26px}
+.cp{border-bottom:1px solid var(--line);padding-bottom:10px}
+.cp b{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+.cp span{display:block;font-size:14.5px;margin-top:4px;line-height:1.4}
+@media(max-width:860px){.qc{grid-template-columns:1fr;gap:30px}}
+@media(max-width:560px){.qs,.cps{grid-template-columns:1fr}}
+
+/* capabilities */
+#capabilities{background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.caps{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+ border:1px solid var(--line)}
+.cap{background:var(--panel);padding:24px 20px 26px;position:relative;transition:background .18s}
+.cap:hover{background:var(--panel2)}
+.cap-n{font-family:var(--disp);font-size:12px;color:var(--gold);letter-spacing:.14em;margin-bottom:12px}
+.cap h3{font-size:16.5px;letter-spacing:0;margin-bottom:9px;line-height:1.18}
+.cap p{font-size:14px;color:var(--steel);line-height:1.5}
+@media(max-width:1000px){.caps{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.caps{grid-template-columns:1fr}}
+
+/* laser feature */
+#laser{background:var(--ink)}
+.split{display:grid;grid-template-columns:1.05fr .95fr;gap:0;border:1px solid var(--line);overflow:hidden}
+.split-txt{padding:44px 42px;background:linear-gradient(160deg,var(--panel2),var(--panel))}
+.split-txt h2{font-size:clamp(25px,3.2vw,37px);margin-bottom:16px}
+.split-txt p{color:#C2CAD5;font-size:16px;margin-bottom:14px}
+.split-img{position:relative;min-height:340px;background:url("[[IMG_01]]") center/cover no-repeat}
+.split-img::after{content:"";position:absolute;inset:0;
+ background:linear-gradient(90deg,rgba(18,22,28,.85),rgba(18,22,28,0) 45%)}
+.specrow{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);
+ border:1px solid var(--line);margin:0 0 18px}
+.specrow>span{background:var(--panel);padding:12px 14px;display:block;
+ font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--steel)}
+.specrow b{display:block;font-family:var(--disp);font-size:18px;color:var(--gold);line-height:1;
+ margin-bottom:6px;letter-spacing:-.01em}
+@media(max-width:620px){.specrow{grid-template-columns:repeat(2,1fr)}}
+.ul-gold{list-style:none;margin:18px 0 0;padding:0}
+.ul-gold li{position:relative;padding-left:26px;margin-bottom:10px;font-size:15px;color:var(--white)}
+.ul-gold li::before{content:"";position:absolute;left:0;top:8px;width:11px;height:11px;
+ background:var(--gold);transform:rotate(45deg)}
+@media(max-width:900px){.split{grid-template-columns:1fr}.split-txt{padding:32px 24px}
+ .split-img{min-height:240px}.split-img::after{background:linear-gradient(0deg,rgba(18,22,28,.85),rgba(18,22,28,0) 55%)}}
+
+.welds{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.welds img{width:100%;height:340px;object-fit:cover;border:1px solid var(--line)}
+@media(max-width:1000px){.welds{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.welds{grid-template-columns:1fr}.welds img{height:260px}}
+
+/* why */
+#why{background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.whys{display:grid;grid-template-columns:repeat(4,1fr);gap:26px}
+.why-bar{width:44px;height:4px;background:var(--gold);margin-bottom:16px}
+.why h3{font-size:17px;letter-spacing:0;margin-bottom:10px;line-height:1.2}
+.why p{font-size:14.5px;color:var(--steel)}
+@media(max-width:1000px){.whys{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.whys{grid-template-columns:1fr}}
+
+/* projects */
+.projs{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:186px;gap:12px}
+.proj{margin:0;position:relative;overflow:hidden;border:1px solid var(--line);background:#000;height:100%}
+.proj:nth-child(1){grid-column:span 2;grid-row:span 2}
+.proj:nth-child(6){grid-column:span 2}
+.proj img{width:100%;height:100%;object-fit:cover;transition:transform .5s ease}
+.proj:hover img{transform:scale(1.05)}
+.proj figcaption{position:absolute;left:0;right:0;bottom:0;padding:36px 15px 13px;
+ background:linear-gradient(180deg,rgba(8,10,13,0),rgba(8,10,13,.94) 55%)}
+.proj figcaption b{display:block;font-family:var(--disp);font-size:13.5px;text-transform:uppercase;
+ letter-spacing:.01em;line-height:1.15}
+.proj figcaption span{display:block;margin-top:4px;font-size:12px;color:#B4BDC9;line-height:1.35}
+.proj:nth-child(1) figcaption b{font-size:18px}
+.proj:nth-child(1) figcaption span{font-size:13.5px}
+@media(max-width:1000px){.projs{grid-template-columns:repeat(2,1fr);grid-auto-rows:200px}
+ .proj:nth-child(1){grid-column:span 2;grid-row:span 1}
+ .proj:nth-child(6){grid-column:span 2}}
+@media(max-width:560px){.projs{grid-template-columns:1fr;grid-auto-rows:210px}
+ .proj:nth-child(1),.proj:nth-child(6){grid-column:span 1}}
+
+/* industries + experience */
+#industries{background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:52px}
+.chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:6px}
+.chip{border:1px solid rgba(233,162,59,.42);color:var(--gold-hi);padding:8px 14px;border-radius:2px;
+ font-size:13px;font-weight:600;letter-spacing:.03em;background:rgba(233,162,59,.06)}
+.exp{list-style:none;margin:6px 0 0;padding:0;columns:1}
+.exp li{position:relative;padding:11px 0 11px 24px;border-bottom:1px solid var(--line);font-size:15px}
+.exp li::before{content:"";position:absolute;left:0;top:18px;width:9px;height:2px;background:var(--gold)}
+.respond{margin-top:26px;border:1px solid rgba(233,162,59,.32);background:rgba(233,162,59,.06);padding:24px 26px}
+.respond-h{font-family:var(--disp);font-size:19px;text-transform:uppercase;margin-bottom:9px}
+.respond p{font-size:14.5px;color:#C2CAD5;margin-bottom:16px}
+@media(max-width:860px){.two{grid-template-columns:1fr;gap:36px}}
+
+/* owner */
+.owner{display:grid;grid-template-columns:auto 1fr;gap:30px;align-items:center;
+ border:1px solid var(--line);background:linear-gradient(120deg,var(--panel2),var(--panel));padding:34px 36px}
+.owner-mark{width:96px;height:96px;border:2px solid var(--gold);display:grid;place-items:center;
+ font-family:var(--disp);font-size:31px;color:var(--gold)}
+.owner h3{font-size:21px;margin-bottom:4px}
+.owner .role{font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);margin-bottom:12px}
+.owner p{color:#C2CAD5;font-size:15.5px;max-width:78ch}
+@media(max-width:640px){.owner{grid-template-columns:1fr;padding:26px 22px}}
+
+/* contact */
+#contact{background:linear-gradient(180deg,var(--panel),#07090C);border-top:3px solid var(--gold);padding:60px 0 0}
+.cgrid{display:grid;grid-template-columns:1.15fr 1fr;gap:48px;align-items:start}
+.cgrid h2{font-size:clamp(28px,4vw,46px);margin-bottom:14px}
+.cgrid h2 em{font-style:normal;color:var(--gold);display:block}
+.cgrid>div>p{color:var(--steel);font-size:16px;max-width:44ch}
+.cbox{border:1px solid var(--line);background:rgba(255,255,255,.02);padding:26px 28px}
+.crow{display:flex;gap:14px;padding:13px 0;border-bottom:1px solid var(--line)}
+.crow:last-child{border-bottom:0}
+.crow .lb{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);
+ min-width:92px;padding-top:3px}
+.crow .vl{font-size:15.5px;word-break:break-word}
+.crow .vl a{text-decoration:none}
+.crow .vl a:hover{color:var(--gold)}
+.bigphone{font-family:var(--disp);font-size:clamp(30px,4.6vw,46px);color:var(--white);
+ text-decoration:none;display:inline-block;margin:8px 0 18px;letter-spacing:-.01em}
+.bigphone:hover{color:var(--gold)}
+.areas{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.area{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--steel);
+ border:1px solid var(--line);padding:6px 11px}
+footer{margin-top:54px;border-top:1px solid var(--line);padding:20px 0;
+ display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:12.5px;color:#6E7785}
+footer img{height:34px}
+@media(max-width:860px){.cgrid{grid-template-columns:1fr;gap:32px}}
+</style></head>
+<body>
+
+<div class="bar"><div class="bar-in">
+  <img src="[[IMG_02]]" alt="State of the Arc Welding logo">
+  <div class="bar-txt"><b>STATE OF THE ARC</b><span>Welding &amp; Services LLC</span></div>
+  <nav>
+    <a href="#onestop">One Stop</a>
+    <a href="#capabilities">Capabilities</a>
+    <a href="#quals">Qualifications</a>
+    <a href="#projects">Projects</a>
+    <a href="#why">Why Us</a>
+    <a class="btn" href="tel:+14322481455">Call 432-248-1455</a>
+  </nav>
+</div></div>
+
+<div class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-in">
+    <span class="kicker">Odessa, Texas &nbsp;&bull;&nbsp; Serving the Permian Basin &amp; Surrounding Areas</span>
+    <h1>Industrial Welding &amp; Fabrication<em>It Leaves Our Yard Ready to Install.</em></h1>
+    <p class="hero-sub">Fabrication, NDE, hydro testing and coating all happen in one place — then our own
+      crews deliver it, set it and tie it in. One vendor from design to completion, anywhere in the Permian Basin
+      and surrounding areas.</p>
+    <p class="tagline">Straight Welds. Straight Answers. We Finish What We Fabricate.</p>
+    <div class="hero-cta">
+      <a class="btn" href="tel:+14322481455">Call 432-248-1455</a>
+      <a class="btn ghost" href="mailto:g.alvarez@sotaweld.com?subject=Request%20for%20Quote">Request a Quote</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>2011</b><span>Established</span></div>
+      <div class="stat"><b>18</b><span>Employees</span></div>
+      <div class="stat"><b class="sm">9,600 SF</b><span>Fabrication Shop</span></div>
+      <div class="stat"><b class="sm">12 kW</b><span>In-House CNC Laser</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="trust"><div class="wrap trust-in">
+  <span class="tl">Currently &amp; previously performing work for</span>
+  <span class="cli">Vaquero</span><span class="cli">Targa</span><span class="cli">Phillips 66</span>
+</div></div>
+
+<section id="onestop"><div class="wrap">
+  <div class="sec-head"><div>
+    <span class="eyebrow">The punch line</span>
+    <h2>One Stop &mdash; From Design to Completion</h2></div>
+    <p>Most shops hand you off three or four times before a job is finished. Everything below happens
+       in one place, then we install it.</p>
+  </div>
+  <div class="lns"><div class="ln"><span class="lnn">1</span><h3>Fabricate</h3><p>Built in our Odessa shop, with parts cut on our own CNC laser.</p></div><div class="ln"><span class="lnn">2</span><h3>NDE</h3><p>Third-party inspection lined up locally, so turnaround is days, not weeks.</p></div><div class="ln"><span class="lnn">3</span><h3>Hydro Test</h3><p>Pressure testing done here in our yard before anything ships.</p></div><div class="ln"><span class="lnn">4</span><h3>Paint or Coat</h3><p>Finished to your specification before it leaves the gate.</p></div><div class="ln"><span class="lnn">5</span><h3>Deliver</h3><p>Hauled to your location on our schedule, not a third party's.</p></div><div class="ln"><span class="lnn">6</span><h3>Install</h3><p>Our crews set it, tie it in and hand you a finished job.</p></div></div>
+</div></section>
+
+<section id="capabilities"><div class="wrap">
+  <div class="sec-head"><div>
+    <span class="eyebrow">What we do</span>
+    <h2>Core Capabilities</h2></div>
+    <p>Eight disciplines under one roof, so a single call covers fabrication, delivery, installation and the repair work after.</p>
+  </div>
+  <div class="caps"><div class="cap"><div class="cap-n">01</div><h3>Industrial &amp; Pipe Welding</h3><p>Carbon steel, stainless and alloy pipe welding to spec — including hot tie-ins, repair sleeves and hot taps.</p></div>
+<div class="cap"><div class="cap-n">02</div><h3>Structural Steel Fabrication</h3><p>Beams, columns, platforms, stairs, handrail and support structures fabricated and erected.</p></div>
+<div class="cap"><div class="cap-n">03</div><h3>Equipment Skid Fabrication</h3><p>Skid bases, piping, supports and grating — built complete and delivered ready to set.</p></div>
+<div class="cap"><div class="cap-n">04</div><h3>Process Piping Systems</h3><p>Manifolds, headers, flowlines and tie-ins fabricated, installed and tested.</p></div>
+<div class="cap"><div class="cap-n">05</div><h3>Mechanical Installation</h3><p>Setting tanks, pumps, compressors and process equipment, then tying it all in.</p></div>
+<div class="cap"><div class="cap-n">06</div><h3>Mobile &amp; Field Welding</h3><p>Trucks and crews to your location for repairs, tie-ins and on-site fabrication.</p></div>
+<div class="cap"><div class="cap-n">07</div><h3>CNC Laser, Tube &amp; Plasma Cutting</h3><p>8&nbsp;ft &times; 20&nbsp;ft fiber laser to 2&quot; plate, rotary chuck for tube to 14&quot;, plasma to 4&quot;+.</p></div>
+<div class="cap"><div class="cap-n">08</div><h3>Maintenance &amp; Repair</h3><p>Turnaround support, structural repair, equipment rebuilds and flare stack repair support.</p></div></div>
+</div></section>
+
+<section id="laser"><div class="wrap">
+  <div class="split">
+    <div class="split-txt">
+      <span class="eyebrow">The difference</span>
+      <h2>We Cut Our Own Parts</h2>
+      <div class="specrow">
+        <span><b>8 ft &times; 20 ft</b>Laser bed</span>
+        <span><b>12 kW</b>Fiber source</span>
+        <span><b>2 in.</b>Max plate, laser</span>
+        <span><b>14 in.</b>Tube chuck</span>
+        <span><b>4 in.+</b>CNC plasma</span>
+      </div>
+      <p>Most fab shops send plate work out and wait. We run a CNC fiber laser, a rotary tube chuck and CNC plasma in-house,
+         which means your brackets, gussets, base plates and custom components get cut the same week
+         they are drawn.</p>
+      <p>That control shows up three ways on your job:</p>
+      <ul class="ul-gold">
+        <li><b>Schedule.</b> No third-party queue between design and weld-out.</li>
+        <li><b>Fit-up.</b> Laser-cut parts drop together, so less grinding and less rework in the field.</li>
+        <li><b>Change orders.</b> A revised part gets re-cut in hours, not next week.</li>
+      </ul>
+    </div>
+    <div class="split-img"></div>
+  </div>
+</div></section>
+
+<section id="welds"><div class="wrap">
+  <div class="sec-head"><div>
+    <span class="eyebrow">Workmanship</span>
+    <h2>The Welds Speak For Themselves</h2></div>
+    <p>Carbon and stainless, shop and field, uncropped. Codes and certificates matter, but this is what shows up on your job.</p>
+  </div>
+  <div class="welds">
+    <img src="[[IMG_03]]" alt="Socket weld on a threaded outlet" loading="lazy">
+    <img src="[[IMG_04]]" alt="Stacked bead on a flange-to-pipe joint" loading="lazy">
+    <img src="[[IMG_05]]" alt="Cap pass on a coated pipe joint" loading="lazy">
+    <img src="[[IMG_06]]" alt="Stainless bead welded on site" loading="lazy">
+  </div>
+</div></section>
+
+<section id="why"><div class="wrap">
+  <div class="sec-head"><div>
+    <span class="eyebrow">Why State of the Arc</span>
+    <h2>What You Get When You Hire Us</h2></div>
+    <p>Built for general contractors and plant maintenance teams who need the work done right the first time and on the date they were given.</p>
+  </div>
+  <div class="whys"><div class="why"><div class="why-bar"></div><h3>One stop, design to completion</h3><p>Fabrication, NDE, hydro testing and coating all happen in one place. It leaves our yard finished and ready to install — and we install it. One vendor, no finger-pointing.</p></div>
+<div class="why"><div class="why-bar"></div><h3>Our own CNC fiber laser</h3><p>Parts get cut in-house instead of sitting in an outside shop's queue. That is days off your schedule and tighter tolerances on every part we build.</p></div>
+<div class="why"><div class="why-bar"></div><h3>Based in the Permian, not passing through</h3><p>Our yard is in Odessa. Short mobilization to Midland, Big Spring and the surrounding basin means we show up when the schedule says we will.</p></div>
+<div class="why"><div class="why-bar"></div><h3>Owner on the job since 2011</h3><p>Gilbert Alvarez founded this company in 2011 and still runs the work. When you call, you reach the person accountable for the outcome.</p></div></div>
+</div></section>
+
+<section id="projects"><div class="wrap">
+  <div class="sec-head"><div>
+    <span class="eyebrow">Recent work</span>
+    <h2>Project Portfolio</h2></div>
+    <p>Fabrication and field installation across oil &amp; gas, midstream, manufacturing and commercial construction.</p>
+  </div>
+  <div class="projs"><figure class="proj"><img src="[[IMG_07]]" alt="Station Piping Field Weld" loading="lazy"><figcaption><b>Station Piping Field Weld</b><span>Field weld on station piping, made on location by our crew.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_08]]" alt="Flare Stack Tip Replacement" loading="lazy"><figcaption><b>Flare Stack Tip Replacement</b><span>Rigging and welding support for a flare tip replacement, alongside the flare contractor.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_09]]" alt="Pipeline Drag Section" loading="lazy"><figcaption><b>Pipeline Drag Section</b><span>Drag section welded out and lowered into the ditch with sideboom support.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_10]]" alt="4 in. Plate Cutting" loading="lazy"><figcaption><b>4 in. Plate Cutting</b><span>Window and openings cut in client-supplied 4 in. plate — a cut they could not place anywhere else.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_11]]" alt="Processed Gas Meter Skid" loading="lazy"><figcaption><b>Processed Gas Meter Skid</b><span>Fabricated complete in our shop, delivered to the field and tied in by our own crew.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_12]]" alt="Split Tee for a Hot Tap" loading="lazy"><figcaption><b>Split Tee for a Hot Tap</b><span>Split tee welded onto an existing line in the ditch to branch off without shutting it down.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_13]]" alt="Stainless Spool Welded On Site" loading="lazy"><figcaption><b>Stainless Spool Welded On Site</b><span>Stainless flanged spool fit and welded on location, not trucked back to a shop.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_14]]" alt="Double-Walled Sump Tank" loading="lazy"><figcaption><b>Double-Walled Sump Tank</b><span>Top flange, nozzles and lift lug cut on our own fiber laser, then fit and welded.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_15]]" alt="Launcher & Receiver Bypass" loading="lazy"><figcaption><b>Launcher &amp; Receiver Bypass</b><span>Bypass piping fabricated and installed to modify an existing pig launcher and receiver.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_16]]" alt="Electrical Panel Structures" loading="lazy"><figcaption><b>Electrical Panel Structures</b><span>Flanged roof and flanged legs, coated and staged — shipped ready for the I&amp;E crew to tie in.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_17]]" alt="Pipe Crossover Stairs" loading="lazy"><figcaption><b>Pipe Crossover Stairs</b><span>Crossover platform, stairs and handrail built so crews can get over piping safely.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_18]]" alt="Compressor Station Underground Lines" loading="lazy"><figcaption><b>Compressor Station Underground Lines</b><span>Running the underground lines off the slug catcher on a compressor station build.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_19]]" alt="Mitered Elevation Change" loading="lazy"><figcaption><b>Mitered Elevation Change</b><span>Station fabrication — large fittings mitered down to hit the required elevation change.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_20]]" alt="Pipeline Reroute Jumper" loading="lazy"><figcaption><b>Pipeline Reroute Jumper</b><span>Jumper off an existing riser to reroute a live line, fabricated and welded in the ditch.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_21]]" alt="Panel Enclosure for Desert Electric" loading="lazy"><figcaption><b>Panel Enclosure for Desert Electric</b><span>Enclosure fabricated and coated in our shop, one of a run built for Desert Electric.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_22]]" alt="20 ft Water Meter Skid" loading="lazy"><figcaption><b>20 ft Water Meter Skid</b><span>Skid base, metering piping, supports and grating built complete in the shop.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_23]]" alt="Heavy Plate Cutting" loading="lazy"><figcaption><b>Heavy Plate Cutting</b><span>Sections cut to profile out of the client's own 4 in. plate, then palletized for pickup.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_24]]" alt="Compressor Station Jumper Line" loading="lazy"><figcaption><b>Compressor Station Jumper Line</b><span>Jumper header and process piping fabricated and tied in at a compressor station.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_25]]" alt="Compressor & Receiver Package" loading="lazy"><figcaption><b>Compressor &amp; Receiver Package</b><span>Air compressors and receiver mounted on a shop-fabricated structural skid.</span></figcaption></figure>
+<figure class="proj"><img src="[[IMG_26]]" alt="Large Structural Skid Base" loading="lazy"><figcaption><b>Large Structural Skid Base</b><span>Coated equipment platform staged in the yard for equipment mounting.</span></figcaption></figure></div>
+</div></section>
+
+<section id="industries"><div class="wrap">
+  <div class="two">
+    <div>
+      <span class="eyebrow">Who we work for</span>
+      <h2 style="font-size:29px;margin-bottom:16px">Industries Served</h2>
+      <div class="chips"><span class="chip">Oil &amp; Gas</span><span class="chip">Midstream</span><span class="chip">Industrial Manufacturing</span><span class="chip">Plant Maintenance</span></div>
+      <div class="owner" style="margin-top:34px">
+        <div class="owner-mark">GA</div>
+        <div>
+          <h3>Gilbert Alvarez</h3>
+          <div class="role">Owner &amp; Founder</div>
+          <p>Founded State of the Arc in 2011 on quality workmanship, integrity and dependable service —
+             and still runs the work today. Call the number on this page and you reach the person accountable for your job.</p>
+        </div>
+      </div>
+    </div>
+    <div>
+      <span class="eyebrow">Project experience</span>
+      <h2 style="font-size:29px;margin-bottom:16px">Scopes We Deliver</h2>
+      <ul class="exp"><li>Oilfield pipeline fabrication and tie-ins</li><li>Production facility construction and upgrades</li><li>Structural steel fabrication and erection</li><li>Equipment skids and mechanical assemblies</li><li>Process equipment fabrication</li><li>Custom CNC laser-cut plate and tube components</li><li>Hot tie-ins on live systems</li><li>Repair sleeves and hot taps</li><li>Mitered fittings for elevation changes</li><li>Stainless steel welding, shop and field</li></ul>
+      <div class="respond">
+        <div class="respond-h">Need it handled now?</div>
+        <p>Emergency repairs, breakdowns and callouts across the Permian Basin.
+           Call the shop direct and talk to someone who can put a crew on it.</p>
+        <a class="btn" href="tel:+14322481455">Call 432-248-1455</a>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<section id="quals"><div class="wrap">
+  <div class="sec-head"><div>
+    <span class="eyebrow">Bid-ready</span>
+    <h2>Qualifications &amp; Shop Capacity</h2></div>
+    <p>Bonded and insured. Certificates and welder qualification records furnished on request.</p>
+  </div>
+  <div class="qc">
+    <div>
+      <div class="qc-h">Welders Qualified To</div>
+      <div class="qs"><div class="q"><b>API 1104</b><span>Welding of pipelines and related facilities</span></div><div class="q"><b>ASME Section IX</b><span>Welder and procedure performance qualification</span></div><div class="q"><b>ASME B31.3</b><span>Process piping</span></div><div class="q"><b>ASME B31.8</b><span>Gas transmission &amp; distribution piping</span></div></div>
+    </div>
+    <div>
+      <div class="qc-h">Equipment &amp; Capacity</div>
+      <div class="cps"><div class="cp"><b>CNC Fiber Laser</b><span>8 ft &times; 20 ft bed &nbsp;&bull;&nbsp; 12 kW source &nbsp;&bull;&nbsp; plate up to 2 in.</span></div><div class="cp"><b>CNC Tube &amp; Pipe Laser</b><span>Rotary chuck &mdash; tube and pipe to 14 in.</span></div><div class="cp"><b>CNC Plasma Cutting</b><span>Plate up to 4 in. and heavier</span></div><div class="cp"><b>Fabrication Shop</b><span>9,600 sq. ft. under roof — Odessa, Texas</span></div><div class="cp"><b>Skid Fabrication</b><span>Complete skids built to 40 ft</span></div><div class="cp"><b>Crane &amp; Rigging</b><span>Third-party crane and rigging coordinated for sets</span></div><div class="cp"><b>Crew</b><span>18 employees, shop and field</span></div><div class="cp"><b>Coating</b><span>Painted or coated to client spec before shipment</span></div><div class="cp"><b>Bonding &amp; Insurance</b><span>Bonded and insured — certificates furnished on request</span></div></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="contact"><div class="wrap">
+  <div class="cgrid">
+    <div>
+      <span class="eyebrow">Let's talk</span>
+      <h2>Send Us the Drawings.<em>We'll Send You a Number.</em></h2>
+      <p>Budget pricing, hard bids, emergency repairs and callouts anywhere in the Permian Basin and surrounding areas — reach us direct.</p>
+      <a class="bigphone" href="tel:+14322481455">432-248-1455</a>
+      <div><a class="btn" href="mailto:g.alvarez@sotaweld.com?subject=Request%20for%20Quote">Request a Quote</a></div>
+      <div class="areas"><span class="area">Odessa</span><span class="area">Midland</span><span class="area">Big Spring</span><span class="area">Permian Basin</span><span class="area">West Texas</span><span class="area">Surrounding Areas</span></div>
+    </div>
+    <div class="cbox">
+      <div class="crow"><div class="lb">Company</div><div class="vl">State of the Arc Welding & Services LLC</div></div>
+      <div class="crow"><div class="lb">Shop</div><div class="vl">10234 W 64th Street, Odessa, TX 79764</div></div>
+      <div class="crow"><div class="lb">Phone</div><div class="vl"><a href="tel:+14322481455">432-248-1455</a></div></div>
+      <div class="crow"><div class="lb">Email</div><div class="vl"><a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a></div></div>
+      <div class="crow"><div class="lb">Web</div><div class="vl"><a href="https://sotaweld.com">SOTAWeld.com</a></div></div>
+    </div>
+  </div>
+  <footer>
+    <img src="[[IMG_27]]" alt="">
+    <span>&copy; 2026 State of the Arc Welding & Services LLC &nbsp;&bull;&nbsp; Odessa, Texas &nbsp;&bull;&nbsp; Straight Welds. Straight Answers. We Finish What We Fabricate.</span>
+  </footer>
+</div></section>
+
+</body></html>
