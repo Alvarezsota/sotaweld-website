@@ -284,11 +284,29 @@ weekPanelBody.addEventListener('click', async (e) => {
   }
   if (e.target.closest('[data-action="delete-entry"]')) {
     if (!confirm("Delete this ticket? This can't be undone.")) return;
-    const { error } = await sb.from('daily_entries').delete().eq('id', entryId);
-    if (error) { alert('Could not delete: ' + error.message); return; }
+
+    // Clear the child rows first: without an ON DELETE CASCADE on these foreign
+    // keys, deleting the parent entry fails outright.
+    const { error: helpErr } = await sb.from('daily_entry_helpers').delete().eq('daily_entry_id', entryId);
+    if (helpErr) { alert("Could not delete this ticket.\n\n" + helpErr.message + "\n\nTell the office."); return; }
+    const { error: partErr } = await sb.from('daily_entry_parts').delete().eq('daily_entry_id', entryId);
+    if (partErr) { alert("Could not delete this ticket.\n\n" + partErr.message + "\n\nTell the office."); return; }
+
+    // .select() makes the deleted rows come back, so a delete that silently
+    // removed nothing (blocked by a row-level security policy) is detectable
+    // instead of looking like it worked.
+    const { data: gone, error } = await sb.from('daily_entries').delete().eq('id', entryId).select('id');
+    if (error) { alert("Could not delete this ticket.\n\n" + error.message + "\n\nTell the office."); return; }
+    if (!gone || gone.length === 0) {
+      alert("This ticket could not be deleted.\n\nYou may not have permission to remove it, or the office already picked it up. Ask the office to delete it for you.");
+      loadWeekPanel();
+      return;
+    }
+
     editingEntryUid = null;
     editState = null;
     loadWeekPanel();
+    loadLoggedForDate();  // it's no longer turned in, so let them log it again
     return;
   }
   if (!editState || editingEntryUid !== entryId) return;
@@ -400,6 +418,87 @@ function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
 
 function newEntry() {
   return { uid: uid(), jobId: '', oneOffName: '', forJobId: '', description: '', hours: 10, perDiem: true, stainless: false, helpers: [], parts: [newPart()] };
+}
+
+/* ---- Duplicate ticket guard ----
+   Stops the same job being turned in twice for the same day. For jobs that
+   track hours, "the same" means same job + same hours. Flat-rate jobs don't
+   track hours (they'd all look like 0), so there we compare the description
+   instead — otherwise a second legitimate flat entry would get blocked. */
+let loggedForDate = [];      // entries already saved for the date in the picker
+let loggedForDateKey = '';   // the date loggedForDate belongs to
+
+function jobKeyFor(jobId, oneOffName) {
+  return jobId === 'other' || !jobId
+    ? 'other:' + (oneOffName || '').trim().toLowerCase()
+    : 'job:' + jobId;
+}
+function dupSigForCard(entry) {
+  if (!entry.jobId) return null;
+  if (entry.jobId === 'other' && !entry.oneOffName.trim()) return null;
+  const key = jobKeyFor(entry.jobId, entry.oneOffName);
+  return hoursTracked(entry.jobId)
+    ? key + '|h:' + Number(entry.hours)
+    : key + '|d:' + entry.description.trim().toLowerCase();
+}
+function dupSigForRow(row) {
+  const key = jobKeyFor(row.job_id || 'other', row.one_off_name);
+  return hoursTracked(row.job_id)
+    ? key + '|h:' + Number(row.hours)
+    : key + '|d:' + (row.description || '').trim().toLowerCase();
+}
+
+async function loadLoggedForDate() {
+  const d = dateInput.value;
+  loggedForDateKey = d;
+  loggedForDate = [];
+  if (!d || !currentUser) { updateSubmitState(); return; }
+  const { data } = await sb.from('daily_entries')
+    .select('id,job_id,one_off_name,hours,description')
+    .eq('welder_id', currentUser.id).eq('entry_date', d);
+  if (dateInput.value !== d) return;  // they changed the date while this was in flight
+  loggedForDate = data || [];
+  updateSubmitState();
+}
+
+// Returns { uids:Set of duplicate cards, msg:short reason } for the current form.
+function findDuplicates() {
+  const uids = new Set();
+  let msg = '';
+  const seen = new Map();
+  const savedSigs = (loggedForDateKey && loggedForDateKey === dateInput.value)
+    ? new Set(loggedForDate.map(dupSigForRow))
+    : new Set();
+
+  for (const e of entries) {
+    const sig = dupSigForCard(e);
+    if (!sig) continue;
+    if (savedSigs.has(sig)) {
+      uids.add(e.uid);
+      if (!msg) msg = 'You already turned in ' + jobName(e) + ' for this day.';
+    }
+    if (seen.has(sig)) {
+      uids.add(e.uid);
+      uids.add(seen.get(sig));
+      if (!msg) msg = jobName(e) + ' is on this form twice.';
+    } else {
+      seen.set(sig, e.uid);
+    }
+  }
+  return { uids, msg };
+}
+
+function dupBannerHtml(entry, kind) {
+  const hrs = hoursTracked(entry.jobId) ? Number(entry.hours) + ' hrs' : '';
+  if (kind === 'form') {
+    return '<b>&#9888; You put this job on here twice</b>'
+      + '<span>' + esc(jobName(entry)) + (hrs ? ' &mdash; ' + hrs : '')
+      + ' is already on this form. Hit &times; Remove on one of them.</span>';
+  }
+  return '<b>&#9888; You already turned this in</b>'
+    + '<span>' + esc(jobName(entry)) + (hrs ? ' for ' + hrs : '') + ' is already turned in for '
+    + selectedDateLabel() + '. You do not need to send it again.</span>'
+    + '<span>If the hours were wrong, open <b>This week</b> below and hit <b>Edit</b> on it.</span>';
 }
 function newHelperRow() {
   return { uid: uid(), helperId: '', hours: 10, perDiem: true };
@@ -543,6 +642,7 @@ function entryCardHtml(entry, idx) {
         <span class="job-idx">Job ${idx + 1}</span>
         ${entries.length > 1 ? `<button type="button" class="remove-job" data-action="remove-entry">&times; Remove</button>` : ''}
       </div>
+      <div class="dup-warn" data-dup-for="${entry.uid}"></div>
       <label class="field-label">Jobsite</label>
       <select class="input job-select">
         <option value="">Pick your job…</option>
@@ -610,6 +710,20 @@ function updateSubmitState() {
     }
     if (!missing && needGloves && !gloveSize) missing = 'Pick a glove size.';
   }
+
+  // Duplicate tickets: flag the offending cards and block Submit outright.
+  const dup = findDuplicates();
+  const savedSigs = (loggedForDateKey === dateInput.value)
+    ? new Set(loggedForDate.map(dupSigForRow))
+    : new Set();
+  entries.forEach(e => {
+    const el = entriesContainer.querySelector(`[data-dup-for="${e.uid}"]`);
+    if (!el) return;
+    if (!dup.uids.has(e.uid)) { el.innerHTML = ''; el.classList.remove('on'); return; }
+    el.innerHTML = dupBannerHtml(e, savedSigs.has(dupSigForCard(e)) ? 'saved' : 'form');
+    el.classList.add('on');
+  });
+  if (dup.msg) missing = dup.msg;
 
   submitBtn.disabled = !!missing;
   const hintEl = document.getElementById('submitHint');
@@ -764,6 +878,7 @@ addJobBtn.addEventListener('click', () => {
 
 dateInput.addEventListener('change', () => {
   updateSubmitState();
+  loadLoggedForDate();
 });
 
 document.querySelectorAll('#gasOpts .gear-btn').forEach(btn => {
@@ -807,6 +922,30 @@ async function handleSubmit() {
   const entryDate = dateInput.value || todayIso();
 
   try {
+    // Last line of defence: re-check the server right before inserting, in case
+    // this day was already turned in from another device or on a double-tap.
+    const { data: freshRows, error: freshErr } = await sb.from('daily_entries')
+      .select('id,job_id,one_off_name,hours,description')
+      .eq('welder_id', currentUser.id).eq('entry_date', entryDate);
+    if (freshErr) throw freshErr;
+    loggedForDate = freshRows || [];
+    loggedForDateKey = entryDate;
+    const freshSigs = new Set(loggedForDate.map(dupSigForRow));
+    const clash = entries.find(e => {
+      const s = dupSigForCard(e);
+      return s && freshSigs.has(s);
+    });
+    if (clash) {
+      alert('This is already turned in.\n\n' + jobName(clash)
+        + (hoursTracked(clash.jobId) ? ' for ' + Number(clash.hours) + ' hrs' : '')
+        + ' is already on ' + selectedDateLabel() + '.\n\n'
+        + 'You do not need to send it again. If the hours were wrong, open "This week" and hit Edit.');
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Submit work";
+      render();
+      return;
+    }
+
     for (const entry of entries) {
       const other = entry.jobId === 'other';
       const yard = isYard(entry.jobId);
@@ -932,6 +1071,7 @@ document.getElementById('logAnotherBtn').addEventListener('click', () => {
   document.getElementById('successScreen').style.display = 'none';
   document.getElementById('entryScreen').style.display = 'block';
   render();
+  loadLoggedForDate();  // what they just submitted now counts as already turned in
 });
 
 async function requireAuth() {
@@ -974,4 +1114,5 @@ async function requireAuth() {
 
   entries = [newEntry()];
   render();
+  loadLoggedForDate();
 })();
