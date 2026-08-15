@@ -2,7 +2,7 @@
   --paper:#191c21; --card:#252a32; --card-2:#2d323b; --ink:#f5f7fa; --ink-soft:#b4bcc7; --ink-mute:#828a95;
   --line:#454d59; --line-2:#333a44; --edge:#5a6470;
   --steel:#c2c8d1; --steel-dk:#d6dbe2; --graphite:#ffffff;
-  --disp:"Space Grotesk", sans-serif;
+  --disp:"Archivo Black", sans-serif;
   --body:"Inter", ui-sans-serif, system-ui, sans-serif;
   background-color:#191c21;
   background-image:
@@ -60,7 +60,7 @@
   padding:7px 14px 7px 12px; border-radius:999px; font-size:13px; font-weight:500; color:var(--ink-soft); margin-bottom:30px; }
 .m-tag-dot { width:7px; height:7px; border-radius:50%; background:var(--steel-dk); box-shadow:0 0 0 4px rgba(198,204,212,.14); }
 .m-hero-h { font-family:var(--disp); font-weight:700; letter-spacing:-.03em; line-height:1.02;
-  font-size:clamp(46px, 7.5vw, 88px); max-width:900px; color:var(--graphite); margin:0; }
+  font-size:clamp(40px, 6.4vw, 74px); max-width:1060px; color:var(--graphite); margin:0; }
 .m-hero-h .u { position:relative; white-space:nowrap; }
 .m-hero-h .u::after { content:""; position:absolute; left:0; right:0; bottom:.07em; height:.08em;
   background:linear-gradient(90deg,#8b929c,#dfe3e8); border-radius:2px; }
@@ -89,11 +89,22 @@
 .m-h2 { font-family:var(--disp); font-weight:700; letter-spacing:-.025em; line-height:1.05;
   font-size:clamp(32px,4.6vw,50px); max-width:620px; color:var(--graphite); margin:0; }
 .m-sec-lead { color:var(--ink-soft); font-size:17px; max-width:340px; line-height:1.6; }
+.m-why-lead { color:var(--ink-soft); font-size:17px; max-width:520px; line-height:1.6; margin:0 0 34px; }
 
 .m-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(258px,1fr)); gap:20px; }
-.m-c { background:linear-gradient(180deg,#2b313a,#23272e); border:1px solid var(--line); border-radius:18px; padding:30px 28px;
+.m-c { display:block; background:linear-gradient(180deg,#2b313a,#23272e); border:1px solid var(--line); border-radius:18px; padding:30px 28px;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.09); transition:transform .16s, box-shadow .16s, border-color .16s; }
 .m-c:hover { transform:translateY(-3px); box-shadow:inset 0 1px 0 rgba(255,255,255,.11), 0 16px 30px -14px rgba(0,0,0,.7); border-color:#6a7482; }
+.m-c-photo { aspect-ratio:16/10; border-radius:12px; border:1px dashed var(--edge); background:var(--card-2);
+  display:flex; align-items:center; justify-content:center; margin-bottom:20px; color:var(--ink-mute); }
+.m-c-photo svg { opacity:.5; }
+.m-c-photo.has-img { border-style:solid; overflow:hidden; padding:0; }
+.m-c-photo.has-img img { width:100%; height:100%; object-fit:cover; display:block;
+  transition:transform .5s ease; }
+.m-c:hover .m-c-photo.has-img img { transform:scale(1.045); }
+.m-c-more { display:inline-flex; align-items:center; gap:6px; margin-top:16px; font-family:var(--disp); font-weight:400;
+  font-size:12px; letter-spacing:.04em; text-transform:uppercase; color:var(--steel-dk); }
+.m-c:hover .m-c-more { color:var(--ink); }
 .m-c-n { font-family:var(--disp); font-weight:700; font-size:14px; color:var(--steel); font-variant-numeric:tabular-nums; }
 .m-c-ic { width:48px; height:48px; border-radius:12px; background:linear-gradient(180deg,#3a4049,#2a2f37);
   border:1px solid #5a6470; color:#eef1f5; box-shadow:inset 0 1px 0 rgba(255,255,255,.12);
@@ -120,6 +131,26 @@
 .m-gallery-grid a:hover img { transform:scale(1.04); }
 .m-gallery-grid a:nth-child(1) { grid-column:span 2; grid-row:span 2; }
 .m-gallery-grid a:nth-child(4) { grid-row:span 2; }
+
+/* Past-jobs category pages */
+.m-work-hero { padding:44px 0 6px; }
+.m-back-link { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-soft); margin-bottom:22px; }
+.m-back-link:hover { color:var(--ink); }
+.m-photo-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:36px; }
+.m-photo-tile { aspect-ratio:4/3; border-radius:14px; border:1px dashed var(--edge); background:var(--card-2);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:var(--ink-mute); font-size:13px; }
+.m-photo-tile svg { opacity:.45; }
+
+/* Photo tiles holding a real job photo */
+.m-photo-tile.has-img { aspect-ratio:auto; border-style:solid; padding:0; overflow:hidden;
+  display:block; background:var(--card-2); }
+.m-photo-tile.has-img img { width:100%; aspect-ratio:4/3; object-fit:cover; display:block; }
+.m-photo-cap { padding:14px 16px 16px; text-align:left; }
+.m-photo-cap b { display:block; font-family:var(--disp); font-weight:600; font-size:15px;
+  letter-spacing:-.01em; color:var(--ink); line-height:1.25; }
+.m-photo-cap span { display:block; margin-top:6px; font-size:13px; line-height:1.5; color:var(--ink-soft); }
+@media (max-width:760px){ .m-photo-grid { grid-template-columns:repeat(2,1fr); } }
+@media (max-width:520px){ .m-photo-grid { grid-template-columns:1fr; } }
 
 /* Reviews */
 .m-reviews-content { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
@@ -177,6 +208,12 @@ textarea.m-input { min-height:100px; resize:vertical; }
 .m-cta-actions { margin-top:30px; display:flex; flex-wrap:wrap; gap:13px; position:relative; }
 .m-btn-white { background:linear-gradient(180deg,#fdfdfe,#dfe3e8); color:#25292f; box-shadow:inset 0 1px 0 rgba(255,255,255,.8); }
 .m-btn-white:hover { background:linear-gradient(180deg,#ffffff,#cfd4db); }
+/* `.m a { color:inherit }` (0,1,1) outranks the button colour rules (0,1,0), so
+   link-buttons were inheriting near-white ink onto their light gradients. These
+   restate the intended colour at a specificity that wins. */
+.m a.m-btn-solid { color:#15181d; }
+.m a.m-btn-white { color:#25292f; }
+.m a.m-btn-line { color:var(--ink); }
 .m-info { position:relative; display:grid; gap:2px; }
 .m-info-r { display:flex; gap:14px; align-items:flex-start; padding:16px 0; border-bottom:1px solid rgba(255,255,255,.1); }
 .m-info-r:last-child { border-bottom:none; }
@@ -226,3 +263,10 @@ textarea.m-input { min-height:100px; resize:vertical; }
   .m-spark-anim { animation:mPulse 3.4s ease-in-out infinite; }
 }
 @keyframes mPulse { 0%,100%{opacity:.9; transform:scale(1)} 50%{opacity:.5; transform:scale(.9)} }
+
+/* Archivo Black ships a single weight (400) and is already black. Asking for
+   600/700 makes the browser synthesise faux-bold, which thickens and smears
+   the letterforms. Pin every display-font element back to its real weight. */
+.m-logo-txt, .m-logo-line, .m-hero-h, .m-band-k, .m-eyebrow, .m-h2, .m-c-n,
+.m-c-t, .m-review-card .author, .m-qr-card h3, .m-faq-question, .m-area-pill,
+.m-cta-h, .m-foot-col h4, .m-foot-b { font-weight:400; }
