@@ -58,8 +58,8 @@
 .dash-card h2 { font-size: 1.2rem; margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; }
 .clock-status { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
 .clock-status .status-text { font-family: 'Oswald', sans-serif; font-size: 1.1rem; }
-.status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #9ca3af; margin-right: 8px; }
-.status-dot.on { background: #22c55e; }
+.status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--dim); margin-right: 8px; }
+.status-dot.on { background: var(--ok); }
 .form-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .form-row label { font-family: 'Oswald', sans-serif; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
 .form-row input, .form-row textarea {

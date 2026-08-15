@@ -14,7 +14,7 @@
 .wl-email-field-grow { flex: 1 1 220px; }
 .wl-email-status { font-size: 12px; margin: 10px 0 0; font-weight: 600; }
 .wl-email-ok { color: var(--ok); }
-.wl-email-err { color: #e0554f; }
+.wl-email-err { color: var(--danger); }
 
 .wl-new-report-btn { display: block; width: 100%; padding: 13px; margin-bottom: 22px; border-radius: 12px; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
 
@@ -23,7 +23,7 @@
 .wl-welder-name { font-size: 17px; font-weight: 800; }
 .wl-welder-total { font-size: 13px; font-weight: 700; color: var(--ok); }
 
-.wl-day { padding: 10px 0; border-top: 1px solid rgba(69,77,89,.4); }
+.wl-day { padding: 10px 0; border-top: 1px solid rgba(255,255,255,.06); }
 .wl-day:first-child { border-top: none; }
 .wl-day-head { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; color: var(--dim); margin-bottom: 8px; }
 .wl-day-total { color: var(--text); font-weight: 800; }
@@ -39,12 +39,12 @@
 .wl-item-in { color: var(--dim2); font-variant-numeric: tabular-nums; }
 
 .wl-submit-meta { font-size: 11px; color: var(--dim2); margin-top: 6px; font-style: italic; }
-.wl-submit-mismatch { color: #e0a83f; font-weight: 700; font-style: normal; background: rgba(224,168,63,.12); border: 1px solid rgba(224,168,63,.35); border-radius: 6px; padding: 4px 8px; display: inline-block; }
+.wl-submit-mismatch { color: var(--molten); font-weight: 700; font-style: normal; background: var(--gold-soft); border: 1px solid rgba(233,162,59,.35); border-radius: 6px; padding: 4px 8px; display: inline-block; }
 
 .wl-job-actions { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
 .we-edit-btn, .we-del-btn { background: none; border: none; font-size: 12px; font-weight: 700; cursor: pointer; padding: 3px 0; font-family: inherit; }
 .we-edit-btn { color: var(--arc); }
-.we-del-btn { color: #e0554f; }
+.we-del-btn { color: var(--danger); }
 
 .job-card { background: var(--steel-850); border: 1px solid var(--line); border-radius: 16px; padding: 16px 14px 14px; margin-bottom: 8px; }
 .job-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
@@ -57,7 +57,7 @@
 
 .oneoff { margin-top: 10px; padding: 12px; border-radius: 12px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.25); }
 .oneoff .field-label { margin-top: 0; color: var(--molten-2); }
-.oneoff.yard { background: rgba(154,161,171,.1); border-color: rgba(154,161,171,.35); }
+.oneoff.yard { background: var(--gold-soft); border-color: rgba(233,162,59,.35); }
 .oneoff.yard .field-label { color: var(--arc); }
 
 .wr-section-inner { margin: 14px 0 0; }
@@ -67,13 +67,13 @@
 .wr-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
 .wr-table th { padding: 8px 6px; text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--dim2); font-weight: 700; border-bottom: 1px solid var(--line); background: var(--steel-800); }
 .wr-table th.wr-l, .wr-table td.wr-l { text-align: left; padding-left: 10px; }
-.wr-table td { padding: 6px; text-align: center; border-bottom: 1px solid rgba(69,77,89,.4); }
+.wr-table td { padding: 6px; text-align: center; border-bottom: 1px solid rgba(255,255,255,.06); }
 .wr-table td.wr-l { font-weight: 700; }
 .wr-table td.wr-per { color: var(--dim); font-variant-numeric: tabular-nums; }
 .wr-table td.wr-rowtot { font-weight: 800; color: var(--ok); font-variant-numeric: tabular-nums; min-width: 56px; }
 .wr-qty-input { width: 52px; text-align: center; padding: 7px 3px; font-size: 14px; font-weight: 700; }
 
-.wr-misc-row { display: flex; gap: 8px; align-items: center; padding: 10px 2px; border-bottom: 1px solid rgba(69,77,89,.4); }
+.wr-misc-row { display: flex; gap: 8px; align-items: center; padding: 10px 2px; border-bottom: 1px solid rgba(255,255,255,.06); }
 .wr-misc-row:last-of-type { border-bottom: none; }
 .wr-misc-desc { flex: 1; }
 .row-x { width: 32px; height: 32px; flex: 0 0 auto; border-radius: 8px; background: var(--steel-700); border: 1px solid var(--line); color: var(--danger); font-size: 16px; cursor: pointer; }
@@ -84,11 +84,11 @@
 .wl-split-preserved-item .row-x { width: 26px; height: 26px; flex: 0 0 auto; font-size: 14px; }
 .wl-job-sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
 .wl-job-hours { color: var(--dim2); font-weight: 600; }
-.wl-job-hours-missing { color: #e0554f; }
+.wl-job-hours-missing { color: var(--danger); }
 
 .wr-split-section { padding: 12px; border-radius: 12px; background: rgba(233,158,63,.07); border: 1px solid rgba(233,158,63,.3); }
 .wr-split-section .wr-section-head { border-bottom: none; padding: 0 0 4px; }
-.wr-split-row { display: flex; gap: 6px; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(69,77,89,.4); flex-wrap: wrap; }
+.wr-split-row { display: flex; gap: 6px; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06); flex-wrap: wrap; }
 .wr-split-row:last-of-type { border-bottom: none; }
 .split-size-select { flex: 1 1 70px; min-width: 64px; }
 .split-sched-select { flex: 1 1 90px; min-width: 80px; }

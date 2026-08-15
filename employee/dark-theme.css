@@ -1,8 +1,14 @@
 :root {
-  --steel-900:#191c21; --steel-850:#252a32; --steel-800:#2d323b;
-  --steel-700:#39404b; --steel-600:#4d5561; --line:#454d59;
-  --text:#f5f7fa; --dim:#aab2bd; --dim2:#828a95;
-  --molten:#c2c8d1; --molten-2:#dbe0e7; --arc:#9aa1ab;
+  /* Brochure palette: near-black ground, steel text, gold accent.
+     Token names are unchanged so every page picks this up automatically.
+     --molten is the accent (was light steel, now gold); --ok and --danger stay
+     green and red because they carry meaning, not branding. */
+  --steel-900:#0A0C0F; --steel-850:#12161C; --steel-800:#181E27;
+  --steel-700:#1E252F; --steel-600:#2A323D; --line:rgba(255,255,255,.10);
+  --edge:rgba(255,255,255,.22);
+  --text:#EEF2F7; --dim:#98A1AE; --dim2:#6E7681;
+  --molten:#E9A23B; --molten-2:#FFC96E; --molten-ink:#150F04; --arc:#E9A23B;
+  --gold-soft:rgba(233,162,59,.14);
   --ok:#57c98c; --danger:#ec7d7a;
 }
 
@@ -37,15 +43,16 @@ a { color: inherit; }
   padding: 8px 12px; border-radius: 8px; text-decoration: none;
 }
 .et-link:hover { color: var(--text); background: rgba(255,255,255,.06); }
-.et-link.on { color: var(--text); background: var(--steel-700); }
+.et-link.on { color: var(--molten); background: var(--gold-soft); }
 .et-user { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--dim); }
 .et-logout {
   background: none; border: 1px solid var(--line); color: var(--text);
   border-radius: 8px; padding: 7px 13px; font-size: 12px; font-weight: 700; cursor: pointer;
 }
+.et-logout:hover { border-color: var(--edge); }
 .admin-pill {
   font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
-  color: var(--arc); background: rgba(255,255,255,.12); padding: 3px 7px; border-radius: 5px;
+  color: var(--arc); background: var(--gold-soft); padding: 3px 7px; border-radius: 5px;
 }
 
 /* Buttons */
@@ -54,9 +61,9 @@ a { color: inherit; }
   border: none; cursor: pointer; border-radius: 12px; padding: 13px 20px;
   font-size: 15px; font-weight: 800; font-family: inherit;
 }
-.btn2-solid { color: #1c1f24; background: linear-gradient(180deg, var(--molten-2), var(--molten)); box-shadow: 0 4px 12px rgba(0,0,0,.18); }
+.btn2-solid { color: var(--molten-ink); background: linear-gradient(180deg, var(--molten-2), var(--molten)); box-shadow: 0 6px 18px -8px rgba(233,162,59,.8); }
 .btn2-solid:disabled { background: var(--steel-700); color: #5c6572; box-shadow: none; cursor: not-allowed; }
-.btn2-line { background: var(--steel-800); border: 1px solid var(--steel-600); color: var(--text); }
+.btn2-line { background: var(--steel-800); border: 1px solid var(--edge); color: var(--text); }
 .btn2-ghost { background: none; border: 1px solid var(--line); color: var(--dim); }
 .btn2-danger { background: none; border: 1px solid var(--line); color: var(--danger); }
 

@@ -23,7 +23,7 @@
 .pd-dollar { color: var(--dim); font-size: 13px; }
 
 .toggle2 { width: 42px; height: 24px; border-radius: 99px; border: none; background: var(--steel-600); cursor: pointer; position: relative; }
-.toggle2 .tk2 { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #c7cfd9; transition: left .15s, background .15s; }
+.toggle2 .tk2 { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--dim); transition: left .15s, background .15s; }
 .toggle2.ton { background: rgba(87,201,140,.4); }
 .toggle2.ton .tk2 { left: 21px; background: var(--ok); }
 .row-x { border: none; background: none; color: var(--dim2); cursor: pointer; display: flex; justify-content: center; padding: 6px; border-radius: 6px; font-size: 16px; }
@@ -53,7 +53,7 @@
 .pw-note { font-size: 11px; color: var(--dim2); margin: 8px 0 0; line-height: 1.4; }
 .pw-status { font-size: 12px; font-weight: 600; margin: 6px 0 0; min-height: 1em; }
 .pw-ok { color: var(--ok); }
-.pw-err { color: #e0554f; }
+.pw-err { color: var(--danger); }
 
 @media (max-width: 640px) {
   .jt-head span:nth-child(3), .jt-row > *:nth-child(3),

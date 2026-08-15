@@ -12,7 +12,7 @@
 .week-panel-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .week-nav-btn { width: 36px; height: 36px; border-radius: 9px; border: 1px solid var(--line); background: var(--steel-800); color: var(--text); cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; }
 .week-panel-label { font-size: 13px; font-weight: 700; color: var(--dim); }
-.week-day { padding: 10px 0; border-top: 1px solid rgba(69,77,89,.5); }
+.week-day { padding: 10px 0; border-top: 1px solid rgba(255,255,255,.07); }
 .week-day:first-child { border-top: none; }
 .week-day-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
 .week-day-date { font-size: 13px; font-weight: 800; }
@@ -27,7 +27,7 @@
 .week-entry-actions { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
 .we-edit-btn, .we-del-btn { background: none; border: none; font-size: 12px; font-weight: 700; cursor: pointer; padding: 3px 0; font-family: inherit; }
 .we-edit-btn { color: var(--arc); }
-.we-del-btn { color: #e0554f; }
+.we-del-btn { color: var(--danger); }
 .week-entry-lock { font-size: 11px; font-style: italic; color: var(--dim2); }
 .week-entry-editing { margin: 6px 0; }
 .edit-card .job-idx { color: var(--arc); }
@@ -52,7 +52,7 @@
 .oneoff { margin-top: 4px; padding: 12px; border-radius: 12px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.25); }
 .oneoff .field-label { margin-top: 0; color: var(--molten-2); }
 .oneoff-note { display: block; margin-top: 8px; font-size: 12px; color: var(--dim); font-weight: 500; line-height: 1.4; }
-.oneoff.yard { background: rgba(154,161,171,.1); border-color: rgba(154,161,171,.35); }
+.oneoff.yard { background: var(--gold-soft); border-color: rgba(233,162,59,.35); }
 .oneoff.yard .field-label { color: var(--arc); }
 .oneoff.flat { background: rgba(87,201,140,.08); border-color: rgba(87,201,140,.35); }
 .oneoff.flat .field-label { color: var(--ok); }
@@ -82,7 +82,7 @@
 
 .pd-toggle { width: 96px; flex-shrink: 0; border: 2px solid var(--line); background: var(--steel-800); border-radius: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 10px 6px; color: var(--dim2); transition: background .15s, border-color .15s; }
 .pd-knob { width: 44px; height: 26px; border-radius: 999px; background: var(--steel-600); position: relative; transition: background .15s; }
-.pd-knob::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #c7cfd9; transition: left .15s, background .15s; }
+.pd-knob::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--dim); transition: left .15s, background .15s; }
 .pd-text { font-size: 12px; font-weight: 700; text-align: center; line-height: 1.5; }
 .pd-text b { font-size: 13px; letter-spacing: .04em; }
 .pd-on { color: var(--ok); background: rgba(87,201,140,.14); border-color: var(--ok); }
@@ -124,7 +124,7 @@
 .glove-size-btn { flex: 1; border: 1px solid var(--line); background: var(--steel-800); color: var(--dim); border-radius: 10px; padding: 10px 8px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; }
 .glove-size-btn.sel { border-color: var(--molten-2); color: var(--molten-2); background: rgba(255,255,255,.09); }
 
-.submit-hint2 { position: fixed; left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom)); text-align: center; font-size: 12px; font-weight: 700; color: #e0a83f; }
+.submit-hint2 { position: fixed; left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom)); text-align: center; font-size: 12px; font-weight: 700; color: var(--molten); }
 .submit-hint2:empty { display: none; }
 .submit-bar2 { position: fixed; bottom: 0; left: 0; right: 0; display: flex; align-items: center; gap: 12px; justify-content: center; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(21,23,27,0) 0%, var(--steel-900) 34%); }
 .submit-bar2 > * { max-width: 520px; }
