@@ -24,26 +24,40 @@ domain-wide forward, that is still worth doing: point the whole domain at
 
 ## The map
 
+**Confirmed** — these exact URLs were found live in Google's index, so they are
+the ones carrying ranking history and they matter most:
+
 | Old URL | Redirect to |
 | --- | --- |
 | `/` | `https://sotaweld.com/` |
 | `/service-pipeline-welding` | `https://sotaweld.com/services/pipeline-welding.html` |
-| `/service-structural-welding` | `https://sotaweld.com/services/structural-steel-fabrication.html` |
 | `/service-metal-fabrication` | `https://sotaweld.com/services/metal-fabrication.html` |
 | `/service-repair-and-maintenance` | `https://sotaweld.com/services/repair-and-maintenance.html` |
-| `/service-custom-welding` | `https://sotaweld.com/services/metal-fabrication.html` |
-| `/service-mobile-welding` | `https://sotaweld.com/services/mobile-field-welding.html` |
-| `/service-automotive-welding` | `https://sotaweld.com/services/repair-and-maintenance.html` |
 | `/gallery-All` | `https://sotaweld.com/#services` |
 | `/gallery-Welding` | `https://sotaweld.com/work/compressor-stations.html` |
 | `/blog` | `https://sotaweld.com/` |
-| `/blog/*` (any post) | `https://sotaweld.com/` |
-| anything else | `https://sotaweld.com/` |
+| `/blog/structural-integrity-the-critical-role/` | `https://sotaweld.com/` |
 
-Some of these old paths were guessed from search results rather than read off
-the site directly — the site was not reachable from where this was written.
-Open the old site's page list and check for any URL not covered above; send
-anything unlisted to `https://sotaweld.com/` so no page 404s.
+**Expected but unconfirmed** — the old site sells these services, and the three
+confirmed URLs above establish the `/service-<name>` pattern, so these are very
+likely the paths. Check them against the site's own page list before relying on
+them; if a name differs, the destination stays the same:
+
+| Old URL | Redirect to |
+| --- | --- |
+| `/service-structural-welding` | `https://sotaweld.com/services/structural-steel-fabrication.html` |
+| `/service-mobile-welding` | `https://sotaweld.com/services/mobile-field-welding.html` |
+| `/service-custom-welding` | `https://sotaweld.com/services/metal-fabrication.html` |
+| `/service-automotive-welding` | `https://sotaweld.com/services/repair-and-maintenance.html` |
+
+**Catch-all — set this one no matter what.** Everything not named above,
+including blog posts and any page neither of us knows about, goes to
+`https://sotaweld.com/`. This is the safety net: with it in place, nothing on
+the old domain can 404 even if the two tables above are incomplete.
+
+The fastest way to make the tables complete is to open the old site's page list
+in its editor and read off the real URLs. If any are missing here, send them to
+the closest matching service page — or let the catch-all take them.
 
 Two of the mappings are deliberate approximations. The old site sold
 *automotive welding* and *custom welding for homeowners*, which this business no
