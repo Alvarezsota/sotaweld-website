@@ -846,4 +846,7 @@ document.getElementById('nextWeekBtn').addEventListener('click', () => { weekSta
   });
 
   await loadWeek();
+
+  refreshOnReturn(loadWeek, () =>
+    newTicketState !== null || !!document.querySelector('.edit-row-form'));
 })();

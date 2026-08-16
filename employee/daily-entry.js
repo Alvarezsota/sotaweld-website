@@ -1137,4 +1137,11 @@ async function requireAuth() {
   entries = [newEntry()];
   render();
   loadLoggedForDate();
+
+  // Only the saved-work views, never `render()` — that would clear the entries
+  // the welder is part way through typing.
+  refreshOnReturn(async () => {
+    await loadWeekPanel();
+    await loadLoggedForDate();
+  }, () => editingEntryUid !== null);
 })();

@@ -818,4 +818,8 @@ document.getElementById('newReportBtn').addEventListener('click', () => {
   document.getElementById('emailToInput').value = currentUser.email;
 
   await loadWeek();
+
+  // Hours come from the daily entries, which Approvals can change after a report
+  // was turned in — pull them again whenever this page comes back into view.
+  refreshOnReturn(loadWeek, () => editingReportId !== null);
 })();

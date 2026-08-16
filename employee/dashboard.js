@@ -121,4 +121,9 @@ function escapeHtml(str) {
 
   await loadAnnouncements();
   if (isAdmin) await loadQuoteRequests();
+
+  refreshOnReturn(async () => {
+    await loadAnnouncements();
+    if (isAdmin) await loadQuoteRequests();
+  }, () => document.getElementById('announcementForm').style.display === 'block');
 })();
