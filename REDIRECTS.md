@@ -65,6 +65,64 @@ longer leads with. Rather than build residential pages that misrepresent the
 work, those redirect to the closest industrial equivalent. If residential work
 is still wanted, say so and those pages can be built properly.
 
+## Doing this without the old site's login
+
+Redirects do not have to be set up inside the old website's editor. They happen
+at the DNS level, which is controlled by the **domain registrar** — a different
+account from the website builder. If you can get into the registrar, you can
+serve these redirects yourself and the old site simply stops being what answers
+for that domain.
+
+Check who the registrar and registrant are at https://lookup.icann.org. If the
+registrant is you or the business, you can recover access with proof of
+identity even if you have never logged in.
+
+Then use Cloudflare, which is free and purpose-built for this:
+
+1. Create a Cloudflare account and add the old domain.
+2. Cloudflare issues two nameservers.
+3. At the registrar, replace the current nameservers with Cloudflare's.
+4. Wait for the domain to show as Active in Cloudflare — usually under an hour.
+5. Go to **Rules → Redirect Rules → Bulk Redirects**, create a list, and add
+   the pairs below.
+
+No hosting and no monthly cost — Cloudflare answers for the domain and issues
+the 301s directly. Note that this does take the old site offline, which is the
+intent.
+
+### Bulk redirect list
+
+Set every row to **301 permanent**. Turn **subpath matching** on for the blog
+row so individual posts are caught, and off for the rest.
+
+| Source | Target |
+| --- | --- |
+| `stateofthearcweldingandservicesllc.com/service-pipeline-welding` | `https://sotaweld.com/services/pipeline-welding.html` |
+| `stateofthearcweldingandservicesllc.com/service-metal-fabrication` | `https://sotaweld.com/services/metal-fabrication.html` |
+| `stateofthearcweldingandservicesllc.com/service-repair-and-maintenance` | `https://sotaweld.com/services/repair-and-maintenance.html` |
+| `stateofthearcweldingandservicesllc.com/service-structural-welding` | `https://sotaweld.com/services/structural-steel-fabrication.html` |
+| `stateofthearcweldingandservicesllc.com/service-mobile-welding` | `https://sotaweld.com/services/mobile-field-welding.html` |
+| `stateofthearcweldingandservicesllc.com/service-custom-welding` | `https://sotaweld.com/services/metal-fabrication.html` |
+| `stateofthearcweldingandservicesllc.com/service-automotive-welding` | `https://sotaweld.com/services/repair-and-maintenance.html` |
+| `stateofthearcweldingandservicesllc.com/gallery-All` | `https://sotaweld.com/#services` |
+| `stateofthearcweldingandservicesllc.com/gallery-Welding` | `https://sotaweld.com/work/compressor-stations.html` |
+| `stateofthearcweldingandservicesllc.com/blog` | `https://sotaweld.com/` |
+
+### The catch-all
+
+Bulk Redirects only match what you list, so add one **Single Redirect Rule**
+underneath to sweep up everything else, including the homepage and any page
+neither of us knows about.
+
+- Rule name: `catch-all to sotaweld`
+- When incoming requests match: **All incoming requests**
+- Then: **Static** redirect to `https://sotaweld.com/`
+- Status: **301**
+- Preserve query string: off
+
+Bulk Redirects are evaluated before Single Redirect Rules, so the specific rows
+above win and this only catches the leftovers.
+
 ## After the redirects are live
 
 1. **Check them.** Visit two or three old URLs and confirm they land on the
