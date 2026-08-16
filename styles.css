@@ -239,6 +239,10 @@
 .m-cap8 h3 { font-family:var(--disp); font-weight:400; font-size:15px; margin:0 0 9px; text-transform:uppercase;
   color:var(--ink); line-height:1.2; letter-spacing:.01em; }
 .m-cap8 p { font-size:13.5px; color:var(--ink-mute); line-height:1.5; margin:0; }
+/* Capability headings that lead to a service page. Underlined on hover only, so
+   the grid still reads as a list rather than a wall of links. */
+.m-cap8-link { color:inherit; text-decoration:none; }
+.m-cap8-link:hover, .m-cap8-link:focus-visible { color:var(--arc); text-decoration:underline; text-underline-offset:3px; }
 @media (max-width:980px){ .m-caps8 { grid-template-columns:repeat(2,1fr); } }
 @media (max-width:520px){ .m-caps8 { grid-template-columns:1fr; } }
 
