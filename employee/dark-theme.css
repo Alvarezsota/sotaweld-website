@@ -45,6 +45,20 @@ a { color: inherit; }
 .et-link:hover { color: var(--text); background: rgba(255,255,255,.06); }
 .et-link.on { color: var(--molten); background: var(--gold-soft); }
 .et-user { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--dim); }
+
+/* Green once the page is listening for changes, grey when it is only
+   refreshing on return. Hover gives the plain-language version. */
+.live-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--dim2);
+  flex: none;
+  cursor: help;
+  transition: background .2s ease, box-shadow .2s ease;
+}
+.live-dot.is-live {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px rgba(87, 201, 140, .18);
+}
 .et-logout {
   background: none; border: 1px solid var(--line); color: var(--text);
   border-radius: 8px; padding: 7px 13px; font-size: 12px; font-weight: 700; cursor: pointer;

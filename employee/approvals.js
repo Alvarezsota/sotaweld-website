@@ -847,6 +847,10 @@ document.getElementById('nextWeekBtn').addEventListener('click', () => { weekSta
 
   await loadWeek();
 
-  refreshOnReturn(loadWeek, () =>
-    newTicketState !== null || !!document.querySelector('.edit-row-form'));
+  await liveData({
+    reload: loadWeek,
+    isBusy: () => newTicketState !== null || !!document.querySelector('.edit-row-form'),
+    tables: ['daily_entries', 'daily_entry_helpers', 'daily_entry_parts', 'job_weeks'],
+    channel: 'approvals'
+  });
 })();

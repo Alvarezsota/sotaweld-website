@@ -820,6 +820,11 @@ document.getElementById('newReportBtn').addEventListener('click', () => {
   await loadWeek();
 
   // Hours come from the daily entries, which Approvals can change after a report
-  // was turned in — pull them again whenever this page comes back into view.
-  refreshOnReturn(loadWeek, () => editingReportId !== null);
+  // was turned in, so watch those as closely as the reports themselves.
+  await liveData({
+    reload: loadWeek,
+    isBusy: () => editingReportId !== null,
+    tables: ['weld_reports', 'daily_entries'],
+    channel: 'weld-log'
+  });
 })();
