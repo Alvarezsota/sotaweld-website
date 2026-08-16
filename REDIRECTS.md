@@ -4,8 +4,13 @@ The business has two websites. The old one is the one Google currently ranks;
 sotaweld.com barely appears. Two sites for one business split the signals
 instead of stacking them, so one has to win and the other has to point at it.
 
-This is the single highest-impact change available. The on-page work in this
-repo helps, but it cannot overcome a second site competing for the same name.
+How much this matters, in proportion: the old domain was created 2025-07-31,
+so it is about a year old and has not banked much authority. It outranks
+sotaweld.com because it has indexed service pages, not because of deep history
+— and sotaweld.com now has its own. Redirecting is worth doing and will speed
+things up, but it is not the thing everything depends on. Repointing the
+listings that link to the old site (see the checklist at the end) is available
+without anyone's permission and carries much of the same benefit.
 
 ## What to do
 
@@ -68,16 +73,39 @@ is still wanted, say so and those pages can be built properly.
 ## Doing this without the old site's login
 
 Redirects do not have to be set up inside the old website's editor. They happen
-at the DNS level, which is controlled by the **domain registrar** — a different
+at the domain level, controlled by the **domain registrar** — a different
 account from the website builder. If you can get into the registrar, you can
 serve these redirects yourself and the old site simply stops being what answers
 for that domain.
 
-Check who the registrar and registrant are at https://lookup.icann.org. If the
-registrant is you or the business, you can recover access with proof of
-identity even if you have never logged in.
+Looked up 2026-08-16, the domain is registered at **GoDaddy**, using GoDaddy's
+own nameservers (`ns21/ns22.domaincontrol.com`). The registrant is masked by
+Domains By Proxy, GoDaddy's privacy service, so the public record does not say
+who owns it. It was created 2025-07-31 and expires 2027-07-31.
 
-Then use Cloudflare, which is free and purpose-built for this:
+### Simplest route: GoDaddy's built-in forwarding
+
+Because the domain is already at GoDaddy, no nameserver changes are needed.
+
+1. Sign in to GoDaddy and open **My Products → Domains**.
+2. Select the domain, then **Domain Settings → Forwarding → Add forwarding**.
+3. Forward to `https://sotaweld.com`.
+4. Set forward type to **Permanent (301)**. This is the setting that matters —
+   a temporary (302) forward passes no ranking history.
+5. Choose **Forward only**. Do *not* choose **Forward with masking**: masking
+   keeps the old address in the browser bar while showing the new site, which
+   is the opposite of telling Google the site moved, and creates duplicate
+   content on top of it.
+
+GoDaddy forwarding sends every path to one destination, so the per-page map
+above collapses into "everything goes to the homepage." For a site this size
+that captures most of the benefit, and it takes two minutes.
+
+### If per-page redirects are wanted instead
+
+Cloudflare is free and can map each old page to its matching new one. Worth it
+only if the specific service pages turn out to be ranking well enough to be
+worth preserving individually.
 
 1. Create a Cloudflare account and add the old domain.
 2. Cloudflare issues two nameservers.
