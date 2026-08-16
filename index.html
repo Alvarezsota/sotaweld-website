@@ -7,8 +7,12 @@
 <meta name="description" content="State of The Arc Welding & Services LLC builds compressor-station piping, hot tie-ins, repair sleeves, and structural fabrication across the Permian Basin. Based in Odessa, TX.">
 <meta property="og:title" content="State of the Arc Welding & Services | Odessa, TX Welding">
 <meta property="og:description" content="Precision welding for the oil patch — compressor stations, hot tie-ins, repair sleeves, and structural fab across West Texas.">
-<meta property="og:image" content="assets/img/hero-1.jpeg">
+<meta property="og:image" content="https://sotaweld.com/assets/img/hero-1.jpeg">
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://sotaweld.com/">
+<meta property="og:site_name" content="State of the Arc Welding &amp; Services LLC">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://sotaweld.com/">
 <link rel="icon" href="assets/img/logo.jpeg">
 <meta name="google-site-verification" content="woCQ_S01RT3xCZ1iJvCCSrCGWJ751ARm7g_g8HTYNyw">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,9 +22,13 @@
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "LocalBusiness",
+  "@type": ["LocalBusiness", "GeneralContractor"],
+  "@id": "https://sotaweld.com/#business",
   "name": "State of the Arc Welding & Services LLC",
-  "image": "assets/img/logo.jpeg",
+  "alternateName": ["State of the Arc Welding and Services", "SOTA Weld"],
+  "description": "Pipeline, compressor-station, structural and skid welding and fabrication for the Permian Basin oil and gas industry, based in Odessa, Texas. Shop and field crews, hot tie-ins, repair sleeves, and in-house CNC fiber laser cutting.",
+  "image": "https://sotaweld.com/assets/img/hero-1.jpeg",
+  "logo": "https://sotaweld.com/assets/img/logo.jpeg",
   "telephone": "+14322481455",
   "email": "g.alvarez@sotaweld.com",
   "address": {
@@ -32,8 +40,29 @@
     "addressCountry": "US"
   },
   "areaServed": ["Odessa, TX", "West Odessa, TX", "Midland, TX", "Gardendale, TX", "Greenwood, TX", "Goldsmith, TX", "Notrees, TX", "Penwell, TX", "Andrews, TX", "Monahans, TX", "Kermit, TX", "Wink, TX", "Crane, TX", "Stanton, TX", "Big Spring, TX", "Coahoma, TX", "Forsan, TX", "Ackerly, TX", "Lamesa, TX", "Seminole, TX", "Seagraves, TX", "Denver City, TX", "Pecos, TX", "Barstow, TX", "Grandfalls, TX", "Rankin, TX", "McCamey, TX", "Iraan, TX", "Big Lake, TX", "Garden City, TX", "Midkiff, TX", "Tarzan, TX", "Fort Stockton, TX", "Colorado City, TX", "Sterling City, TX", "Snyder, TX"],
-  "openingHours": "Mo-Sa 07:00-17:30",
-  "url": "https://sotaweld.com"
+  "openingHoursSpecification": [{
+    "@type": "OpeningHoursSpecification",
+    "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+    "opens": "07:00",
+    "closes": "17:30"
+  }],
+  "sameAs": [
+    "https://www.facebook.com/p/State-of-the-Arc-Welding-Services-LLC-100083322458415/",
+    "https://www.yelp.com/biz/state-of-the-arc-welding-and-services-odessa"
+  ],
+  "url": "https://sotaweld.com",
+  "hasOfferCatalog": {
+    "@type": "OfferCatalog",
+    "name": "Welding & Fabrication Services",
+    "itemListElement": [
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Compressor Station Piping" } },
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Hot Tie-Ins & Repair Sleeves" } },
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Structural & Skid Fabrication" } },
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Pipeline Welding" } },
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "CNC Fiber Laser Cutting" } },
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Shop & Field Welding Crews" } }
+    ]
+  }
 }
 </script>
 </head>
