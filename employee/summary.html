@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Approvals | State of the Arc Welding</title>
+<title>Weekly Summary | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260816b">
-<link rel="stylesheet" href="approvals.css?v=20260816b">
+<link rel="stylesheet" href="dark-theme.css?v=20260819a">
+<link rel="stylesheet" href="approvals.css?v=20260819a">
+<link rel="stylesheet" href="summary.css?v=20260819a">
 </head>
 <body>
 
@@ -21,8 +22,8 @@
     <a class="et-link" href="weld-report.html">Weld Report</a>
     <a class="et-link" href="dashboard.html">Office</a>
     <a class="et-link" href="admin-setup.html">Setup</a>
-    <a class="et-link on" href="approvals.html">Approvals</a>
-    <a class="et-link" href="summary.html">Summary</a>
+    <a class="et-link" href="approvals.html">Approvals</a>
+    <a class="et-link on" href="summary.html">Summary</a>
     <a class="et-link" href="weld-log.html">Weld Log</a>
   </nav>
   <div class="et-user">
@@ -48,20 +49,24 @@
           <button class="btn2 btn2-ghost small" id="nextWeekBtn">Next week &rarr;</button>
         </div>
       </div>
-      <div class="week-summary" id="weekSummary"></div>
     </div>
 
-    <button type="button" class="btn2 btn2-line wl-new-report-btn" id="newTicketBtn">+ Submit a ticket for a welder</button>
-    <div id="newTicketCard"></div>
+    <div id="warnBox"></div>
+    <div id="kpiRow" class="sum-kpis"></div>
 
-    <div id="jobGrid" class="job-grid"></div>
-    <div id="jobDetail" style="display:none;"></div>
+    <div class="sum-tabs" id="sumTabs">
+      <button class="sum-tab on" data-tab="jobs">Invoices by job</button>
+      <button class="sum-tab" data-tab="welders">Welders</button>
+      <button class="sum-tab" data-tab="helpers">Helpers</button>
+    </div>
+
+    <div id="sumBody"><p class="empty-state2">Loading...</p></div>
 
   </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260816b"></script>
-<script src="approvals.js?v=20260816b"></script>
+<script src="supabase-client.js?v=20260819a"></script>
+<script src="summary.js?v=20260819a"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@
 .section-note2 span { font-size: 13px; color: var(--dim); font-weight: 500; line-height: 1.5; }
 .btn2.small { font-size: 13px; padding: 8px 14px; white-space: nowrap; }
 
-.jt-head, .jt-row { display: grid; grid-template-columns: 2.2fr 1.2fr 1.4fr .8fr .8fr .8fr .7fr .7fr .7fr 36px; align-items: center; gap: 8px; }
+.jt-head, .jt-row { display: grid; grid-template-columns: 2fr 1.1fr 1.2fr 1fr .75fr .8fr .8fr .7fr .7fr .7fr 36px; align-items: center; gap: 8px; }
 .jt-head { padding: 6px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); font-weight: 700; }
 .jt-head .c { text-align: center; }
 .jt-row { background: var(--steel-850); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; margin-bottom: 7px; }
@@ -20,6 +20,8 @@
 .cell-in.num { text-align: center; width: 56px; padding: 8px 4px; }
 .c { display: flex; align-items: center; justify-content: center; }
 .pd-cell { gap: 2px; }
+.cell-in.bid { font-size: 13px; }
+.cell-in.bid::placeholder { color: var(--dim2); opacity: .7; }
 .pd-dollar { color: var(--dim); font-size: 13px; }
 
 .toggle2 { width: 42px; height: 24px; border-radius: 99px; border: none; background: var(--steel-600); cursor: pointer; position: relative; }
@@ -57,12 +59,34 @@
 
 @media (max-width: 640px) {
   .jt-head span:nth-child(3), .jt-row > *:nth-child(3),
-  .jt-head span:nth-child(4), .jt-row .pd-cell,
-  .jt-head span:nth-child(5), .jt-row .billrate-cell,
-  .jt-head span:nth-child(6), .jt-row .stainless-cell { display: none; }
-  .jt-head, .jt-row { grid-template-columns: 1.6fr .8fr .7fr .7fr .7fr 36px; }
+  .jt-head span:nth-child(5), .jt-row .pd-cell,
+  .jt-head span:nth-child(6), .jt-row .billrate-cell,
+  .jt-head span:nth-child(7), .jt-row .stainless-cell { display: none; }
+  .jt-head, .jt-row { grid-template-columns: 1.4fr .9fr .9fr .65fr .65fr .65fr 36px; }
   .p-head span:nth-child(2), .p-row > *:nth-child(2) { display: none; }
   .p-head, .p-row { grid-template-columns: 1.8fr 1fr 1fr .8fr; }
   .helpers-row-grid { grid-template-columns: 1.8fr 1fr 1fr .8fr 20px !important; }
   .welders-row-grid { grid-template-columns: 1.8fr 1fr 1fr .8fr 100px !important; }
+}
+
+/* Lump sum bid items, entered per job right under its row on Setup. */
+.bid-strip { display: flex; align-items: center; gap: 10px; margin: -3px 0 9px 12px; }
+.bid-toggle { background: none; border: 1px solid var(--line); color: var(--arc); font-size: 11px; font-weight: 700;
+  padding: 5px 10px; border-radius: 7px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+.bid-toggle:hover { border-color: var(--molten); }
+.bid-strip-total { font-size: 11px; color: var(--dim2); font-weight: 600; }
+.bid-panel { background: var(--steel-800); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: -3px 0 10px; }
+.bid-panel-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px;
+  font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--molten-2); margin-bottom: 10px; }
+.bid-line { display: grid; grid-template-columns: 2.4fr .7fr .6fr .9fr .9fr 30px; gap: 8px; align-items: center; margin-bottom: 6px; }
+.bid-line-head { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); font-weight: 700; padding: 0 9px; }
+.bid-line-head .c { text-align: center; }
+.bid-line-total { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 13px; }
+.bid-panel-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
+.bid-contract { font-weight: 800; font-variant-numeric: tabular-nums; }
+.bid-panel-note { font-size: 11px; color: var(--dim2); margin: 8px 0 0; line-height: 1.5; }
+@media (max-width: 640px) {
+  .bid-line { grid-template-columns: 1fr 1fr 30px; }
+  .bid-line-head { display: none; }
 }

@@ -83,15 +83,44 @@ function jobLabelFor(row) {
   return row.one_off_name || 'One-off job';
 }
 
+// A welder who works two jobs in a day files one report per job, because inches
+// have to land on the right job for costing. He still only worked one day, so the
+// log shows him once and splits the jobs inside — one name, one day total, one
+// hours line, with each job called out under it.
 function buildDayGroups(reports) {
   const byDay = {};
   reports.forEach(r => {
-    if (!byDay[r.report_date]) byDay[r.report_date] = { dateStr: r.report_date, total: 0, rows: [] };
+    if (!byDay[r.report_date]) byDay[r.report_date] = { dateStr: r.report_date, total: 0, welders: {} };
     const day = byDay[r.report_date];
     day.total += Number(r.total_inches);
-    day.rows.push(r);
+
+    const wid = r.welder_id || 'unknown';
+    if (!day.welders[wid]) {
+      day.welders[wid] = {
+        welderId: wid,
+        name: (r.profiles && r.profiles.full_name) || 'Unknown welder',
+        total: 0,
+        rows: [],
+      };
+    }
+    const w = day.welders[wid];
+    w.total += Number(r.total_inches);
+    w.rows.push(r);
   });
-  return Object.values(byDay).sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+
+  return Object.values(byDay)
+    .sort((a, b) => a.dateStr.localeCompare(b.dateStr))
+    .map(day => ({
+      dateStr: day.dateStr,
+      total: day.total,
+      welders: Object.values(day.welders)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(w => ({
+          ...w,
+          rows: [...w.rows].sort((a, b) =>
+            (jobLabelFor(a) || '').localeCompare(jobLabelFor(b) || '')),
+        })),
+    }));
 }
 
 function lineItemsHtml(r) {
@@ -525,37 +554,47 @@ function renderBody(dayGroups) {
     return;
   }
 
-  body.innerHTML = newReportHtml + dayGroups.map(day => {
-    const rows = [...day.rows].sort((a, b) =>
-      ((a.profiles && a.profiles.full_name) || '').localeCompare((b.profiles && b.profiles.full_name) || ''));
-    return `
+  body.innerHTML = newReportHtml + dayGroups.map(day => `
       <div class="card wl-welder-card">
         <div class="wl-welder-head">
           <span class="wl-welder-name">${esc(dayLabel(day.dateStr))}</span>
           <span class="wl-welder-total">${day.total.toFixed(2)} in this day</span>
         </div>
-        ${rows.map(r => {
-          if (editingReportId === r.id) return editCardHtml(editState);
-          const hrsKey = `${r.welder_id}_${r.report_date}`;
-          const hrsWorked = hoursByWelderDate[hrsKey];
+        ${day.welders.map(w => {
+          // If this welder's report is open for editing, the edit card replaces
+          // just that job, not the whole welder block.
+          const editingHere = w.rows.some(r => editingReportId === r.id);
+          const hrsWorked = hoursByWelderDate[`${w.welderId}_${day.dateStr}`];
+          const hrsHtml = hrsWorked != null
+            ? `<span class="wl-job-hours">&middot; ${hrsWorked} hrs logged</span>`
+            : `<span class="wl-job-hours wl-job-hours-missing">&middot; no hours logged</span>`;
+          const multi = w.rows.length > 1;
+
           return `
-          <div class="wl-job">
+          <div class="wl-welder-block">
             <div class="wl-job-head">
-              <span class="wl-job-name">${esc((r.profiles && r.profiles.full_name) || 'Unknown welder')}</span>
-              <span class="wl-job-total">${Number(r.total_inches).toFixed(2)} in ${hrsWorked != null ? `<span class="wl-job-hours">&middot; ${hrsWorked} hrs logged</span>` : `<span class="wl-job-hours wl-job-hours-missing">&middot; no hours logged</span>`}</span>
+              <span class="wl-job-name">${esc(w.name)}</span>
+              <span class="wl-job-total">${w.total.toFixed(2)} in ${hrsHtml}</span>
             </div>
-            <div class="wl-job-sub">${esc(jobLabelFor(r))}</div>
-            <div class="wl-items">${lineItemsHtml(r)}</div>
-            ${submissionMetaHtml(r)}
-            <div class="wl-job-actions">
-              <button type="button" class="we-edit-btn" data-action="edit-report" data-report-id="${r.id}">Edit</button>
-              <button type="button" class="we-del-btn" data-action="delete-report-inline" data-report-id="${r.id}">Delete</button>
-            </div>
-          </div>
-        `;
+            ${multi ? `<div class="wl-multi-note">${w.rows.length} jobs this day</div>` : ''}
+            ${w.rows.map(r => {
+              if (editingReportId === r.id) return editCardHtml(editState);
+              return `
+              <div class="wl-job wl-job-nested">
+                <div class="wl-job-sub">${esc(jobLabelFor(r))}${
+                  multi ? ` <span class="wl-job-subtotal">${Number(r.total_inches).toFixed(2)} in</span>` : ''
+                }</div>
+                <div class="wl-items">${lineItemsHtml(r)}</div>
+                ${submissionMetaHtml(r)}
+                <div class="wl-job-actions">
+                  <button type="button" class="we-edit-btn" data-action="edit-report" data-report-id="${r.id}">Edit</button>
+                  <button type="button" class="we-del-btn" data-action="delete-report-inline" data-report-id="${r.id}">Delete</button>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>`;
         }).join('')}
-      </div>`;
-  }).join('');
+      </div>`).join('');
 }
 
 document.getElementById('weldLogBody').addEventListener('click', async (e) => {

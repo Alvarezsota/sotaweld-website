@@ -1,0 +1,151 @@
+/* Weekly summary — invoices by job, welder payroll, helper payroll.
+   Leans on dark-theme.css and approvals.css; only adds what those don't cover. */
+
+.sum-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 18px 0 22px;
+}
+.sum-kpi {
+  background: #16181c;
+  border: 1px solid #2a2e35;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.sum-kpi .k {
+  font-size: 10px;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: #8b939f;
+  font-weight: 600;
+}
+.sum-kpi .v {
+  font-family: 'Oswald', sans-serif;
+  font-size: 25px;
+  font-weight: 600;
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.sum-kpi .v.acc { color: #ff7a2f; }
+.sum-kpi .v.good { color: #4ade80; }
+.sum-kpi .v.bad  { color: #f87171; }
+
+.sum-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.sum-tab {
+  background: #16181c;
+  border: 1px solid #2a2e35;
+  color: #cbd2da;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sum-tab:hover { border-color: #3a4049; }
+.sum-tab.on { background: #ff7a2f; border-color: #ff7a2f; color: #10120f; }
+
+.sum-warn {
+  background: #2a1f0e;
+  border: 1px solid #7a5a1e;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+.sum-warn h3 {
+  margin: 0 0 8px;
+  font-family: 'Oswald', sans-serif;
+  font-size: 15px;
+  color: #f5c451;
+  letter-spacing: .03em;
+}
+.sum-warn-row { font-size: 13px; color: #d8cdb4; padding: 5px 0; border-top: 1px dotted #5c4a22; }
+.sum-warn-row:first-of-type { border-top: none; }
+.sum-warn .muted { color: #a0906f; font-size: 12px; }
+
+.sum-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.sum-table th {
+  text-align: right;
+  font-size: 10px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: #8b939f;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-bottom: 1.5px solid #2a2e35;
+  white-space: nowrap;
+}
+.sum-table th.l, .sum-table td.l { text-align: left; }
+.sum-table td {
+  padding: 10px;
+  border-bottom: 1px solid #22262c;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.sum-table tr.tot td {
+  border-top: 2px solid #3a4049;
+  border-bottom: none;
+  font-weight: 700;
+  background: #15171b;
+}
+.sum-table tbody tr.clickable { cursor: pointer; }
+.sum-table tbody tr.clickable:hover { background: #1b1e23; }
+.sum-name { font-weight: 600; color: #eef2f6; }
+.sum-sub { color: #7f8791; font-size: 11.5px; margin-top: 2px; }
+.sum-pos { color: #4ade80; }
+.sum-neg { color: #f87171; }
+
+.sum-detail { background: #101216; border: 1px solid #22262c; border-radius: 8px; margin: 4px 0 14px; }
+.sum-detail table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sum-detail td, .sum-detail th { padding: 6px 9px; text-align: right; }
+.sum-detail th { font-size: 10px; text-transform: uppercase; color: #7f8791; letter-spacing: .06em; }
+.sum-detail td.l, .sum-detail th.l { text-align: left; }
+.sum-detail tr + tr td { border-top: 1px dotted #262b31; }
+.sum-detail .d-desc { color: #7f8791; font-size: 11.5px; }
+
+.sum-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 18px; }
+
+.bid-box { background: #101216; border: 1px solid #22262c; border-radius: 8px; padding: 14px; margin: 4px 0 16px; }
+.bid-box h4 {
+  margin: 0 0 10px;
+  font-family: 'Oswald', sans-serif;
+  font-size: 14px;
+  letter-spacing: .04em;
+  color: #ff7a2f;
+  text-transform: uppercase;
+}
+.bid-row { display: grid; grid-template-columns: 1fr 90px 100px 100px 110px 40px; gap: 8px; align-items: center; margin-bottom: 8px; }
+.bid-row .bid-lbl { font-size: 10px; text-transform: uppercase; color: #7f8791; letter-spacing: .06em; }
+.bid-input {
+  background: #1a1d22;
+  border: 1px solid #2f343b;
+  color: #eef2f6;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.bid-input:focus { outline: none; border-color: #ff7a2f; }
+.bid-input[readonly] { color: #8b939f; }
+.bid-remaining { font-size: 12px; color: #8b939f; text-align: right; }
+.bid-remaining.done { color: #4ade80; }
+.bid-remaining.over { color: #f87171; }
+.bid-total { border-top: 1px solid #2a2e35; margin-top: 10px; padding-top: 10px; display: flex; justify-content: space-between; font-weight: 700; }
+.bid-num-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 14px; }
+.bid-num-row .fieldwrap { display: flex; flex-direction: column; gap: 4px; }
+.bid-num-row .bid-lbl { font-size: 10px; text-transform: uppercase; color: #7f8791; letter-spacing: .06em; }
+
+.week-nav { display: flex; gap: 8px; margin-top: 8px; }
+.sum-note { color: #7f8791; font-size: 12px; margin: 14px 0 0; line-height: 1.6; }
+.sum-saving { color: #f5c451; font-size: 12px; }
+.sum-saved { color: #4ade80; font-size: 12px; }
+
+@media (max-width: 780px) {
+  .bid-row { grid-template-columns: 1fr 1fr; }
+  .sum-table { font-size: 12.5px; }
+  .sum-table th, .sum-table td { padding: 7px 6px; }
+  .hide-sm { display: none; }
+}

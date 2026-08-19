@@ -86,6 +86,17 @@
 .wl-job-hours { color: var(--dim2); font-weight: 600; }
 .wl-job-hours-missing { color: var(--danger); }
 
+/* One welder, one day. When he worked more than one job that day his report
+   stays together under his name and the jobs split out underneath it. */
+.wl-welder-block { background: var(--steel-800); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.wl-welder-block:last-child { margin-bottom: 0; }
+.wl-multi-note { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--dim2); margin-top: 2px; }
+.wl-job-nested { background: transparent; border: none; border-radius: 0; padding: 8px 0 0; margin-bottom: 0; }
+.wl-job-nested + .wl-job-nested { border-top: 1px dashed var(--line); margin-top: 8px; }
+.wl-job-nested .wl-job-sub { font-size: 13px; font-weight: 600; color: var(--text); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.wl-job-subtotal { font-size: 12px; font-weight: 800; color: var(--ok); font-variant-numeric: tabular-nums; }
+
+
 .wr-split-section { padding: 12px; border-radius: 12px; background: rgba(233,158,63,.07); border: 1px solid rgba(233,158,63,.3); }
 .wr-split-section .wr-section-head { border-bottom: none; padding: 0 0 4px; }
 .wr-split-row { display: flex; gap: 6px; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06); flex-wrap: wrap; }

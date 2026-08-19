@@ -1,5 +1,7 @@
 let currentUser = null;
 let jobsList = [];
+let bidItemsByJob = {};   // job_id -> rows from job_bid_items
+let openBidJobId = null; // which lump sum job has its bid panel open
 let weldersList = [];
 let helpersList = [];
 
@@ -28,15 +30,72 @@ function renderJobs() {
       <input class="cell-in strong job-name" value="${escAttr(j.name)}" placeholder="Job name">
       <input class="cell-in job-operator" value="${escAttr(j.operator || '')}" placeholder="Operator">
       <input class="cell-in job-bill" value="${escAttr(j.bill_to || '')}" placeholder="Set bill-to…">
+      <input class="cell-in bid job-bidnum" value="${escAttr(j.bid_number || '')}" placeholder="Bid #" title="Your bid or quote number for this job. Optional, works on any job, and prints on the invoice.">
       <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num job-pd" value="${escAttr(j.per_diem)}"></div>
       <div class="c pd-cell billrate-cell"><span class="pd-dollar">$</span><input class="cell-in num job-billrate" value="${escAttr(j.bill_rate)}" placeholder="Default" title="Override the welder's normal bill rate for this job. Leave blank to use their default rate."></div>
       <div class="c pd-cell stainless-cell"><span class="pd-dollar">$</span><input class="cell-in num job-stainless" value="${escAttr(j.stainless_bill_rate)}" title="Bill rate per hour when a welder flags stainless work on this job"></div>
-      <div class="c"><button type="button" class="toggle2${j.billing_type === 'flat' ? ' ton' : ''}" data-action="toggle-flat" title="Flat rate job (billed a flat dollar amount instead of by the hour)"><span class="tk2"></span></button></div>
+      <div class="c"><button type="button" class="toggle2${j.billing_type === 'flat' ? ' ton' : ''}" data-action="toggle-flat" title="Lump sum job — bid as a price instead of billed by the hour. Bill it off bid line items on the Summary page."><span class="tk2"></span></button></div>
       <div class="c"><button type="button" class="toggle2${j.track_hours ? ' ton' : ''}" data-action="toggle-hours" title="Track hours on this job's daily log"><span class="tk2"></span></button></div>
       <div class="c"><button type="button" class="toggle2${j.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>
       <button type="button" class="row-x" data-action="delete-job">&times;</button>
     </div>
+    ${j.billing_type === 'flat' ? bidPanelHtml(j) : ''}
   `).join('');
+}
+
+// ---------- Lump sum bid items ----------
+// What you bid, entered once per job. The Summary page bills it by marking how
+// many of each line got finished in a given week.
+function bidPanelHtml(job) {
+  const open = openBidJobId === job.id;
+  const items = bidItemsByJob[job.id];
+  const contract = (items || []).reduce((a, i) => a + Number(i.qty_bid || 0) * Number(i.unit_price || 0), 0);
+
+  if (!open) {
+    return `<div class="bid-strip" data-job-id="${job.id}">
+      <button type="button" class="bid-toggle" data-action="open-bid">Bid items${
+        items ? ` (${items.length})` : ''}</button>
+      ${items && items.length ? `<span class="bid-strip-total">Contract ${moneyFmt(contract)}</span>` : ''}
+    </div>`;
+  }
+
+  const rows = (items || []).map(i => `
+    <div class="bid-line" data-bid-id="${i.id}">
+      <input class="cell-in bid-desc" value="${escAttr(i.description)}" placeholder="What you bid">
+      <div class="c"><input class="cell-in num bid-qty" value="${escAttr(i.qty_bid)}" title="How many you bid"></div>
+      <input class="cell-in bid-unit" value="${escAttr(i.unit)}" placeholder="ea">
+      <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num bid-price" value="${escAttr(i.unit_price)}" title="Price each"></div>
+      <span class="c bid-line-total">${moneyFmt(Number(i.qty_bid || 0) * Number(i.unit_price || 0))}</span>
+      <button type="button" class="row-x" data-action="delete-bid">&times;</button>
+    </div>`).join('');
+
+  return `<div class="bid-panel" data-job-id="${job.id}">
+    <div class="bid-panel-head">
+      <span>Bid items &mdash; ${esc(job.name)}</span>
+      <button type="button" class="bid-toggle" data-action="close-bid">Close</button>
+    </div>
+    ${items === undefined ? '<p class="empty-state2">Loading&hellip;</p>' : `
+      <div class="bid-line bid-line-head">
+        <span>Description</span><span class="c">Qty</span><span>Unit</span><span class="c">Price each</span><span class="c">Line total</span><span></span>
+      </div>
+      ${rows || '<p class="empty-state2">Nothing bid yet. Add the first line below.</p>'}
+      <div class="bid-panel-foot">
+        <button type="button" class="btn2 btn2-solid small" data-action="add-bid">+ Add bid line</button>
+        <span class="bid-contract">Contract total ${moneyFmt(contract)}</span>
+      </div>
+      <p class="bid-panel-note">Enter what you bid here once. Each week on the Summary page you mark how
+      many of each line got finished, and that is what the customer is invoiced.</p>`}
+  </div>`;
+}
+
+function moneyFmt(n) {
+  return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function loadBidItems(jobId) {
+  const { data } = await sb.from('job_bid_items').select('*').eq('job_id', jobId).order('sort_order').order('created_at');
+  bidItemsByJob[jobId] = data || [];
+  renderJobs();
 }
 
 async function loadJobs() {
@@ -59,13 +118,73 @@ document.getElementById('jobsTable').addEventListener('blur', async (e) => {
   else if (e.target.classList.contains('job-pd')) patch = { per_diem: num(e.target.value) };
   else if (e.target.classList.contains('job-billrate')) patch = { bill_rate: e.target.value.trim() === '' ? null : num(e.target.value) };
   else if (e.target.classList.contains('job-stainless')) patch = { stainless_bill_rate: num(e.target.value) };
+  else if (e.target.classList.contains('job-bidnum')) patch = { bid_number: e.target.value.trim() || null };
   if (!patch) return;
 
   Object.assign(job, patch);
   await sb.from('jobs').update(patch).eq('id', id);
 }, true);
 
+// Bid line edits save on blur, same feel as the job cells above.
+document.getElementById('jobsTable').addEventListener('blur', async (e) => {
+  const line = e.target.closest('[data-bid-id]');
+  if (!line) return;
+  const id = line.dataset.bidId;
+  const jobId = line.closest('[data-job-id]').dataset.jobId;
+  const row = (bidItemsByJob[jobId] || []).find(i => i.id === id);
+  if (!row) return;
+
+  let patch = null;
+  if (e.target.classList.contains('bid-desc')) patch = { description: e.target.value.trim() };
+  else if (e.target.classList.contains('bid-qty')) patch = { qty_bid: num(e.target.value) };
+  else if (e.target.classList.contains('bid-unit')) patch = { unit: e.target.value.trim() || 'ea' };
+  else if (e.target.classList.contains('bid-price')) patch = { unit_price: num(e.target.value) };
+  if (!patch) return;
+
+  Object.assign(row, patch);
+  const { error } = await sb.from('job_bid_items').update(patch).eq('id', id);
+  if (error) { alert('Could not save that bid line: ' + error.message); return; }
+  renderJobs();
+}, true);
+
 document.getElementById('jobsTable').addEventListener('click', async (e) => {
+  const openBid = e.target.closest('[data-action="open-bid"]');
+  if (openBid) {
+    openBidJobId = openBid.closest('[data-job-id]').dataset.jobId;
+    renderJobs();
+    if (bidItemsByJob[openBidJobId] === undefined) await loadBidItems(openBidJobId);
+    return;
+  }
+  const closeBid = e.target.closest('[data-action="close-bid"]');
+  if (closeBid) { openBidJobId = null; renderJobs(); return; }
+
+  const addBid = e.target.closest('[data-action="add-bid"]');
+  if (addBid) {
+    const jobId = addBid.closest('[data-job-id]').dataset.jobId;
+    const sort = (bidItemsByJob[jobId] || []).length;
+    const { data, error } = await sb.from('job_bid_items')
+      .insert({ job_id: jobId, description: 'New bid line', qty_bid: 1, unit_price: 0, unit: 'ea', sort_order: sort })
+      .select().single();
+    if (error) { alert('Could not add that line: ' + error.message); return; }
+    (bidItemsByJob[jobId] = bidItemsByJob[jobId] || []).push(data);
+    renderJobs();
+    return;
+  }
+
+  const delBid = e.target.closest('[data-action="delete-bid"]');
+  if (delBid) {
+    const line = delBid.closest('[data-bid-id]');
+    const jobId = line.closest('[data-job-id]').dataset.jobId;
+    const id = line.dataset.bidId;
+    const row = (bidItemsByJob[jobId] || []).find(i => i.id === id);
+    if (!confirm(`Delete bid line "${row ? row.description : ''}"? Any weekly progress recorded against it goes too.`)) return;
+    const { error } = await sb.from('job_bid_items').delete().eq('id', id);
+    if (error) { alert('Could not delete: ' + error.message); return; }
+    bidItemsByJob[jobId] = (bidItemsByJob[jobId] || []).filter(i => i.id !== id);
+    renderJobs();
+    return;
+  }
+
   const row = e.target.closest('[data-job-id]');
   if (!row) return;
   const id = row.dataset.jobId;
@@ -80,6 +199,7 @@ document.getElementById('jobsTable').addEventListener('click', async (e) => {
   }
   if (e.target.closest('[data-action="toggle-flat"]')) {
     job.billing_type = job.billing_type === 'flat' ? 'hourly' : 'flat';
+    if (job.billing_type !== 'flat' && openBidJobId === job.id) openBidJobId = null;
     renderJobs();
     await sb.from('jobs').update({ billing_type: job.billing_type }).eq('id', id);
     return;

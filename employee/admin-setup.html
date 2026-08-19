@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="dark-theme.css?v=20260816b">
-<link rel="stylesheet" href="admin-setup.css?v=20260816b">
+<link rel="stylesheet" href="admin-setup.css?v=20260819b">
 </head>
 <body>
 
@@ -22,6 +22,7 @@
     <a class="et-link" href="dashboard.html">Office</a>
     <a class="et-link on" href="admin-setup.html">Setup</a>
     <a class="et-link" href="approvals.html">Approvals</a>
+    <a class="et-link" href="summary.html">Summary</a>
     <a class="et-link" href="weld-log.html">Weld Log</a>
   </nav>
   <div class="et-user">
@@ -44,11 +45,11 @@
 
     <div id="jobsPanel">
       <div class="section-note2">
-        <span>Active jobs show up in the welders' job picker. Toggle a job off when it's done — history stays, it just leaves the picker.</span>
+        <span>Active jobs show up in the welders' job picker. Toggle a job off when it's done — history stays, it just leaves the picker. Bid # is optional on any job. Turn on Lump sum when the job is bid as a price instead of billed by the hour.</span>
         <button class="btn2 btn2-solid small" id="addJobBtn">+ Add job</button>
       </div>
       <div class="jt-head">
-        <span>Job</span><span>Operator</span><span>Bill to</span><span class="c">Per diem</span><span class="c">Bill rate $/hr</span><span class="c">Stainless $</span><span class="c">Flat rate</span><span class="c">Hours</span><span class="c">Active</span><span></span>
+        <span>Job</span><span>Operator</span><span>Bill to</span><span>Bid #</span><span class="c">Per diem</span><span class="c">Bill rate $/hr</span><span class="c">Stainless $</span><span class="c">Lump sum</span><span class="c">Hours</span><span class="c">Active</span><span></span>
       </div>
       <div id="jobsTable"></div>
     </div>
@@ -85,6 +86,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-client.js?v=20260816b"></script>
-<script src="admin-setup.js?v=20260816b"></script>
+<script src="admin-setup.js?v=20260819b"></script>
 </body>
 </html>
