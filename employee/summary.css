@@ -149,3 +149,12 @@
   .sum-table th, .sum-table td { padding: 7px 6px; }
   .hide-sm { display: none; }
 }
+
+/* Print button above the welder / helper tables */
+.sum-print-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+@media print { .sum-print-bar { display: none; } }

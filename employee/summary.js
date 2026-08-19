@@ -19,6 +19,7 @@ let weekData = null;
 let openRow = null;      // job_id / welder_id / helper_id whose detail is expanded
 let bidCache = {};       // job_id -> bid status from get_job_bid_status
 let editing = false;     // blocks live refresh mid-edit
+let companyName = 'State of the Arc Welding & Services LLC';
 
 function esc(str) {
   const div = document.createElement('div');
@@ -79,6 +80,7 @@ async function loadWeek() {
   }
   weekData = data;
   bidCache = {};
+  loadCompanyName();
   renderWarnings();
   renderKpis();
   render();
@@ -325,6 +327,125 @@ async function printInvoice(jobId, internal) {
   }
 }
 
+// ---------- printable crew summary ----------
+
+async function loadCompanyName() {
+  const { data } = await sb.from('app_settings').select('value').eq('key', 'company_name').maybeSingle();
+  if (data && data.value) companyName = data.value;
+}
+
+/** Builds a clean, light, printable page for the welder or helper summary and
+ *  sends it straight to the print dialog — "Save as PDF" from there. */
+function printCrew(kind) {
+  const rows = (kind === 'welders' ? weekData.welders : weekData.helpers) || [];
+  if (!rows.length) { alert('Nothing to print for this week.'); return; }
+
+  const nameKey = kind === 'welders' ? 'welder_name' : 'helper_name';
+  const label = kind === 'welders' ? 'Welders' : 'Helpers';
+
+  const t = rows.reduce((a, r) => ({
+    hours: a.hours + Number(r.total_hours || 0),
+    hp: a.hp + Number(r.hours_paid || 0),
+    pdd: a.pdd + Number(r.per_diem_days || 0),
+    pda: a.pda + Number(r.per_diem_amount || 0),
+    paid: a.paid + Number(r.total_paid || 0),
+    billed: a.billed + Number(r.total_billed || 0),
+  }), { hours: 0, hp: 0, pdd: 0, pda: 0, paid: 0, billed: 0 });
+
+  const dayRows = (r) => (r.detail || []).map(l => `<tr>
+      <td class="l" style="width:70px"><b>${esc(dayLabel(l.date))}</b></td>
+      <td class="l">${esc(l.job || '—')}${
+        l.bills_to && l.bills_to !== l.job ? `<div class="d">bills to ${esc(l.bills_to)}</div>` : ''
+      }${l.description ? `<div class="d">${esc(String(l.description).slice(0, 90))}</div>` : ''}</td>
+      <td style="width:52px">${num(l.hours)}</td>
+      <td style="width:70px">${l.per_diem ? money(l.per_diem_rate) : '—'}</td>
+      <td style="width:82px">${money(l.paid)}</td>
+    </tr>`).join('');
+
+  const body = rows.map(r => {
+    const split = Number(r.per_diem_charges) > Number(r.per_diem_days);
+    const days = dayRows(r);
+    return `<tr class="p">
+        <td class="l name">${esc(r[nameKey])}</td>
+        <td>${num(r.days_worked)}</td>
+        <td>${num(r.total_hours)}</td>
+        <td>${money(r.hours_paid)}</td>
+        <td>${num(r.per_diem_days)}</td>
+        <td>${money(r.per_diem_amount)}</td>
+        <td><b>${money(r.total_paid)}</b></td>
+        <td>${money(r.total_billed)}${split
+          ? `<div class="d">incl. ${num(r.per_diem_charges)} PD charges</div>` : ''}</td>
+      </tr>
+      ${days ? `<tr><td colspan="8" style="padding:0 8px;border:none">
+        <div class="days"><table>
+          <tr><th class="l">Day</th><th class="l">Job</th><th>Hrs</th><th>Per diem</th><th>Pay</th></tr>
+          ${days}
+        </table></div></td></tr>` : ''}`;
+  }).join('');
+
+  const html = `<!doctype html><html><head><meta charset="utf-8">
+<title>${esc(label)} — ${esc(formatWeekLabel(weekStart))}</title>
+<style>
+  body{margin:0;background:#faf9f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1c1917;font-size:13px;line-height:1.5;}
+  .wrap{max-width:900px;margin:0 auto;padding:22px 16px 40px;}
+  .card{background:#fff;border:1px solid #e7e5e4;border-radius:10px;overflow:hidden;}
+  .hd{background:#1c1917;color:#fff;padding:16px 20px;}
+  .hd h1{margin:0;font-size:16px;letter-spacing:.03em;text-transform:uppercase;}
+  .hd .sub{margin-top:4px;font-size:12.5px;color:#d6d3d1;}
+  .sec{padding:8px 20px 20px;}
+  h2{font-size:11.5px;text-transform:uppercase;letter-spacing:.09em;color:#B4541E;margin:18px 0 8px;}
+  table{width:100%;border-collapse:collapse;}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#78716c;text-align:right;padding:6px 8px;border-bottom:1.5px solid #e7e5e4;font-weight:600;}
+  th.l,td.l{text-align:left;}
+  td{padding:7px 8px;border-bottom:1px solid #e7e5e4;text-align:right;font-variant-numeric:tabular-nums;}
+  tr.tot td{border-top:2px solid #1c1917;border-bottom:none;font-weight:700;background:#fafaf9;}
+  .name{font-weight:600;}
+  .d{color:#78716c;font-size:11px;font-weight:400;}
+  .days{margin:2px 0 12px;padding:6px 10px;background:#faf9f7;border:1px solid #e7e5e4;border-radius:6px;}
+  .days table{font-size:11.5px;}
+  .days td,.days th{padding:4px 6px;border:none;}
+  .days td{border-bottom:1px dotted #e7e5e4;}
+  .kpis{display:table;width:100%;border-spacing:8px 0;margin:6px 0;}
+  .kpi{display:table-cell;width:25%;background:#faf9f7;border:1px solid #e7e5e4;border-radius:8px;padding:9px 12px;}
+  .kpi .k{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#78716c;}
+  .kpi .v{font-size:18px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums;}
+  .kpi .v.acc{color:#B4541E;}
+  .note{font-size:11px;color:#78716c;margin-top:10px;}
+  @media print{body{background:#fff}.wrap{max-width:none;padding:0}.card{border:none}tr.p{break-inside:avoid}}
+</style></head><body><div class="wrap"><div class="card">
+<div class="hd"><h1>${esc(companyName)}</h1>
+<div class="sub">${esc(label)} summary &middot; ${esc(formatWeekLabel(weekStart))}</div></div>
+<div class="sec">
+  <div class="kpis">
+    <div class="kpi"><div class="k">People</div><div class="v">${rows.length}</div></div>
+    <div class="kpi"><div class="k">Total hours</div><div class="v">${num(t.hours)}</div></div>
+    <div class="kpi"><div class="k">Total paid out</div><div class="v acc">${money(t.paid)}</div></div>
+    <div class="kpi"><div class="k">Total billed</div><div class="v">${money(t.billed)}</div></div>
+  </div>
+  <h2>${esc(label)}</h2>
+  <table>
+    <tr><th class="l">Name</th><th>Days</th><th>Hours</th><th>Hourly pay</th>
+        <th>PD days</th><th>Per diem</th><th>Total paid</th><th>Billed</th></tr>
+    ${body}
+    <tr class="tot"><td class="l">${rows.length} ${rows.length === 1 ? 'person' : 'people'}</td>
+      <td></td><td>${num(t.hours)}</td><td>${money(t.hp)}</td>
+      <td>${num(t.pdd)}</td><td>${money(t.pda)}</td>
+      <td>${money(t.paid)}</td><td>${money(t.billed)}</td></tr>
+  </table>
+  <p class="note">Per diem is counted once per person per day, no matter how many jobs he touched.
+  &ldquo;Billed&rdquo; is what the customer is invoiced for that person&rsquo;s hours; each job he
+  worked that day is charged its own per diem, so Billed can carry more per diem than he is paid.</p>
+</div></div></div>
+<script>window.onload = function () { window.print(); };<\/script>
+</body></html>`;
+
+  const win = window.open('', '_blank');
+  if (!win) { alert('Your browser blocked the print window. Allow pop-ups for sotaweld.com and try again.'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
 // ---------- lump sum bid editor ----------
 
 async function loadBidStatus(jobId) {
@@ -480,6 +601,11 @@ function renderCrew(kind) {
   }).join('');
 
   document.getElementById('sumBody').innerHTML = `
+    <div class="sum-print-bar">
+      <button class="btn2 btn2-line small" data-print-crew="${kind}">
+        Print ${kind === 'welders' ? 'welder' : 'helper'} summary
+      </button>
+    </div>
     <table class="sum-table">
       <thead><tr>
         <th class="l">Name</th><th>Days</th><th>Hours</th><th class="hide-sm">Hourly pay</th>
@@ -500,6 +626,12 @@ function renderCrew(kind) {
       no matter how many jobs he touched. When those two differ, the extra shows under Billed:
       each job he worked that day is charged its own per diem.
     </p>`;
+
+  document.querySelectorAll('[data-print-crew]').forEach(b =>
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      printCrew(b.getAttribute('data-print-crew'));
+    }));
 
   document.querySelectorAll('tr[data-person]').forEach(tr => {
     tr.addEventListener('click', (e) => {
