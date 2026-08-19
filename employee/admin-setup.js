@@ -415,6 +415,37 @@ document.getElementById('tabPeopleBtn').addEventListener('click', () => {
   document.getElementById('jobsPanel').style.display = 'none';
 });
 
+// ---------- Letterhead ----------
+// Kept in app_settings so the pay statements and invoices can both read it and
+// nobody has to touch code to change an address.
+const CO_FIELDS = { coName: 'company_name', coAddress: 'company_address', coPhone: 'company_phone' };
+
+async function loadCompanyInfo() {
+  const { data } = await sb.from('app_settings').select('key, value').in('key', Object.values(CO_FIELDS));
+  const byKey = Object.fromEntries((data || []).map(r => [r.key, r.value]));
+  for (const [elId, key] of Object.entries(CO_FIELDS)) {
+    const el = document.getElementById(elId);
+    if (el) el.value = byKey[key] || '';
+  }
+}
+
+function wireCompanyInfo() {
+  const saved = document.getElementById('coSaved');
+  for (const [elId, key] of Object.entries(CO_FIELDS)) {
+    const el = document.getElementById(elId);
+    if (!el) continue;
+    el.addEventListener('change', async () => {
+      const { error } = await sb.from('app_settings')
+        .upsert({ key, value: el.value.trim(), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+      if (saved) {
+        saved.textContent = error ? 'Not saved' : 'Saved';
+        saved.style.color = error ? 'var(--bad, #e0554f)' : '';
+        setTimeout(() => { saved.textContent = ''; }, 2500);
+      }
+    });
+  }
+}
+
 (async function init() {
   currentUser = await requireAuth();
   if (!currentUser) return;
@@ -435,5 +466,6 @@ document.getElementById('tabPeopleBtn').addEventListener('click', () => {
     window.location.href = 'login.html';
   });
 
-  await Promise.all([loadJobs(), loadWelders(), loadHelpers()]);
+  wireCompanyInfo();
+  await Promise.all([loadJobs(), loadWelders(), loadHelpers(), loadCompanyInfo()]);
 })();

@@ -20,6 +20,8 @@ let openRow = null;      // job_id / welder_id / helper_id whose detail is expan
 let bidCache = {};       // job_id -> bid status from get_job_bid_status
 let editing = false;     // blocks live refresh mid-edit
 let companyName = 'State of the Arc Welding & Services LLC';
+let companyAddress = '';
+let companyPhone = '';
 
 function esc(str) {
   const div = document.createElement('div');
@@ -328,11 +330,140 @@ async function printInvoice(jobId, internal) {
   }
 }
 
+// ---------- individual pay statement ----------
+
+/** One printable statement for one welder or helper for the week — letterhead,
+ *  day-by-day hours, per diem, and what he is owed. These men are paid as
+ *  contractors, so there is no withholding on it: it states hours and amount due. */
+function printPayStatement(kind, personId) {
+  const rows = (kind === 'welders' ? weekData.welders : weekData.helpers) || [];
+  const idKey = kind === 'welders' ? 'welder_id' : 'helper_id';
+  const nameKey = kind === 'welders' ? 'welder_name' : 'helper_name';
+  const r = rows.find(x => x[idKey] === personId);
+  if (!r) { alert('Could not find that person in this week.'); return; }
+
+  // One row per DAY, not per ticket. A man who split a day across two jobs still
+  // collects a single per diem, so per diem is counted once per date here or the
+  // statement would pay him twice for the same day.
+  const lines = r.detail || [];
+  const byDate = new Map();
+  for (const l of lines) {
+    if (!byDate.has(l.date)) byDate.set(l.date, []);
+    byDate.get(l.date).push(l);
+  }
+  const dayRows = [...byDate.entries()].sort().map(([date, ls]) => {
+    const hrs = ls.reduce((a, l) => a + Number(l.hours || 0), 0);
+    const hourly = ls.reduce((a, l) => a + Number(l.hours || 0) * Number(l.pay_rate || 0), 0);
+    const pd = ls.some(l => l.per_diem) ? Number(ls.find(l => l.per_diem).per_diem_rate || 0) : 0;
+    const rates = [...new Set(ls.map(l => Number(l.pay_rate || 0)))];
+    const jobs = ls.map(l => `<div class="jl">${esc(l.job || '—')}${
+      (l.bid_item || ls.length > 1)
+        ? `<div class="d">${[l.bid_item ? esc(l.bid_item) : '', ls.length > 1 ? num(l.hours) + ' hrs' : '']
+             .filter(Boolean).join(' &middot; ')}</div>`
+        : ''}</div>`).join('');
+    return `<tr>
+      <td class="l nw">${esc(dayLabel(date))}</td>
+      <td class="l">${jobs}</td>
+      <td>${num(hrs)}</td>
+      <td>${rates.length === 1 ? money(rates[0]) : '—'}</td>
+      <td>${money(hourly)}</td>
+      <td>${pd ? money(pd) : '—'}</td>
+      <td><b>${money(hourly + pd)}</b></td>
+    </tr>`;
+  }).join('');
+
+  // The letterhead reads fine on text alone; the badge appears automatically once
+  // employee/sota-logo.png exists in the repo, and quietly drops out if it does not.
+  const logo = `<img class="logo" src="sota-logo.png" alt="" onerror="this.remove()">`;
+  const addr = [companyAddress, companyPhone].filter(Boolean).map(esc).join(' &middot; ');
+
+  const html = `<!doctype html><html><head><meta charset="utf-8">
+<title>Pay statement — ${esc(r[nameKey])} — ${esc(formatWeekLabel(weekStart))}</title>
+<style>
+  body{margin:0;background:#f4f3f1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1c1917;font-size:13px;line-height:1.5;}
+  .sheet{max-width:740px;margin:0 auto;background:#fff;padding:30px 34px 40px;min-height:9in;}
+  .lh{display:flex;align-items:center;gap:18px;border-bottom:3px solid #1c1917;padding-bottom:14px;}
+  .logo{width:132px;height:auto;}
+  .lh-txt h1{margin:0;font-size:17px;letter-spacing:.02em;text-transform:uppercase;}
+  .lh-txt .a{margin-top:3px;font-size:12px;color:#78716c;}
+  .title{display:flex;justify-content:space-between;align-items:flex-end;margin:20px 0 4px;}
+  .title h2{margin:0;font-size:15px;text-transform:uppercase;letter-spacing:.09em;color:#B4541E;}
+  .title .wk{font-size:12.5px;color:#78716c;}
+  .who{font-size:22px;font-weight:700;margin:10px 0 2px;}
+  .who-sub{font-size:12.5px;color:#78716c;margin-bottom:16px;}
+  .meta{display:flex;gap:26px;margin:0 0 18px;padding:10px 12px;background:#faf9f7;border:1px solid #e7e5e4;border-radius:8px;}
+  .meta label{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:#78716c;display:block;margin-bottom:3px;}
+  .meta input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid #d6d3d1;border-radius:5px;background:#fff;width:150px;}
+  table{width:100%;border-collapse:collapse;}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#78716c;text-align:right;padding:7px 8px;border-bottom:1.5px solid #1c1917;font-weight:600;}
+  th.l,td.l{text-align:left;}
+  td{padding:8px;border-bottom:1px solid #e7e5e4;text-align:right;font-variant-numeric:tabular-nums;}
+  .d{font-size:11px;color:#78716c;}
+  .nw{white-space:nowrap;width:74px;}
+  .jl + .jl{margin-top:6px;}
+  tr.tot td{border-top:2px solid #1c1917;border-bottom:none;font-weight:700;background:#faf9f7;}
+  .totals{margin-top:20px;margin-left:auto;width:320px;}
+  .totals div{display:flex;justify-content:space-between;padding:7px 10px;border-bottom:1px solid #e7e5e4;}
+  .totals .grand{border:none;border-top:2px solid #1c1917;background:#faf9f7;font-size:17px;font-weight:700;}
+  .grand .v{color:#B4541E;}
+  .sig{margin-top:46px;display:flex;gap:40px;}
+  .sig div{flex:1;border-top:1px solid #1c1917;padding-top:6px;font-size:11px;color:#78716c;}
+  .note{margin-top:22px;font-size:11px;color:#78716c;}
+  .bar{max-width:740px;margin:0 auto;padding:12px 34px;display:flex;gap:10px;justify-content:flex-end;}
+  .bar button{font:inherit;font-weight:600;padding:8px 16px;border-radius:7px;border:1px solid #1c1917;background:#1c1917;color:#fff;cursor:pointer;}
+  @media print{body{background:#fff}.sheet{max-width:none;padding:0;min-height:0}.bar{display:none}
+    .meta input{border:none;padding-left:0}}
+</style></head><body>
+<div class="bar"><button onclick="window.print()">Print / Save as PDF</button></div>
+<div class="sheet">
+  <div class="lh">${logo}<div class="lh-txt"><h1>${esc(companyName)}</h1>
+    ${addr ? `<div class="a">${addr}</div>` : ''}</div></div>
+
+  <div class="title"><h2>Contractor pay statement</h2>
+    <span class="wk">${esc(formatWeekLabel(weekStart))}</span></div>
+  <div class="who">${esc(r[nameKey])}</div>
+  <div class="who-sub">${kind === 'welders' ? 'Welder' : 'Helper'} &middot; ${num(r.days_worked)} day${Number(r.days_worked) === 1 ? '' : 's'} worked</div>
+
+  <div class="meta">
+    <div><label>Check #</label><input type="text" placeholder="—"></div>
+    <div><label>Pay date</label><input type="text" placeholder="—"></div>
+  </div>
+
+  <table>
+    <tr><th class="l">Day</th><th class="l">Job</th><th>Hours</th><th>Rate</th><th>Hourly pay</th><th>Per diem</th><th>Day total</th></tr>
+    ${dayRows || '<tr><td colspan="7" class="l">No days logged this week.</td></tr>'}
+    <tr class="tot"><td class="l">Totals</td><td></td><td>${num(r.total_hours)}</td><td></td>
+      <td>${money(r.hours_paid)}</td><td>${money(r.per_diem_amount)}</td><td>${money(r.total_paid)}</td></tr>
+  </table>
+
+  <div class="totals">
+    <div><span>Hours worked</span><span>${num(r.total_hours)}</span></div>
+    <div><span>Hourly pay</span><span>${money(r.hours_paid)}</span></div>
+    <div><span>Per diem &mdash; ${num(r.per_diem_days)} day${Number(r.per_diem_days) === 1 ? '' : 's'}</span><span>${money(r.per_diem_amount)}</span></div>
+    <div class="grand"><span>Total due</span><span class="v">${money(r.total_paid)}</span></div>
+  </div>
+
+  <div class="sig"><div>Received by</div><div>Date</div></div>
+  <p class="note">Paid as an independent contractor &mdash; no taxes withheld. Per diem is counted once
+  per day worked. Questions on this statement, contact the office.</p>
+</div></body></html>`;
+
+  const win = window.open('', '_blank');
+  if (!win) { alert('Your browser blocked the pop-up. Allow pop-ups for sotaweld.com and try again.'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
 // ---------- printable crew summary ----------
 
 async function loadCompanyName() {
-  const { data } = await sb.from('app_settings').select('value').eq('key', 'company_name').maybeSingle();
-  if (data && data.value) companyName = data.value;
+  const { data } = await sb.from('app_settings').select('key, value')
+    .in('key', ['company_name', 'company_address', 'company_phone']);
+  const byKey = Object.fromEntries((data || []).map(r => [r.key, r.value]));
+  if (byKey.company_name) companyName = byKey.company_name;
+  companyAddress = byKey.company_address || '';
+  companyPhone = byKey.company_phone || '';
 }
 
 /** Builds a clean, light, printable page for the welder or helper summary and
@@ -588,7 +719,9 @@ function renderCrew(kind) {
     const split = Number(r.per_diem_charges) > Number(r.per_diem_days);
     return `<tr class="clickable" data-person="${escAttr(id)}">
         <td class="l"><div class="sum-name">${esc(r[nameKey])}</div>
-          <div class="sum-sub">${num(r.jobs_worked)} job${Number(r.jobs_worked) === 1 ? '' : 's'}</div></td>
+          <div class="sum-sub">${num(r.jobs_worked)} job${Number(r.jobs_worked) === 1 ? '' : 's'}
+            <button type="button" class="stub-btn" data-stub="${escAttr(id)}" data-stub-kind="${kind}">Pay statement</button>
+          </div></td>
         <td>${num(r.days_worked)}</td>
         <td>${num(r.total_hours)}</td>
         <td class="hide-sm">${money0(r.hours_paid)}</td>
@@ -628,6 +761,12 @@ function renderCrew(kind) {
       no matter how many jobs he touched. When those two differ, the extra shows under Billed:
       each job he worked that day is charged its own per diem.
     </p>`;
+
+  document.querySelectorAll('[data-stub]').forEach(b =>
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      printPayStatement(b.getAttribute('data-stub-kind'), b.getAttribute('data-stub'));
+    }));
 
   document.querySelectorAll('[data-print-crew]').forEach(b =>
     b.addEventListener('click', (e) => {

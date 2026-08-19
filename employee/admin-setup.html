@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="dark-theme.css?v=20260816b">
-<link rel="stylesheet" href="admin-setup.css?v=20260819b">
+<link rel="stylesheet" href="admin-setup.css?v=20260820b">
 </head>
 <body>
 
@@ -41,6 +41,20 @@
     <div class="tabs2">
       <button class="tab2 on" id="tabJobsBtn">Jobs</button>
       <button class="tab2" id="tabPeopleBtn">People &amp; rates</button>
+    </div>
+
+    <div class="co-card">
+      <div class="co-head">Your letterhead</div>
+      <p class="co-note">This is what prints at the top of the pay statements and the invoices.</p>
+      <div class="co-grid">
+        <label class="co-field"><span>Company name</span>
+          <input class="cell-in" id="coName" placeholder="State of the Arc Welding &amp; Services LLC"></label>
+        <label class="co-field"><span>Address</span>
+          <input class="cell-in" id="coAddress" placeholder="Street, City, TX ZIP"></label>
+        <label class="co-field co-field-sm"><span>Phone</span>
+          <input class="cell-in" id="coPhone" placeholder="(432) 555-0100"></label>
+        <span class="co-saved" id="coSaved"></span>
+      </div>
     </div>
 
     <div id="jobsPanel">
@@ -86,6 +100,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-client.js?v=20260816b"></script>
-<script src="admin-setup.js?v=20260820a"></script>
+<script src="admin-setup.js?v=20260820b"></script>
 </body>
 </html>
