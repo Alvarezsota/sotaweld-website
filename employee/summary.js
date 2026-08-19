@@ -92,27 +92,70 @@ async function loadWeek() {
 
 function renderWarnings() {
   const box = document.getElementById('warnBox');
-  const dups = (weekData.warnings && weekData.warnings.duplicate_tickets) || [];
-  if (!dups.length) { box.innerHTML = ''; return; }
+  const w = weekData.warnings || {};
+  const dups = w.duplicate_tickets || [];
+  const splits = w.split_welds || [];
+  const late = w.late_filing || [];
 
-  const rows = dups.map(d => {
-    const hrs = (d.hours_each || []).join(' + ');
-    const descs = (d.descriptions || []).map(x => esc(x)).join(' &nbsp;|&nbsp; ');
-    return `<div class="sum-warn-row">
-      <b>${esc(d.welder_name)}</b> &middot; ${esc(dayLabel(d.entry_date))} &middot; ${esc(d.job_name || '—')}
-      &mdash; ${d.ticket_count} tickets, ${hrs} = <b>${num(d.total_hours)} hrs</b>
-      <div class="muted">${descs}</div>
-    </div>`;
-  }).join('');
+  if (!dups.length && !splits.length && !late.length) {
+    box.innerHTML = `<div class="sum-ok">Crew check &mdash; nothing to look at this week.</div>`;
+    return;
+  }
+
+  const sections = [];
+
+  if (splits.length) {
+    sections.push(`
+      <div class="ck-block">
+        <div class="ck-head">Split welds that don&rsquo;t tie out <span class="ck-count">${splits.length}</span></div>
+        <div class="muted">Both men should end up holding the same half of the same weld. These don&rsquo;t
+        match, so one of them is carrying inches the other never claimed.</div>
+        ${splits.map(s => `
+          <div class="ck-row">
+            <div class="ck-when"><b>${esc(dayLabel(s.report_date))}</b> &middot; ${esc(s.job_name || '\u2014')} &middot; ${esc(s.spec)}</div>
+            <div class="ck-detail">${esc(s.detail)}</div>
+            <div class="ck-sides">${(s.sides || []).map(x =>
+              `<span class="ck-side">${esc(x.welder)} &mdash; ${num(x.qty)} &times; ${num(x.inches)} in${
+                x.logged_himself ? '' : ' <i>auto-credit</i>'}</span>`).join('')}</div>
+          </div>`).join('')}
+      </div>`);
+  }
+
+  if (dups.length) {
+    sections.push(`
+      <div class="ck-block">
+        <div class="ck-head">Same man, same job, same day &mdash; more than one ticket <span class="ck-count">${dups.length}</span></div>
+        <div class="muted">Sometimes that&rsquo;s two real scopes; sometimes it&rsquo;s a double submit. Per diem is
+        counted once either way &mdash; it&rsquo;s the <b>hours</b> that double up. Fix on the Approvals page.</div>
+        ${dups.map(d => `
+          <div class="ck-row">
+            <div class="ck-when"><b>${esc(d.welder_name)}</b> &middot; ${esc(dayLabel(d.entry_date))} &middot; ${esc(d.job_name || '\u2014')}
+              &mdash; ${d.ticket_count} tickets, ${(d.hours_each || []).join(' + ')} = <b>${num(d.total_hours)} hrs</b></div>
+            <div class="ck-detail">${(d.descriptions || []).map(x => esc(x)).join(' &nbsp;|&nbsp; ')}</div>
+          </div>`).join('')}
+      </div>`);
+  }
+
+  if (late.length) {
+    sections.push(`
+      <div class="ck-block">
+        <div class="ck-head">Written up late, or dated ahead <span class="ck-count">${late.length}</span></div>
+        <div class="muted">Same night or next morning is normal. These were filed two or more days after the
+        work &mdash; or dated for a day that hadn&rsquo;t happened yet.</div>
+        ${late.map(l => `
+          <div class="ck-row">
+            <div class="ck-when"><b>${esc(l.person_name)}</b> &middot; ${esc(l.kind)} for ${esc(dayLabel(l.work_date))}
+              &middot; ${esc(l.job_name || '\u2014')}</div>
+            <div class="ck-detail">${Number(l.days_late) < 0
+              ? `Dated <b>${Math.abs(Number(l.days_late))} day${Math.abs(Number(l.days_late)) === 1 ? '' : 's'} ahead</b> of when it was filed (${esc(dayLabel(l.filed_date))}).`
+              : `Filed ${esc(dayLabel(l.filed_date))} &mdash; <b>${num(l.days_late)} days after</b> the work.`}</div>
+          </div>`).join('')}
+      </div>`);
+  }
 
   box.innerHTML = `<div class="sum-warn">
-    <h3>Check before you invoice</h3>
-    <div class="muted" style="margin-bottom:8px;">
-      More than one ticket for the same welder, same job, same day. Sometimes that's two real
-      scopes; sometimes it's a double submit. Per diem is already counted once either way —
-      it's the <b>hours</b> that double up. Fix on the Approvals page.
-    </div>
-    ${rows}
+    <h3>Crew check &mdash; before you invoice</h3>
+    ${sections.join('')}
   </div>`;
 }
 
