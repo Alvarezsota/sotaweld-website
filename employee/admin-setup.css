@@ -68,3 +68,25 @@
   .helpers-row-grid { grid-template-columns: 1.8fr 1fr 1fr .8fr 20px !important; }
   .welders-row-grid { grid-template-columns: 1.8fr 1fr 1fr .8fr 100px !important; }
 }
+
+/* Lump sum bid items, entered per job right under its row on Setup. */
+.bid-strip { display: flex; align-items: center; gap: 10px; margin: -3px 0 9px 12px; }
+.bid-toggle { background: none; border: 1px solid var(--line); color: var(--arc); font-size: 11px; font-weight: 700;
+  padding: 5px 10px; border-radius: 7px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+.bid-toggle:hover { border-color: var(--molten); }
+.bid-strip-total { font-size: 11px; color: var(--dim2); font-weight: 600; }
+.bid-panel { background: var(--steel-800); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: -3px 0 10px; }
+.bid-panel-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px;
+  font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--molten-2); margin-bottom: 10px; }
+.bid-line { display: grid; grid-template-columns: 2.4fr .7fr .6fr .9fr .9fr 30px; gap: 8px; align-items: center; margin-bottom: 6px; }
+.bid-line-head { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); font-weight: 700; padding: 0 9px; }
+.bid-line-head .c { text-align: center; }
+.bid-line-total { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 13px; }
+.bid-panel-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
+.bid-contract { font-weight: 800; font-variant-numeric: tabular-nums; }
+.bid-panel-note { font-size: 11px; color: var(--dim2); margin: 8px 0 0; line-height: 1.5; }
+@media (max-width: 640px) {
+  .bid-line { grid-template-columns: 1fr 1fr 30px; }
+  .bid-line-head { display: none; }
+}
