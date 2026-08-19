@@ -20,6 +20,9 @@ const PIPE = [[1.5,1.63],[2,2.38],[3,3.5],[4,4.5],[5,5.56],[6,6.63],[8,8.63],[10
 const OLET = [[0.5,5.28],[0.75,6.66],[1,8.23],[1.5,11.99],[2,14.95],[3,21.98],[4,28.26],[6,41.64],[8,54.2],[10,67.51]];
 // Big pipe (14"+) can be split between two welders working the same weld
 const BIG_PIPE = PIPE.filter(([nom]) => nom >= 12);
+// Shop policy: 12" and bigger is a two-welder job. Anything that size logged in
+// the solo Pipe Welds table gets flagged before it can be submitted.
+const SPLIT_POLICY_MIN = 12;
 function pipeWeldInches(nominal, schedule) {
   const row = PIPE.find(([nom]) => nom === Number(nominal));
   if (!row) return 0;
@@ -95,11 +98,11 @@ function pipeRowsHtml() {
         <td class="wr-l">${nom}"</td>
         <td class="wr-per">${od.toFixed(2)}</td>
         <td class="wr-per">${fmt(std)}</td>
-        <td><input class="input wr-qty-input" type="number" min="0" step="1" data-val="${std}" data-lbl="${nom}&quot; Std"></td>
+        <td><input class="input wr-qty-input" type="number" min="0" step="1" data-nom="${nom}" data-val="${std}" data-lbl="${nom}&quot; Std"></td>
         <td class="wr-per">${fmt(s80)}</td>
-        <td><input class="input wr-qty-input" type="number" min="0" step="1" data-val="${s80}" data-lbl="${nom}&quot; Sch80"></td>
+        <td><input class="input wr-qty-input" type="number" min="0" step="1" data-nom="${nom}" data-val="${s80}" data-lbl="${nom}&quot; Sch80"></td>
         <td class="wr-per">${fmt(s100)}</td>
-        <td><input class="input wr-qty-input" type="number" min="0" step="1" data-val="${s100}" data-lbl="${nom}&quot; Sch100+"></td>
+        <td><input class="input wr-qty-input" type="number" min="0" step="1" data-nom="${nom}" data-val="${s100}" data-lbl="${nom}&quot; Sch100+"></td>
         <td class="wr-rowtot" data-rowtot>0</td>
       </tr>`;
   }).join('');
@@ -167,6 +170,13 @@ function entryCardHtml(entry) {
             <tbody data-pipe-body>${pipeRowsHtml()}</tbody>
           </table>
         </div>
+        <div class="wr-big-warn" data-bigwarn hidden>
+          <div class="wr-big-warn-hd">&#9888; Are you sure this shouldn&rsquo;t be a split weld?</div>
+          <div class="wr-big-warn-txt">Shop policy: <b>12&Prime; and bigger runs with two welders.</b> You logged these in the solo pipe table:</div>
+          <div class="wr-big-warn-list" data-bigwarn-list></div>
+          <div class="wr-big-warn-txt">If you had a partner on them, clear them here and put them under <b>Split Welds</b> below instead &mdash; your partner gets credited automatically.</div>
+          <label class="wr-big-warn-ack"><input type="checkbox" class="wr-big-ack"> No partner &mdash; I ran these by myself.</label>
+        </div>
       </div>
 
       <div class="wr-section-inner">
@@ -218,6 +228,8 @@ function recalcEntry(entryEl) {
     oletTotal += t;
   });
 
+  updateBigWeldWarning(entryEl);
+
   let splitTotal = 0;
   entryEl.querySelectorAll('.wr-split-row').forEach(row => {
     const nominal = row.querySelector('.split-size-select').value;
@@ -238,6 +250,30 @@ function recalcEntry(entryEl) {
   entryEl.querySelector('[data-entry-total]').textContent = fmt(grand) + ' in';
   entryEl.dataset.grand = fmt(grand);
   return { pipeTotal: fmt(pipeTotal + splitTotal), oletTotal: fmt(oletTotal), miscTotal: fmt(miscTotal), splitTotal: fmt(splitTotal), grand: fmt(grand) };
+}
+
+// Flags 12"+ welds sitting in the solo pipe table. Returns true when the welder
+// still owes us an answer on them.
+function updateBigWeldWarning(entryEl) {
+  const box = entryEl.querySelector('[data-bigwarn]');
+  if (!box) return false;
+
+  const flagged = [];
+  entryEl.querySelectorAll('[data-pipe-body] .wr-qty-input').forEach(q => {
+    const nom = Number(q.dataset.nom);
+    const qty = Number(q.value) || 0;
+    if (nom >= SPLIT_POLICY_MIN && qty > 0) flagged.push(`${qty} &times; ${esc(q.dataset.lbl)}`);
+  });
+
+  const ack = box.querySelector('.wr-big-ack');
+  if (!flagged.length) {
+    box.hidden = true;
+    if (ack) ack.checked = false;
+    return false;
+  }
+  box.hidden = false;
+  box.querySelector('[data-bigwarn-list]').innerHTML = flagged.join('<br>');
+  return !(ack && ack.checked);
 }
 
 function recalcGrand() {
@@ -271,6 +307,14 @@ function updateSubmitState() {
     if (!missing) {
       const badSplit = [...entriesContainer.querySelectorAll('.wr-entry')].find(el => !entrySplitLinesValid(el));
       if (badSplit) missing = 'Pick who a split weld was shared with.';
+    }
+    if (!missing) {
+      const unconfirmed = [...entriesContainer.querySelectorAll('.wr-entry')].some(el => {
+        const box = el.querySelector('[data-bigwarn]');
+        const ack = box && box.querySelector('.wr-big-ack');
+        return box && !box.hidden && !(ack && ack.checked);
+      });
+      if (unconfirmed) missing = 'Confirm the 12" and bigger welds you ran by yourself, or move them to Split Welds.';
     }
     if (!missing && !(grand > 0 || hasMiscDesc)) missing = 'Enter at least some weld inches, or a description under Miscellaneous / Off-chart.';
   }
@@ -376,6 +420,10 @@ entriesContainer.addEventListener('change', (e) => {
   const entry = entries.find(x => x.uid === entryEl.dataset.entryUid);
   if (!entry) return;
 
+  if (e.target.classList.contains('wr-big-ack')) {
+    updateSubmitState();
+    return;
+  }
   if (e.target.classList.contains('job-select')) {
     entry.jobId = e.target.value;
     if (entry.jobId !== 'other') entry.oneOffName = '';

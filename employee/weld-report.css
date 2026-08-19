@@ -50,3 +50,46 @@
 .wr-grand { text-align: right; }
 .wr-grand-lbl { display: block; font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
 .wr-grand-val { font-size: 26px; font-weight: 800; color: var(--ok); font-variant-numeric: tabular-nums; }
+
+/* 12"+ solo weld policy warning */
+.wr-big-warn {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #7a4a1b;
+  border-left: 4px solid #e8a33d;
+  border-radius: 8px;
+  background: rgba(232, 163, 61, 0.08);
+}
+.wr-big-warn[hidden] { display: none; }
+.wr-big-warn-hd {
+  font-weight: 800;
+  font-size: 14px;
+  color: #f0c078;
+  margin-bottom: 8px;
+}
+.wr-big-warn-txt {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #d9c6ad;
+  margin-bottom: 8px;
+}
+.wr-big-warn-list {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f5e3c8;
+  line-height: 1.7;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+}
+.wr-big-warn-ack {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f0c078;
+  cursor: pointer;
+}
+.wr-big-warn-ack input { width: 17px; height: 17px; accent-color: #e8a33d; cursor: pointer; }
