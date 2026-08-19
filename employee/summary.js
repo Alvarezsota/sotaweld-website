@@ -9,8 +9,8 @@
 //   customers are charged one. That spread is yours.
 //
 //   Yard and shop hours bill to the customer only when that job is hourly.
-//   Hard-bid work stays on its own invoice and bills off the bid line items,
-//   but its labor cost still lands on the bid job so margin stays honest.
+//   Lump sum work stays on its own invoice and bills off the bid line items,
+//   but its labor cost still lands on that job so margin stays honest.
 
 let currentUser = null;
 let weekStart = getMonday(new Date());
@@ -166,8 +166,8 @@ function renderJobs() {
     const sub = [
       j.bill_to ? 'bill to ' + esc(j.bill_to) : null,
       j.bid_number ? 'Bid #' + esc(j.bid_number) : null,
-      flat ? 'hard bid' : 'hourly',
-      needsBid ? '<span style="color:#f5c451">needs bid entry</span>' : null,
+      flat ? 'lump sum' : 'hourly',
+      needsBid ? '<span style="color:#f5c451">needs bid amount</span>' : null,
     ].filter(Boolean).join(' &middot; ');
 
     return `<tr class="clickable" data-job="${escAttr(j.job_id)}">
@@ -200,7 +200,7 @@ function renderJobs() {
     </table>
     <p class="sum-note">
       Click a job to see the daily detail and print its invoice. &ldquo;Cost&rdquo; is hourly pay plus
-      per diem for the crew on that job &mdash; on a hard bid that includes yard and shop hours worked
+      per diem for the crew on that job &mdash; on a lump sum job that includes yard and shop hours worked
       for it, so the margin reflects what the bid actually cost you.
     </p>`;
 
@@ -217,6 +217,17 @@ function renderJobs() {
   wireJobDetail();
 }
 
+/** Bid / quote number. Optional on any job, hourly or lump sum — it prints on the invoice. */
+function bidNumberHtml(j) {
+  return `<div class="bid-num-row" style="margin:2px 0 14px;">
+    <div class="fieldwrap"><span class="bid-lbl">Bid / quote number</span>
+      <input class="bid-input" id="bidNum-${escAttr(j.job_id)}" style="width:200px"
+             value="${j.bid_number ? escAttr(j.bid_number) : ''}" placeholder="e.g. SOTA-2026-0142"></div>
+    <button class="btn2 btn2-line small" id="bidNumSave-${escAttr(j.job_id)}">Save</button>
+    <span id="bidNumMsg-${escAttr(j.job_id)}"></span>
+  </div>`;
+}
+
 function jobDetailHtml(j) {
   const flat = j.billing_type === 'flat';
   const lines = j.detail || [];
@@ -229,6 +240,7 @@ function jobDetailHtml(j) {
       <button class="btn2 btn2-ghost small" data-print-int="${escAttr(j.job_id)}">Print with cost &amp; margin</button>
       <a class="btn2 btn2-ghost small" href="approvals.html">Edit tickets</a>
     </div>
+    ${bidNumberHtml(j)}
     ${flat ? `<div id="bidBox-${escAttr(j.job_id)}" class="bid-box">Loading bid&hellip;</div>` : ''}
     ${dayTableHtml(onInv, !flat, 'On this invoice')}
     ${tracked.length ? dayTableHtml(tracked, false, 'Worked on this job — billed on the bid, not by the hour') : ''}
@@ -266,10 +278,30 @@ function dayTableHtml(lines, showRate, heading) {
 }
 
 function wireJobDetail() {
+  (weekData.jobs || []).forEach(j => wireBidNumber(j.job_id));
   document.querySelectorAll('[data-print]').forEach(b =>
     b.addEventListener('click', () => printInvoice(b.getAttribute('data-print'), false)));
   document.querySelectorAll('[data-print-int]').forEach(b =>
     b.addEventListener('click', () => printInvoice(b.getAttribute('data-print-int'), true)));
+}
+
+function wireBidNumber(jobId) {
+  const input = document.getElementById('bidNum-' + jobId);
+  const btn = document.getElementById('bidNumSave-' + jobId);
+  if (!input || !btn) return;
+  input.addEventListener('focus', () => { editing = true; });
+  input.addEventListener('blur', () => { setTimeout(() => { editing = false; }, 400); });
+  btn.addEventListener('click', async () => {
+    const msg = document.getElementById('bidNumMsg-' + jobId);
+    msg.className = 'sum-saving'; msg.textContent = 'Saving...';
+    const { error } = await sb.rpc('set_job_bid_number', {
+      p_job: jobId, p_bid_number: input.value.trim(), p_bid_date: null
+    });
+    if (error) { msg.className = 'error-msg2'; msg.textContent = error.message; return; }
+    msg.className = 'sum-saved'; msg.textContent = 'Saved';
+    await loadWeek();
+    if (openRow) loadBidStatus(openRow);
+  });
 }
 
 // ---------- printable invoice ----------
@@ -293,7 +325,7 @@ async function printInvoice(jobId, internal) {
   }
 }
 
-// ---------- hard bid editor ----------
+// ---------- lump sum bid editor ----------
 
 async function loadBidStatus(jobId) {
   const job = (weekData.jobs || []).find(j => j.job_id === jobId);
@@ -340,14 +372,7 @@ function renderBidBox(jobId) {
   }).join('');
 
   el.innerHTML = `
-    <h4>Hard bid</h4>
-    <div class="bid-num-row">
-      <div class="fieldwrap"><span class="bid-lbl">Bid number</span>
-        <input class="bid-input" id="bidNum-${escAttr(jobId)}" style="width:190px"
-               value="${job.bid_number ? escAttr(job.bid_number) : ''}" placeholder="e.g. SOTA-2026-0142"></div>
-      <button class="btn2 btn2-line small" id="bidNumSave-${escAttr(jobId)}">Save bid #</button>
-      <span id="bidNumMsg-${escAttr(jobId)}"></span>
-    </div>
+    <h4>Lump sum &mdash; bid line items</h4>
     ${items.length ? rows : `<div class="empty-state2" style="margin-bottom:10px;">
       No bid line items yet. Add what you bid &mdash; description, how many, price each &mdash;
       then enter how many got finished each week and that's the invoice.</div>`}
@@ -392,18 +417,6 @@ function wireBidBox(jobId) {
       await loadWeek();
       if (openRow) await loadBidStatus(openRow);
     });
-  });
-
-  const numBtn = document.getElementById('bidNumSave-' + jobId);
-  if (numBtn) numBtn.addEventListener('click', async () => {
-    const val = document.getElementById('bidNum-' + jobId).value.trim();
-    const msg = document.getElementById('bidNumMsg-' + jobId);
-    msg.className = 'sum-saving'; msg.textContent = 'Saving...';
-    const { error } = await sb.rpc('set_job_bid_number', { p_job: jobId, p_bid_number: val, p_bid_date: null });
-    if (error) { msg.className = 'error-msg2'; msg.textContent = error.message; return; }
-    msg.className = 'sum-saved'; msg.textContent = 'Saved';
-    await loadWeek();
-    if (openRow) await loadBidStatus(openRow);
   });
 
   const addBtn = document.getElementById('niAdd-' + jobId);
