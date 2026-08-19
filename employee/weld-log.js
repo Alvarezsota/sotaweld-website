@@ -326,6 +326,7 @@ function emptyNewReportState() {
     splitPartnerId: '',
     splitLines: [],
     _chartBreakdown: [],
+    _credits: [],
     _splitTotal: 0
   };
 }
@@ -426,8 +427,18 @@ async function removePreservedSplit(item, myName, reportDate) {
 function startEdit(reportId) {
   const row = allReports.find(r => r.id === reportId);
   if (!row) return;
+  // Three kinds of line live in a breakdown:
+  //   - splits this welder logged himself  (carry partnerId)
+  //   - half-credits his partner's ticket gave him  (carry fromWelderId, or on
+  //     older rows just a "(split w/ ...)" label and nothing else)
+  //   - ordinary chart work
+  // Credits used to fall in with the chart lines, and because their labels match
+  // no chart input they were dropped the moment anyone edited the ticket. That is
+  // how welders quietly lost inches. Hold them aside and write them back.
+  const isCredit = b => !b.partnerId && (b.fromWelderId || /\(split w\//.test(String(b.label || '')));
   const splitItems = (row.breakdown || []).filter(b => b.partnerId);
-  const chartBreakdown = (row.breakdown || []).filter(b => !b.partnerId);
+  const credits = (row.breakdown || []).filter(isCredit);
+  const chartBreakdown = (row.breakdown || []).filter(b => !b.partnerId && !isCredit(b));
   editingReportId = reportId;
   editState = {
     id: row.id,
@@ -441,7 +452,9 @@ function startEdit(reportId) {
     splitPartnerId: '',
     splitLines: [],
     _chartBreakdown: chartBreakdown,
+    _credits: credits,
     _splitTotal: splitItems.reduce((s, b) => s + Number(b.total), 0)
+      + credits.reduce((s, b) => s + Number(b.total), 0)
   };
   renderBody(buildDayGroups(allReports));
   const cardEl = document.querySelector(`[data-report-id="${reportId}"]`);
@@ -477,7 +490,8 @@ async function saveEdit(reportId) {
   const totals = recalcEditCard(cardEl, editState._splitTotal);
 
   const newSplitBreakdown = partner ? buildNewSplitBreakdown(cardEl, partner.id, partner.full_name) : [];
-  const breakdown = [...buildEditBreakdown(cardEl), ...editState.splitItems, ...newSplitBreakdown];
+  const breakdown = [...buildEditBreakdown(cardEl), ...editState.splitItems,
+                     ...(editState._credits || []), ...newSplitBreakdown];
   const miscItems = editState.miscRows
     .filter(r => r.desc.trim())
     .map(r => ({ description: r.desc.trim(), inches: 0 }));
@@ -514,6 +528,7 @@ async function saveEdit(reportId) {
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
           body: JSON.stringify({
             partnerWelderId: partner.id,
+            sourceWelderId: welderId,
             reportDate,
             jobId: other ? null : editState.jobId,
             oneOffName: other ? cardEl.querySelector('.edit-oneoff-input').value.trim() : null,
