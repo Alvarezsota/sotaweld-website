@@ -2,6 +2,7 @@ let currentUser = null;
 let currentProfile = null;
 let jobs = [];
 let helpers = [];
+let bidItemsByJob = {};   // job_id -> [{id, description, unit}] from bid_items_public
 let entries = [];
 let gasFlag = '';
 let extFlag = '';
@@ -146,6 +147,7 @@ function weekEntryHtml(d) {
         <span class="week-entry-name">${esc(jobLabelFor(e))}</span>
         <span class="week-entry-hrs">${hoursTracked(e.job_id) ? e.hours + ' hrs' : ''}${e.per_diem ? ' · PD' : ''}${e.is_stainless ? ' · Stainless' : ''}</span>
       </div>
+      ${e.bid_item_id ? `<div class="week-entry-bid">${esc(bidItemName(e.bid_item_id))}</div>` : ''}
       ${e.description ? `<div class="week-entry-desc">${esc(e.description)}</div>` : ''}
       ${d.parts.map(p => `<div class="week-entry-helper">&#8618; ${esc(p.description)} (${p.quantity} &times; $${p.rate}) — $${(Number(p.quantity) * Number(p.rate)).toLocaleString()}</div>`).join('')}
       ${d.helpers.map(h => {
@@ -175,6 +177,7 @@ function startEditEntry(entryId) {
     jobId: e.job_id || (e.one_off_name ? 'other' : ''),
     oneOffName: e.one_off_name || '',
     forJobId: e.for_job_id || '',
+    bidItemId: e.bid_item_id || '',
     description: e.description || '',
     hours: Number(e.hours) || 0,
     perDiem: !!e.per_diem,
@@ -208,6 +211,7 @@ async function saveEditEntry(entryId) {
       job_id: other ? null : editState.jobId,
       one_off_name: other ? editState.oneOffName.trim() : null,
       for_job_id: yard ? editState.forJobId : null,
+      bid_item_id: editState.bidItemId || null,
       description: editState.description.trim(),
       hours: editState.hours,
       per_diem: editState.perDiem,
@@ -398,11 +402,18 @@ weekPanelBody.addEventListener('change', (e) => {
     if (!isYard(editState.jobId)) editState.forJobId = '';
     if (!hoursTracked(editState.jobId)) editState.hours = 0;
     editState.stainless = false;
+    editState.bidItemId = '';
     renderWeekPanelBody();
     return;
   }
   if (e.target.classList.contains('for-job-select')) {
     editState.forJobId = e.target.value;
+    editState.bidItemId = '';
+    renderWeekPanelBody();
+    return;
+  }
+  if (e.target.classList.contains('bid-item-select')) {
+    editState.bidItemId = e.target.value;
     return;
   }
   const helperEl = e.target.closest('[data-helper-uid]');
@@ -439,7 +450,7 @@ function esc(str) {
 function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
 
 function newEntry() {
-  return { uid: uid(), jobId: '', oneOffName: '', forJobId: '', description: '', hours: 10, perDiem: true, stainless: false, helpers: [], parts: [newPart()] };
+  return { uid: uid(), jobId: '', oneOffName: '', forJobId: '', bidItemId: '', description: '', hours: 10, perDiem: true, stainless: false, helpers: [], parts: [newPart()] };
 }
 
 /* ---- Duplicate ticket guard ----
@@ -530,6 +541,37 @@ function newPart() {
 }
 function partTotal(p) { return Number(p.qty || 0) * Number(p.rate || 0); }
 function partsTotal(parts) { return parts.reduce((s, p) => s + partTotal(p), 0); }
+// Yard work booked against another job should offer THAT job's bid items.
+function bidJobIdFor(entry) {
+  return isYard(entry.jobId) ? entry.forJobId : entry.jobId;
+}
+function bidItemsFor(entry) {
+  const jid = bidJobIdFor(entry);
+  return (jid && bidItemsByJob[jid]) || [];
+}
+function bidItemName(id) {
+  for (const list of Object.values(bidItemsByJob)) {
+    const hit = list.find(b => b.id === id);
+    if (hit) return hit.description;
+  }
+  return 'Bid item';
+}
+function bidPickerHtml(entry) {
+  const items = bidItemsFor(entry);
+  if (!items.length) return '';
+  const job = jobs.find(j => j.id === bidJobIdFor(entry));
+  return `
+    <div class="oneoff bid">
+      <label class="field-label">Which bid item were you on?</label>
+      <select class="input bid-item-select">
+        <option value="">Not one of these &mdash; general work</option>
+        ${items.map(b => `<option value="${b.id}" ${entry.bidItemId === b.id ? 'selected' : ''}>${esc(b.description)}</option>`).join('')}
+      </select>
+      <span class="oneoff-note">${esc((job && job.name) || 'This customer')} has more than one job bid.
+      Picking the right one keeps the hours on the right bid.</span>
+    </div>`;
+}
+
 function isYard(jobId) {
   const j = jobs.find(x => x.id === jobId);
   return !!(j && j.is_yard);
@@ -625,6 +667,7 @@ function editCardHtml(entry) {
             ${jobs.filter(j => !j.is_yard).map(j => `<option value="${j.id}" ${entry.forJobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}</option>`).join('')}
           </select>
         </div>` : ''}
+      ${bidPickerHtml(entry)}
       <label class="field-label">What did you work on?</label>
       <textarea class="input descr-input" rows="2">${esc(entry.description)}</textarea>
       ${flat ? `
@@ -686,6 +729,7 @@ function entryCardHtml(entry, idx) {
           </select>
           <span class="oneoff-note">These hours land on that job's ticket — so your shop time bills to the right customer.</span>
         </div>` : ''}
+      ${bidPickerHtml(entry)}
       <label class="field-label">What did you work on?</label>
       <textarea class="input descr-input" rows="2" placeholder="e.g. Cont. fab on compressor piping">${esc(entry.description)}</textarea>
       ${flat ? `
@@ -829,12 +873,18 @@ entriesContainer.addEventListener('change', (e) => {
     if (!isYard(entry.jobId)) entry.forJobId = '';
     if (!hoursTracked(entry.jobId)) entry.hours = 0;
     entry.stainless = false;
+    entry.bidItemId = '';        // a different job means a different bid list
     render();
     return;
   }
   if (e.target.classList.contains('for-job-select')) {
     entry.forJobId = e.target.value;
+    entry.bidItemId = '';
     render();
+    return;
+  }
+  if (e.target.classList.contains('bid-item-select')) {
+    entry.bidItemId = e.target.value;
     return;
   }
   const helperEl = e.target.closest('[data-helper-uid]');
@@ -979,6 +1029,7 @@ async function handleSubmit() {
         job_id: other ? null : entry.jobId,
         one_off_name: other ? entry.oneOffName.trim() : null,
         for_job_id: yard ? entry.forJobId : null,
+        bid_item_id: entry.bidItemId || null,
         description: entry.description.trim(),
         hours: entry.hours,
         per_diem: entry.perDiem,
@@ -1127,12 +1178,15 @@ async function requireAuth() {
   dateInput.max = todayIso();
   dateInput.min = ymd(getMonday(new Date()));
 
-  const [{ data: jobsData }, { data: helpersData }] = await Promise.all([
+  const [{ data: jobsData }, { data: helpersData }, { data: bidData }] = await Promise.all([
     sb.from('jobs').select('*').eq('active', true).order('name'),
-    sb.from('helpers_public').select('*').eq('active', true).order('name')
+    sb.from('helpers_public').select('*').eq('active', true).order('name'),
+    sb.from('bid_items_public').select('*').order('sort_order')
   ]);
   jobs = jobsData || [];
   helpers = helpersData || [];
+  bidItemsByJob = {};
+  (bidData || []).forEach(b => { (bidItemsByJob[b.job_id] ||= []).push(b); });
 
   entries = [newEntry()];
   render();

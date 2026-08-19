@@ -39,13 +39,16 @@ function renderJobs() {
       <div class="c"><button type="button" class="toggle2${j.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>
       <button type="button" class="row-x" data-action="delete-job">&times;</button>
     </div>
-    ${j.billing_type === 'flat' ? bidPanelHtml(j) : ''}
+    ${bidPanelHtml(j)}
   `).join('');
 }
 
-// ---------- Lump sum bid items ----------
-// What you bid, entered once per job. The Summary page bills it by marking how
-// many of each line got finished in a given week.
+// ---------- Bid items ----------
+// What you bid, entered once per job. Works on ANY job, hourly or lump sum:
+//   - lump sum: the Summary page bills it by marking how many of each line got
+//     finished in a given week.
+//   - hourly: the lines are how the crew says which of that customer's bids they
+//     were on, so several bids under one customer stay separated.
 function bidPanelHtml(job) {
   const open = openBidJobId === job.id;
   const items = bidItemsByJob[job.id];
@@ -83,8 +86,11 @@ function bidPanelHtml(job) {
         <button type="button" class="btn2 btn2-solid small" data-action="add-bid">+ Add bid line</button>
         <span class="bid-contract">Contract total ${moneyFmt(contract)}</span>
       </div>
-      <p class="bid-panel-note">Enter what you bid here once. Each week on the Summary page you mark how
-      many of each line got finished, and that is what the customer is invoiced.</p>`}
+      <p class="bid-panel-note">${job.billing_type === 'flat'
+        ? `Enter what you bid here once. Each week on the Summary page you mark how many of each
+           line got finished, and that is what the customer is invoiced.`
+        : `This job bills by the hour, so these lines are not invoiced off &mdash; they show up as a
+           picker on Log Work so the crew can say which of this customer's bids they were on.`}</p>`}
   </div>`;
 }
 
@@ -199,7 +205,6 @@ document.getElementById('jobsTable').addEventListener('click', async (e) => {
   }
   if (e.target.closest('[data-action="toggle-flat"]')) {
     job.billing_type = job.billing_type === 'flat' ? 'hourly' : 'flat';
-    if (job.billing_type !== 'flat' && openBidJobId === job.id) openBidJobId = null;
     renderJobs();
     await sb.from('jobs').update({ billing_type: job.billing_type }).eq('id', id);
     return;

@@ -261,6 +261,7 @@ function dayTableHtml(lines, showRate, heading) {
     const amt = ls.reduce((a, l) => a + Number(l.billed || 0), 0);
     const rows = ls.map(l => `<tr>
         <td class="l">${esc(l.name)} <span class="role-tag2">${esc(l.kind)}</span>
+          ${l.bid_item ? `<div class="d-bid">${esc(l.bid_item)}</div>` : ''}
           ${l.description ? `<div class="d-desc">${esc(String(l.description).slice(0, 90))}</div>` : ''}</td>
         <td>${num(l.hours)}</td>
         ${showRate ? `<td>${money0(l.bill_rate)}</td>` : ''}
@@ -355,7 +356,8 @@ function printCrew(kind) {
   const dayRows = (r) => (r.detail || []).map(l => `<tr>
       <td class="l" style="width:70px"><b>${esc(dayLabel(l.date))}</b></td>
       <td class="l">${esc(l.job || '—')}${
-        l.bills_to && l.bills_to !== l.job ? `<div class="d">bills to ${esc(l.bills_to)}</div>` : ''
+        l.bid_item ? `<div class="d"><b>${esc(l.bid_item)}</b></div>` : ''
+      }${l.bills_to && l.bills_to !== l.job ? `<div class="d">bills to ${esc(l.bills_to)}</div>` : ''
       }${l.description ? `<div class="d">${esc(String(l.description).slice(0, 90))}</div>` : ''}</td>
       <td style="width:52px">${num(l.hours)}</td>
       <td style="width:70px">${l.per_diem ? money(l.per_diem_rate) : '—'}</td>
@@ -649,6 +651,7 @@ function personDetailHtml(r) {
   const rows = lines.map(l => `<tr>
       <td class="l" style="width:110px;"><b>${esc(dayLabel(l.date))}</b></td>
       <td class="l">${esc(l.job || '—')}
+        ${l.bid_item ? `<div class="d-bid">${esc(l.bid_item)}</div>` : ''}
         ${l.bills_to && l.bills_to !== l.job ? `<div class="d-desc">bills to ${esc(l.bills_to)}</div>` : ''}
         ${l.description ? `<div class="d-desc">${esc(String(l.description).slice(0, 90))}</div>` : ''}</td>
       <td style="width:60px;">${num(l.hours)}</td>
