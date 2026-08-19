@@ -28,10 +28,11 @@ function renderJobs() {
       <input class="cell-in strong job-name" value="${escAttr(j.name)}" placeholder="Job name">
       <input class="cell-in job-operator" value="${escAttr(j.operator || '')}" placeholder="Operator">
       <input class="cell-in job-bill" value="${escAttr(j.bill_to || '')}" placeholder="Set bill-to…">
+      <input class="cell-in bid job-bidnum" value="${escAttr(j.bid_number || '')}" placeholder="Bid #" title="Your bid or quote number for this job. Optional, works on any job, and prints on the invoice.">
       <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num job-pd" value="${escAttr(j.per_diem)}"></div>
       <div class="c pd-cell billrate-cell"><span class="pd-dollar">$</span><input class="cell-in num job-billrate" value="${escAttr(j.bill_rate)}" placeholder="Default" title="Override the welder's normal bill rate for this job. Leave blank to use their default rate."></div>
       <div class="c pd-cell stainless-cell"><span class="pd-dollar">$</span><input class="cell-in num job-stainless" value="${escAttr(j.stainless_bill_rate)}" title="Bill rate per hour when a welder flags stainless work on this job"></div>
-      <div class="c"><button type="button" class="toggle2${j.billing_type === 'flat' ? ' ton' : ''}" data-action="toggle-flat" title="Flat rate job (billed a flat dollar amount instead of by the hour)"><span class="tk2"></span></button></div>
+      <div class="c"><button type="button" class="toggle2${j.billing_type === 'flat' ? ' ton' : ''}" data-action="toggle-flat" title="Lump sum job — bid as a price instead of billed by the hour. Bill it off bid line items on the Summary page."><span class="tk2"></span></button></div>
       <div class="c"><button type="button" class="toggle2${j.track_hours ? ' ton' : ''}" data-action="toggle-hours" title="Track hours on this job's daily log"><span class="tk2"></span></button></div>
       <div class="c"><button type="button" class="toggle2${j.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>
       <button type="button" class="row-x" data-action="delete-job">&times;</button>
@@ -59,6 +60,7 @@ document.getElementById('jobsTable').addEventListener('blur', async (e) => {
   else if (e.target.classList.contains('job-pd')) patch = { per_diem: num(e.target.value) };
   else if (e.target.classList.contains('job-billrate')) patch = { bill_rate: e.target.value.trim() === '' ? null : num(e.target.value) };
   else if (e.target.classList.contains('job-stainless')) patch = { stainless_bill_rate: num(e.target.value) };
+  else if (e.target.classList.contains('job-bidnum')) patch = { bid_number: e.target.value.trim() || null };
   if (!patch) return;
 
   Object.assign(job, patch);
