@@ -1,0 +1,31 @@
+-- Applied to production 2026-08-22. Two weld-report defects and one addition.
+--
+-- 1. DOUBLE-CREDITED SPLIT WELDS
+--    weld-split-credit only honoured "a man's own ticket wins" when the partner
+--    had already filed. If he had not, the credit went in as its own row and
+--    nothing removed it when he filed seconds later. Juan Calleros showed
+--    304.58" for 2026-08-21 against a true 169.17". Whether it happened came
+--    down to who hit save first.
+--    Fixed with an AFTER trigger, so it covers the split-credit function, the
+--    inline crediting in weld-log.js, the website and the mobile app at once,
+--    and cannot be defeated by save order.
+--
+-- 2. TOTALS DRIFTING FROM THE LINES
+--    Derrick Maynard's 2026-08-18 ticket had a 12" split credit appended to its
+--    breakdown the next day without pipe_inches/total_inches being recomputed,
+--    leaving him 20.02" short with nothing on screen showing it. Totals are now
+--    derived in a BEFORE trigger on every write, so no caller can get them wrong.
+--
+-- 3. crew_day_status() backs the 8pm owner alert, which now covers hours as
+--    well as weld reports.
+--
+-- The full function bodies are live in the database; this file records what
+-- changed and why. See also 20260815_crew_delete_policies.sql.
+
+-- (definitions applied via supabase migrations: weld_report_totals,
+--  reconcile_weld_split_credits, crew_day_status, missing_weld_reports,
+--  weld_report_status)
+
+-- Backfill that accompanied the change: every row whose stored totals
+-- disagreed with its own lines was re-derived. Only Derrick's 08-18 differed.
+--   update weld_reports set updated_at = now() where <totals <> sum(lines)>;
