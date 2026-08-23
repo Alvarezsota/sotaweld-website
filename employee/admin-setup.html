@@ -6,8 +6,8 @@
 <title>Setup | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260823h">
-<link rel="stylesheet" href="admin-setup.css?v=20260823h">
+<link rel="stylesheet" href="dark-theme.css?v=20260823i">
+<link rel="stylesheet" href="admin-setup.css?v=20260823i">
 </head>
 <body>
 
@@ -82,14 +82,28 @@
         </div>
 
         <!-- Hidden until "+ Add welder" is pressed. A welder is a login, not just
-             a row, so this asks for an email and sends them a link to set their
-             own password - the office never handles their password. -->
+             a row, so this either emails him a link to set his own password, or
+             creates the login outright with a password the office picks. The
+             second is for a welder who is in the system to be billed against and
+             may never open the portal at all. -->
         <div class="welder-invite" id="welderInvite" hidden>
+          <div class="wi-mode">
+            <label class="wi-mode-opt">
+              <input type="radio" name="wiMode" value="invite" checked>
+              <span>Email him a link</span>
+            </label>
+            <label class="wi-mode-opt">
+              <input type="radio" name="wiMode" value="password">
+              <span>Set a password myself</span>
+            </label>
+          </div>
           <div class="wi-grid">
             <label class="field-label" for="wiName">Name</label>
             <input class="input" id="wiName" placeholder="Full name" autocomplete="off">
-            <label class="field-label" for="wiEmail">Email</label>
+            <label class="field-label" for="wiEmail" id="wiEmailLabel">Email</label>
             <input class="input" id="wiEmail" type="email" placeholder="name@example.com" autocomplete="off">
+            <label class="field-label" for="wiPassword" id="wiPasswordLabel" hidden>Password</label>
+            <input class="input" id="wiPassword" type="text" placeholder="At least 6 characters" autocomplete="off" hidden>
             <label class="field-label" for="wiPay">Pay / hr</label>
             <input class="input num" id="wiPay" inputmode="decimal" placeholder="70">
             <label class="field-label" for="wiBill">Bill / hr</label>
@@ -103,7 +117,9 @@
         </div>
 
         <p class="pg-note">Adding a welder emails them a link to pick their own password. They show up
-           here as soon as they are added; they can sign in once they have set it.</p>
+           here as soon as they are added; they can sign in once they have set it.
+           For a welder who is only being billed against, set the password yourself instead —
+           nothing is emailed, and you simply do not pass it on.</p>
         <div class="p-head">
           <span>Name</span><span class="c">Pay / hr</span><span class="c">Bill / hr</span><span class="c">Margin / hr</span><span class="c">Admin</span><span></span>
         </div>
@@ -125,8 +141,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260823h"></script>
-<script src="admin-setup.js?v=20260823h"></script>
+<script src="supabase-client.js?v=20260823i"></script>
+<script src="admin-setup.js?v=20260823i"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

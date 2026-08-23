@@ -246,6 +246,7 @@ document.getElementById('addJobBtn').addEventListener('click', async () => {
 let passwordEditId = null;
 const ADMIN_SET_PASSWORD_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/admin-set-password';
 const ADMIN_INVITE_WELDER_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/admin-invite-welder';
+const ADMIN_CREATE_WELDER_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/admin-create-welder';
 
 function renderWelders() {
   const table = document.getElementById('weldersTable');
@@ -506,6 +507,24 @@ function wireCompanyInfo() {
   const billEl = document.getElementById('wiBill');
   const msgEl = document.getElementById('wiMsg');
   const sendBtn = document.getElementById('wiSend');
+  const passwordEl = document.getElementById('wiPassword');
+  const passwordLabel = document.getElementById('wiPasswordLabel');
+  const emailLabel = document.getElementById('wiEmailLabel');
+  const modeEls = [...document.querySelectorAll('input[name="wiMode"]')];
+
+  const invitingByEmail = () => !modeEls.length || modeEls.find(r => r.checked).value === 'invite';
+
+  // The two modes need different fields, so the panel reshapes rather than
+  // showing a password box that does nothing half the time.
+  function applyMode() {
+    const invite = invitingByEmail();
+    passwordEl.hidden = passwordLabel.hidden = invite;
+    emailLabel.textContent = invite ? 'Email' : 'Email (optional)';
+    emailEl.placeholder = invite ? 'name@example.com' : "Leave blank if he won't use the portal";
+    sendBtn.textContent = invite ? 'Send invite' : 'Add welder';
+    say('');
+  }
+  modeEls.forEach(r => r.addEventListener('change', applyMode));
 
   function say(text, kind) {
     msgEl.className = 'wi-msg' + (kind ? ' ' + kind : '');
@@ -513,39 +532,66 @@ function wireCompanyInfo() {
   }
   function close() {
     panel.hidden = true;
-    nameEl.value = emailEl.value = payEl.value = billEl.value = '';
-    say('');
+    nameEl.value = emailEl.value = payEl.value = billEl.value = passwordEl.value = '';
+    if (modeEls.length) modeEls[0].checked = true;
+    applyMode();
   }
 
+  // Closing from the header button clears the panel too. Otherwise a half-typed
+  // email survives a close and reopen, and it means something different
+  // depending on which mode is selected when it comes back.
   openBtn.addEventListener('click', () => {
-    panel.hidden = !panel.hidden;
-    if (!panel.hidden) { say(''); nameEl.focus(); }
+    if (panel.hidden) { panel.hidden = false; say(''); nameEl.focus(); }
+    else close();
   });
   document.getElementById('wiCancel').addEventListener('click', close);
 
   sendBtn.addEventListener('click', async () => {
     const fullName = nameEl.value.trim();
     const email = emailEl.value.trim();
+    const invite = invitingByEmail();
+    const password = passwordEl.value;
+
     if (!fullName) { say('Enter the name of the welder.', 'err'); nameEl.focus(); return; }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { say('Enter a valid email address.', 'err'); emailEl.focus(); return; }
+    // An email is the only way in when one is being sent; when the office sets
+    // the password it is optional, and a blank one gets a placeholder instead.
+    if (invite && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      say('Enter a valid email address.', 'err'); emailEl.focus(); return;
+    }
+    if (!invite && email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      say('Enter a valid email address, or leave it blank.', 'err'); emailEl.focus(); return;
+    }
+    if (!invite && password.length < 6) {
+      say('Password must be at least 6 characters.', 'err'); passwordEl.focus(); return;
+    }
 
     sendBtn.disabled = true;
-    sendBtn.textContent = 'Sending...';
+    sendBtn.textContent = invite ? 'Sending...' : 'Adding...';
     say('');
 
     try {
       const { data: { session } } = await sb.auth.getSession();
-      const res = await fetch(ADMIN_INVITE_WELDER_URL, {
+      const res = await fetch(invite ? ADMIN_INVITE_WELDER_URL : ADMIN_CREATE_WELDER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ fullName, email, payRate: payEl.value.trim(), billRate: billEl.value.trim() })
+        body: invite
+          ? JSON.stringify({ fullName, email, payRate: payEl.value.trim(), billRate: billEl.value.trim() })
+          : JSON.stringify({ fullName, email, password, payRate: payEl.value.trim(), billRate: billEl.value.trim() })
       });
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || 'Could not add the welder.');
 
       await loadWelders();
 
-      if (json.emailed) {
+      if (!invite) {
+        // A generated address is his username and is shown nowhere else, so it
+        // stays on screen instead of the panel closing itself.
+        say(json.generatedEmail
+          ? fullName + ' was added. He signs in as ' + json.email
+            + ' - write that down, it is not shown again. Nothing was emailed to him.'
+          : fullName + ' was added. He signs in as ' + json.email + '. Nothing was emailed to him.', 'ok');
+        nameEl.value = emailEl.value = passwordEl.value = '';
+      } else if (json.emailed) {
         say(fullName + ' was added. The invite is on its way to ' + email + '.', 'ok');
         setTimeout(close, 4000);
       } else {
@@ -562,7 +608,7 @@ function wireCompanyInfo() {
       say(String(err.message || err), 'err');
     } finally {
       sendBtn.disabled = false;
-      sendBtn.textContent = 'Send invite';
+      sendBtn.textContent = invitingByEmail() ? 'Send invite' : 'Add welder';
     }
   });
 })();

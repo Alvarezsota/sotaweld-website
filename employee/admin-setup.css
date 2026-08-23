@@ -120,6 +120,20 @@
   background: var(--steel-800); border: 1px solid var(--edge);
   border-radius: 12px; padding: 14px 14px 12px; margin: 0 0 12px;
 }
+/* Which of the two ways a welder gets added. Sits above the fields because it
+   decides which of them apply. */
+.wi-mode { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.wi-mode-opt {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 12px; border: 1px solid var(--line); border-radius: 8px;
+  font-size: 13px; color: var(--dim); cursor: pointer;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+.wi-mode-opt:hover { color: var(--text); }
+.wi-mode-opt:has(input:checked) { border-color: var(--arc); color: var(--text); background: var(--gold-soft); }
+.wi-mode-opt:has(input:focus-visible) { outline: 2px solid var(--arc); outline-offset: 2px; }
+.wi-mode-opt input { accent-color: var(--arc); margin: 0; }
+
 .wi-grid {
   display: grid; grid-template-columns: auto 1fr auto 1fr;
   gap: 8px 12px; align-items: center;
