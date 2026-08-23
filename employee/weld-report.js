@@ -522,6 +522,46 @@ addJobBtn.addEventListener('click', () => {
   refreshRemoveButtons();
 });
 
+let helpersList = [];
+const helperPick = document.getElementById('helperPick');
+const helperHint = document.getElementById('helperHint');
+
+function fillHelperPicker() {
+  const keep = helperPick.value;
+  helperPick.innerHTML = '<option value="">Worked alone</option>'
+    + helpersList.map((h) => `<option value="${h.id}">${esc(h.name)}</option>`).join('');
+  if (keep) helperPick.value = keep;
+}
+
+function setHelper(id, why) {
+  helperPick.value = id || '';
+  const name = (helpersList.find((h) => h.id === id) || {}).name;
+  if (!id) { helperHint.textContent = ''; helperHint.className = 'wr-helper-hint'; return; }
+  helperHint.className = 'wr-helper-hint' + (why === 'saved' ? ' filled' : '');
+  helperHint.textContent = why === 'saved'
+    ? 'Saved with this report.'
+    : (name || 'Somebody') + ' is on your time ticket for this day. Change it if that is wrong.';
+}
+
+/* Nothing chosen yet, so offer whoever is already on his time ticket that day.
+   It is only a suggestion - he can set it back to "Worked alone". */
+async function suggestHelperFromTimeTicket(date) {
+  try {
+    const { data: rows } = await sb.from('daily_entries')
+      .select('id').eq('welder_id', currentUser.id).eq('entry_date', date);
+    const ids = (rows || []).map((r) => r.id);
+    if (!ids.length) { setHelper('', ''); return; }
+    const { data: helpers } = await sb.from('daily_entry_helpers')
+      .select('helper_id').in('daily_entry_id', ids);
+    const first = (helpers || []).find((h) => h.helper_id);
+    setHelper(first ? first.helper_id : '', 'suggested');
+  } catch {
+    setHelper('', '');            // never let this block the report
+  }
+}
+
+helperPick.addEventListener('change', () => setHelper(helperPick.value, 'saved'));
+
 async function loadReportsForDate() {
   const date = dateInput.value || todayIso();
   entriesContainer.innerHTML = '';
@@ -550,6 +590,9 @@ async function loadReportsForDate() {
       appendEntryCard(entry, row.breakdown || []);
     });
     submitBtn.textContent = 'Update Weld Report';
+    const saved = data.find(r => r.helper_id);
+    if (saved) setHelper(saved.helper_id, 'saved');
+    else await suggestHelperFromTimeTicket(date);
   } else {
     const entry = newEntry();
     entries.push(entry);
@@ -602,6 +645,9 @@ submitBtn.addEventListener('click', async () => {
         total_inches: totals.grand,
         breakdown,
         misc_items: miscItems,
+        // One answer for the whole day, written onto every job's row, because
+        // the question is whether somebody was with him - not which job.
+        helper_id: helperPick.value || null,
         updated_at: new Date().toISOString()
       };
 
@@ -689,12 +735,15 @@ async function requireAuth() {
   dateInput.value = todayIso();
   dateInput.max = todayIso();
 
-  const [{ data: jobsData }, { data: weldersData }] = await Promise.all([
+  const [{ data: jobsData }, { data: weldersData }, { data: helpersData }] = await Promise.all([
     sb.from('jobs').select('*').eq('active', true).order('name'),
-    sb.from('welders_public').select('*').order('full_name')
+    sb.from('welders_public').select('*').order('full_name'),
+    sb.from('helpers_public').select('id, name').eq('active', true).order('name')
   ]);
   jobs = jobsData || [];
   weldersList = weldersData || [];
+  helpersList = helpersData || [];
+  fillHelperPicker();
 
   await loadReportsForDate();
 })();

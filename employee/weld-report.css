@@ -93,3 +93,19 @@
   cursor: pointer;
 }
 .wr-big-warn-ack input { width: 17px; height: 17px; accent-color: #e8a33d; cursor: pointer; }
+
+
+/* Helper-present picker. Sits with the date because it describes the whole day,
+   not one job - a welder with three tickets should answer this once. */
+.wr-helper-line {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+.wr-helper-line .de-date-label { margin: 0; white-space: nowrap; }
+.wr-helper-line .input { flex: 1 1 220px; max-width: 340px; }
+.wr-helper-hint { font-size: 12.5px; color: var(--dim2); flex: 1 1 100%; }
+.wr-helper-hint.filled { color: var(--ok); }
+@media (max-width: 560px) {
+  .wr-helper-line { gap: 6px; }
+  .wr-helper-line .input { max-width: none; }
+}

@@ -109,3 +109,12 @@
 .wr-entry-total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(87,201,140,.25); font-size: 14px; font-weight: 800; color: var(--ok); }
 .edit-card-footer { display: flex; gap: 10px; margin-top: 14px; }
 .edit-card-footer .btn2 { flex: 1; }
+
+
+/* Who was with the welder that day. Presence only - deliberately quiet, so it
+   never reads like a second set of billable hours. */
+.wl-helper {
+  font-size: 12px; font-weight: 600; color: var(--molten);
+  background: var(--gold-soft); border-radius: 5px; padding: 2px 8px;
+  white-space: nowrap;
+}

@@ -6,8 +6,8 @@
 <title>Weld Report | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260823h">
-<link rel="stylesheet" href="weld-report.css?v=20260823h">
+<link rel="stylesheet" href="dark-theme.css?v=20260823j">
+<link rel="stylesheet" href="weld-report.css?v=20260823j">
 </head>
 <body>
 
@@ -42,6 +42,16 @@
       <span class="de-date-label">Date</span>
       <input type="date" id="dateInput" class="input de-date-input">
     </div>
+    <!-- Presence only. The helper's hours stay on the time ticket; this just
+         records that somebody was with him, which the weld log could not show. -->
+    <div class="wr-helper-line">
+      <label class="de-date-label" for="helperPick">Helper with you today</label>
+      <select class="input" id="helperPick">
+        <option value="">Worked alone</option>
+      </select>
+      <span class="wr-helper-hint" id="helperHint"></span>
+    </div>
+
     <p class="wr-intro">Log your weld inches for the day, job by job. Totals calculate automatically as you type. Editing a day you already submitted updates it.</p>
 
     <div id="entriesContainer"></div>
@@ -70,8 +80,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260823h"></script>
-<script src="weld-report.js?v=20260823h"></script>
+<script src="supabase-client.js?v=20260823j"></script>
+<script src="weld-report.js?v=20260823j"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

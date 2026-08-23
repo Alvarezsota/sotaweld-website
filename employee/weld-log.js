@@ -7,6 +7,7 @@ let allReports = [];
 let editingReportId = null;
 let editState = null;
 let hoursByWelderDate = {};
+let helperNameById = {};
 
 const PI = 3.14;
 const PIPE = [[1.5,1.63],[2,2.38],[3,3.5],[4,4.5],[5,5.56],[6,6.63],[8,8.63],[10,10.75],[12,12.75],
@@ -590,11 +591,18 @@ function renderBody(dayGroups) {
             ? `<span class="wl-job-hours">&middot; ${hrsWorked} hrs logged</span>`
             : `<span class="wl-job-hours wl-job-hours-missing">&middot; no hours logged</span>`;
           const multi = w.rows.length > 1;
+          // The welder answers this once for the day, so every row carries the
+          // same id - take the first one that has it rather than listing it per job.
+          const helperId = (w.rows.find((r) => r.helper_id) || {}).helper_id;
+          const helperHtml = helperId
+            ? `<span class="wl-helper">with ${esc(helperNameById[helperId] || 'a helper')}</span>`
+            : '';
 
           return `
           <div class="wl-welder-block">
             <div class="wl-job-head">
               <span class="wl-job-name">${esc(w.name)}</span>
+              ${helperHtml}
               <span class="wl-job-total">${w.total.toFixed(2)} in ${hrsHtml}</span>
             </div>
             ${multi ? `<div class="wl-multi-note">${w.rows.length} jobs this day</div>` : ''}
@@ -747,7 +755,8 @@ async function loadWeek() {
   document.getElementById('weekLabel').textContent = formatWeekLabel(weekStart);
   document.getElementById('weldLogBody').innerHTML = '<div class="card"><p class="empty-state2">Loading…</p></div>';
 
-  const [{ data: reports }, { data: jobs }, { data: welders }, { data: entries }] = await Promise.all([
+  const [{ data: reports }, { data: jobs }, { data: welders }, { data: entries },
+         { data: helpers }] = await Promise.all([
     sb.from('weld_reports')
       .select('*, profiles(full_name)')
       .gte('report_date', start).lte('report_date', end)
@@ -756,7 +765,8 @@ async function loadWeek() {
     sb.from('profiles').select('id, full_name').order('full_name'),
     sb.from('daily_entries')
       .select('welder_id, entry_date, hours')
-      .gte('entry_date', start).lte('entry_date', end)
+      .gte('entry_date', start).lte('entry_date', end),
+    sb.from('helpers_public').select('id, name')
   ]);
 
   jobsById = {};
@@ -766,6 +776,9 @@ async function loadWeek() {
   allReports = reports || [];
   editingReportId = null;
   editState = null;
+
+  helperNameById = {};
+  (helpers || []).forEach((h) => { helperNameById[h.id] = h.name; });
 
   hoursByWelderDate = {};
   (entries || []).forEach(e => {

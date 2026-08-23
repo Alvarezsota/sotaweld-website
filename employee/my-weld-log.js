@@ -59,9 +59,12 @@ function lineHtml(b) {
     </div>`;
 }
 
-function dayHtml(dateStr, rows, jobsById) {
+function dayHtml(dateStr, rows, jobsById, helperById) {
   const d = new Date(dateStr + 'T00:00:00');
   const total = rows.reduce((s, r) => s + num(r.total_inches), 0);
+  // Answered once for the day, so it is stamped on every row - read the first.
+  const helperId = (rows.find((r) => r.helper_id) || {}).helper_id;
+  const helperName = helperId ? (helperById[helperId] || 'a helper') : '';
 
   if (!rows.length) {
     return `
@@ -99,6 +102,7 @@ function dayHtml(dateStr, rows, jobsById) {
     <section class="mwl-day">
       <div class="mwl-day-head">
         <span class="mwl-day-name">${esc(dayLabel(d))}</span>
+        ${helperName ? `<span class="mwl-helper">with ${esc(helperName)}</span>` : ''}
         <span class="mwl-day-total">${fmt(total)}<span class="mwl-unit">in</span></span>
       </div>
       ${tickets}
@@ -111,12 +115,13 @@ async function loadWeek() {
   weekLabel.textContent = weekLabelText(weekStart);
   daysBody.innerHTML = '<div class="mwl-loading">Loading&hellip;</div>';
 
-  const [{ data: reports, error }, { data: jobs }] = await Promise.all([
+  const [{ data: reports, error }, { data: jobs }, { data: helpers }] = await Promise.all([
     sb.from('weld_reports').select('*')
       .eq('welder_id', currentUser.id)
       .gte('report_date', start).lte('report_date', end)
       .order('report_date'),
     sb.from('jobs').select('id, name'),
+    sb.from('helpers_public').select('id, name'),
   ]);
 
   if (error) {
@@ -128,6 +133,8 @@ async function loadWeek() {
 
   const jobsById = {};
   (jobs || []).forEach((j) => { jobsById[j.id] = j.name; });
+  const helperById = {};
+  (helpers || []).forEach((h) => { helperById[h.id] = h.name; });
 
   const byDate = {};
   (reports || []).forEach((r) => { (byDate[r.report_date] ||= []).push(r); });
@@ -142,7 +149,7 @@ async function loadWeek() {
     const ds = ymd(addDays(weekStart, i));
     const rows = byDate[ds] || [];
     if (i === 6 && !rows.length) continue;
-    out.push(dayHtml(ds, rows, jobsById));
+    out.push(dayHtml(ds, rows, jobsById, helperById));
   }
   daysBody.innerHTML = out.join('');
 }

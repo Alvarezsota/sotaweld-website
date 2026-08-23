@@ -92,3 +92,12 @@
   background: rgba(236,125,122,.1); border: 1px solid var(--danger); border-radius: 12px;
 }
 .mwl-error span { color: var(--dim); font-size: 12px; }
+
+
+/* Who was with the welder that day. Presence only - deliberately quiet, so it
+   never reads like a second set of billable hours. */
+.mwl-helper {
+  font-size: 12px; font-weight: 600; color: var(--molten);
+  background: var(--gold-soft); border-radius: 5px; padding: 2px 8px;
+  white-space: nowrap;
+}
