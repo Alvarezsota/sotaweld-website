@@ -100,3 +100,14 @@ a { color: inherit; }
 
 .error-msg2 { color: var(--danger); font-size: 13px; margin-top: 8px; min-height: 1.2em; }
 .empty-state2 { color: var(--dim2); font-size: 14px; padding: 12px 4px; }
+
+/* Support footer. Every page carries it, so a man who hits an error never has
+   to guess how to reach the office. */
+.et-support {
+  max-width: 900px; margin: 34px auto 0; padding: 16px 18px 26px;
+  border-top: 1px solid var(--line); text-align: center;
+  font-size: 12.5px; color: var(--dim2); line-height: 1.7;
+}
+.et-support b { color: var(--dim); font-weight: 700; }
+.et-support a { color: var(--molten); font-weight: 700; text-decoration: none; }
+.et-support a:hover { text-decoration: underline; }
