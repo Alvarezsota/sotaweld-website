@@ -174,6 +174,7 @@ function startEditEntry(entryId) {
   editingEntryUid = entryId;
   editState = {
     uid: entryId,
+    entryDate: e.entry_date,
     jobId: e.job_id || (e.one_off_name ? 'other' : ''),
     oneOffName: e.one_off_name || '',
     forJobId: e.for_job_id || '',
@@ -207,6 +208,30 @@ async function saveEditEntry(entryId) {
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
 
   try {
+    // An edit collides as easily as a new ticket: point this one at the job and
+    // hours another ticket on the same day already has, and you have a clean
+    // double. The submit path checks for that; this one did not, so a man
+    // correcting a mistake could quietly create the very thing he was fixing.
+    const sig = dupSigForCard(editState);
+    if (sig && editState.entryDate) {
+      const { data: sameDay, error: sdErr } = await sb.from('daily_entries')
+        .select('id,job_id,one_off_name,hours,description')
+        .eq('welder_id', currentUser.id)
+        .eq('entry_date', editState.entryDate)
+        .neq('id', entryId);
+      if (sdErr) throw sdErr;
+      const clash = (sameDay || []).find((r) => dupSigForRow(r) === sig);
+      if (clash) {
+        alert('That would make two of the same ticket.\n\n'
+          + jobLabelFor(clash)
+          + (hoursTracked(clash.job_id) ? ' for ' + Number(clash.hours) + ' hrs' : '')
+          + ' is already turned in for ' + dayLabel(editState.entryDate) + '.\n\n'
+          + 'Change the hours or the job on this one, or delete the other ticket instead.');
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save changes'; }
+        return;
+      }
+    }
+
     const { error: upErr } = await sb.from('daily_entries').update({
       job_id: other ? null : editState.jobId,
       one_off_name: other ? editState.oneOffName.trim() : null,
