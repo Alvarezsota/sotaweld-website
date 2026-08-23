@@ -465,8 +465,17 @@ entriesContainer.addEventListener('click', async (e) => {
     if (entries.length <= 1) return;
     if (entry.rowId) {
       if (!confirm("Remove this job from today's weld report? This deletes it right away.")) return;
-      const { error } = await sb.from('weld_reports').delete().eq('id', entry.rowId);
+      // A refused delete returns no error and no rows. Without asking what was
+      // removed this cleared the job off the screen and left it in the database,
+      // so it came back on the next load - and stayed on the invoice meanwhile.
+      const { data: gone, error } = await sb.from('weld_reports')
+        .delete().eq('id', entry.rowId).select('id');
       if (error) { alert('Could not remove: ' + error.message); return; }
+      if (!gone || gone.length === 0) {
+        alert('That could not be removed.\n\n'
+            + 'It is still on your report. Tell the office rather than sending it as is.');
+        return;
+      }
     }
     entries = entries.filter(x => x.uid !== entry.uid);
     entryEl.remove();
@@ -571,9 +580,12 @@ submitBtn.addEventListener('click', async () => {
 
       if (totals.grand <= 0 && !breakdown.length && !miscItems.length) {
         if (entry.rowId) {
-          const { error } = await sb.from('weld_reports').delete().eq('id', entry.rowId);
+          const { data: gone, error } = await sb.from('weld_reports')
+            .delete().eq('id', entry.rowId).select('id');
           if (error) throw error;
-          entry.rowId = null;
+          // Emptied to nothing but the row would not go: leave rowId in place so
+          // the next save updates it rather than adding a second one.
+          if (gone && gone.length > 0) entry.rowId = null;
         }
         continue;
       }

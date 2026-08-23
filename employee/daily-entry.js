@@ -338,6 +338,11 @@ weekPanelBody.addEventListener('click', async (e) => {
 
     // Clear the child rows first: without an ON DELETE CASCADE on these foreign
     // keys, deleting the parent entry fails outright.
+    //
+    // These two do not need a zero-row check of their own. That missing cascade
+    // is what protects them: if either clear is refused, the child rows remain,
+    // the parent delete below fails on the foreign key, and that error is caught
+    // there. A silent no-op here cannot slip through as a success.
     const { error: helpErr } = await sb.from('daily_entry_helpers').delete().eq('daily_entry_id', entryId);
     if (helpErr) { alert("Could not delete this ticket.\n\n" + helpErr.message + "\n\nTell the office."); return; }
     const { error: partErr } = await sb.from('daily_entry_parts').delete().eq('daily_entry_id', entryId);

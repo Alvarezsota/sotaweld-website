@@ -551,8 +551,14 @@ async function saveEdit(reportId) {
 
 async function deleteReport(reportId) {
   if (!confirm("Delete this weld report? This can't be undone.")) return;
-  const { error } = await sb.from('weld_reports').delete().eq('id', reportId);
+  const { data: gone, error } = await sb.from('weld_reports')
+    .delete().eq('id', reportId).select('id');
   if (error) { alert('Could not delete: ' + error.message); return; }
+  if (!gone || gone.length === 0) {
+    alert('That report could not be deleted.\n\n'
+        + 'Nothing was removed. This is a permissions problem rather than something you did wrong.');
+    return;
+  }
   editingReportId = null;
   editState = null;
   await loadWeek();

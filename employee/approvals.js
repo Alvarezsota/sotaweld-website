@@ -479,7 +479,21 @@ function startEditLine(row, line, groupId) {
     if (entryErr) { alert('Could not save: ' + entryErr.message); return; }
 
     if (flatNow) {
-      await sb.from('daily_entry_parts').delete().eq('daily_entry_id', line.entryId);
+      // Clearing then re-inserting only works if the clear actually removed the
+      // rows. A refused delete returns no error and no rows, so inserting after
+      // it puts every parts line on the ticket twice - check before inserting.
+      const { error: clearErr } = await sb.from('daily_entry_parts')
+        .delete().eq('daily_entry_id', line.entryId).select('id');
+      if (clearErr) { alert('Could not save: ' + clearErr.message); return; }
+      const { count: leftOver } = await sb.from('daily_entry_parts')
+        .select('id', { count: 'exact', head: true }).eq('daily_entry_id', line.entryId);
+      if (leftOver) {
+        alert('The hours were saved, but the old parts lines could not be cleared.\n\n'
+            + 'Nothing was doubled up - we stopped before that could happen. '
+            + 'The parts on this ticket need fixing by hand.');
+        await loadWeek();
+        return;
+      }
       const validParts = editParts
         .filter(p => p.description.trim() && Number(p.quantity) > 0 && Number(p.rate) > 0)
         .map(p => ({ daily_entry_id: line.entryId, description: p.description.trim(), quantity: Number(p.quantity), rate: Number(p.rate) }));
@@ -488,7 +502,9 @@ function startEditLine(row, line, groupId) {
         if (partsErr) { alert('Entry saved, but parts could not be saved: ' + partsErr.message); return; }
       }
     } else if (line.parts) {
-      await sb.from('daily_entry_parts').delete().eq('daily_entry_id', line.entryId);
+      const { error: dropErr } = await sb.from('daily_entry_parts')
+        .delete().eq('daily_entry_id', line.entryId).select('id');
+      if (dropErr) alert('The hours were saved, but the parts lines could not be removed: ' + dropErr.message);
     }
     await loadWeek();
   });
@@ -498,10 +514,18 @@ async function deleteLine(line, groupId) {
   const label = line.helperRowId ? `${line.name}'s helper hours` : `${line.name}'s whole entry for this day (including any helpers on it)`;
   if (!confirm(`Delete ${label}? This can't be undone.`)) return;
 
-  if (line.helperRowId) {
-    await sb.from('daily_entry_helpers').delete().eq('id', line.helperRowId);
-  } else {
-    await sb.from('daily_entries').delete().eq('id', line.entryId);
+  // A delete the database refuses comes back with no error and no rows, so
+  // without asking what was removed the row simply reappears on reload with no
+  // explanation. Ask, and say so plainly when nothing was deleted.
+  const { data: gone, error } = line.helperRowId
+    ? await sb.from('daily_entry_helpers').delete().eq('id', line.helperRowId).select('id')
+    : await sb.from('daily_entries').delete().eq('id', line.entryId).select('id');
+
+  if (error) { alert('Could not delete: ' + error.message); return; }
+  if (!gone || gone.length === 0) {
+    alert('That could not be deleted.\n\n'
+        + 'Nothing was removed. This is a permissions problem rather than something you did wrong.');
+    return;
   }
   await loadWeek();
 }

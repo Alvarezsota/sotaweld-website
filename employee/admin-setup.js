@@ -184,8 +184,13 @@ document.getElementById('jobsTable').addEventListener('click', async (e) => {
     const id = line.dataset.bidId;
     const row = (bidItemsByJob[jobId] || []).find(i => i.id === id);
     if (!confirm(`Delete bid line "${row ? row.description : ''}"? Any weekly progress recorded against it goes too.`)) return;
-    const { error } = await sb.from('job_bid_items').delete().eq('id', id);
+    const { data: gone, error } = await sb.from('job_bid_items').delete().eq('id', id).select('id');
     if (error) { alert('Could not delete: ' + error.message); return; }
+    if (!gone || gone.length === 0) {
+      alert('That bid line could not be deleted.\n\n'
+          + 'Nothing was removed, so it is still there.');
+      return;
+    }
     bidItemsByJob[jobId] = (bidItemsByJob[jobId] || []).filter(i => i.id !== id);
     renderJobs();
     return;
@@ -217,7 +222,14 @@ document.getElementById('jobsTable').addEventListener('click', async (e) => {
   }
   if (e.target.closest('[data-action="delete-job"]')) {
     if (!confirm(`Delete "${job.name}"? This can't be undone.`)) return;
-    await sb.from('jobs').delete().eq('id', id);
+    // A refused delete comes back with no error and no rows, so without asking
+    // what went the job disappears from the screen and is still in the database.
+    const { data: gone } = await sb.from('jobs').delete().eq('id', id).select('id');
+    if (!gone || gone.length === 0) {
+      alert('That job could not be deleted.\n\n'
+          + 'Nothing was removed. It may have work booked against it.');
+      return;
+    }
     jobsList = jobsList.filter(j => j.id !== id);
     renderJobs();
   }
@@ -389,7 +401,12 @@ document.getElementById('helpersTable').addEventListener('click', async (e) => {
   }
   if (e.target.closest('[data-action="delete-helper"]')) {
     if (!confirm(`Delete "${h.name}"? This can't be undone.`)) return;
-    await sb.from('helpers').delete().eq('id', id);
+    const { data: gone } = await sb.from('helpers').delete().eq('id', id).select('id');
+    if (!gone || gone.length === 0) {
+      alert('That helper could not be deleted.\n\n'
+          + 'Nothing was removed. They may have hours booked against them.');
+      return;
+    }
     helpersList = helpersList.filter(x => x.id !== id);
     renderHelpers();
   }
