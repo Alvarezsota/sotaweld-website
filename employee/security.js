@@ -195,24 +195,20 @@ async function startEnrol() {
 }
 
 
-/** Draws the otpauth URI as a QR code. Loads the library only when enrolling. */
+/** Draws the otpauth URI as a QR code, from the copy of the encoder we ship. */
 async function drawQr(uri) {
   const box = document.getElementById('qrBox');
   try {
-    if (!window.QRCode) {
-      await new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js';
-        s.onload = resolve;
-        s.onerror = () => reject(new Error('could not load the QR library'));
-        document.head.appendChild(s);
-      });
-    }
-    const url = await window.QRCode.toDataURL(uri, {
-      width: 380, margin: 1,
-      color: { dark: '#000000', light: '#ffffff' },   // plain black on white scans best
+    if (!window.QRCode) throw new Error('QR encoder missing');
+    // SVG rather than a bitmap: the box is a fixed size, and downscaling a
+    // PNG into it resamples the squares. Vector stays exact at any size.
+    // margin 4 is the quiet zone the QR spec requires - scanners need it.
+    const svg = await window.QRCode.toString(uri, {
+      type: 'svg', margin: 4, width: 240,
+      color: { dark: '#000000', light: '#ffffff' },  // plain black on white scans best
+      errorCorrectionLevel: 'M',
     });
-    box.innerHTML = `<img alt="Setup QR code" src="${url}">`;
+    box.innerHTML = svg;
   } catch (e) {
     // Not fatal: the key can still be typed in by hand.
     if (box && !box.querySelector('img, svg')) {
