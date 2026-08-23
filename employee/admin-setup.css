@@ -113,3 +113,34 @@
 .co-field span { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--dim, #9aa3b2); }
 .co-field-sm { flex: 0 1 170px; }
 .co-saved { font-size: 12px; font-weight: 600; color: var(--ok, #57c98c); padding-bottom: 8px; min-width: 44px; }
+
+
+/* Add-a-welder panel. Sits inside the Welders group, hidden until asked for. */
+.welder-invite {
+  background: var(--steel-800); border: 1px solid var(--edge);
+  border-radius: 12px; padding: 14px 14px 12px; margin: 0 0 12px;
+}
+.wi-grid {
+  display: grid; grid-template-columns: auto 1fr auto 1fr;
+  gap: 8px 12px; align-items: center;
+}
+.wi-grid .field-label { margin: 0; white-space: nowrap; }
+.wi-grid .input { width: 100%; }
+.wi-grid .input.num { max-width: 120px; }
+.wi-actions { display: flex; gap: 10px; margin-top: 12px; }
+.wi-msg { min-height: 1.2em; margin: 10px 2px 0; font-size: 13px; color: var(--dim); }
+.wi-msg.err { color: var(--danger); }
+.wi-msg.ok  { color: var(--ok); }
+.wi-link {
+  display: block; margin-top: 8px; padding: 8px 10px; word-break: break-all;
+  background: var(--steel-900); border: 1px solid var(--line); border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+  color: var(--text);
+}
+
+/* Stacks on a phone, where the four-column grid would be unusable. */
+@media (max-width: 640px) {
+  .wi-grid { grid-template-columns: 1fr; gap: 4px; }
+  .wi-grid .input.num { max-width: none; }
+  .wi-actions { flex-direction: column; }
+}

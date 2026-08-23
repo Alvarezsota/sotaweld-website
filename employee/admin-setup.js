@@ -233,6 +233,7 @@ document.getElementById('addJobBtn').addEventListener('click', async () => {
 // ---------- Welders (profiles) ----------
 let passwordEditId = null;
 const ADMIN_SET_PASSWORD_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/admin-set-password';
+const ADMIN_INVITE_WELDER_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/admin-invite-welder';
 
 function renderWelders() {
   const table = document.getElementById('weldersTable');
@@ -468,4 +469,83 @@ function wireCompanyInfo() {
 
   wireCompanyInfo();
   await Promise.all([loadJobs(), loadWelders(), loadHelpers(), loadCompanyInfo()]);
+})();
+
+
+// ---------- Add a welder ----------
+//
+// A welder is a login, not just a row, so this cannot be a plain insert the way
+// helpers are. The work happens in the admin-invite-welder function, which holds
+// the service role; the office never sees or sets their password - the welder
+// picks it from the emailed link.
+(function wireAddWelder() {
+  const panel = document.getElementById('welderInvite');
+  const openBtn = document.getElementById('addWelderBtn');
+  if (!panel || !openBtn) return;
+
+  const nameEl = document.getElementById('wiName');
+  const emailEl = document.getElementById('wiEmail');
+  const payEl = document.getElementById('wiPay');
+  const billEl = document.getElementById('wiBill');
+  const msgEl = document.getElementById('wiMsg');
+  const sendBtn = document.getElementById('wiSend');
+
+  function say(text, kind) {
+    msgEl.className = 'wi-msg' + (kind ? ' ' + kind : '');
+    msgEl.textContent = text;
+  }
+  function close() {
+    panel.hidden = true;
+    nameEl.value = emailEl.value = payEl.value = billEl.value = '';
+    say('');
+  }
+
+  openBtn.addEventListener('click', () => {
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) { say(''); nameEl.focus(); }
+  });
+  document.getElementById('wiCancel').addEventListener('click', close);
+
+  sendBtn.addEventListener('click', async () => {
+    const fullName = nameEl.value.trim();
+    const email = emailEl.value.trim();
+    if (!fullName) { say('Enter the name of the welder.', 'err'); nameEl.focus(); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { say('Enter a valid email address.', 'err'); emailEl.focus(); return; }
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Sending...';
+    say('');
+
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const res = await fetch(ADMIN_INVITE_WELDER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ fullName, email, payRate: payEl.value.trim(), billRate: billEl.value.trim() })
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Could not add the welder.');
+
+      await loadWelders();
+
+      if (json.emailed) {
+        say(fullName + ' was added. The invite is on its way to ' + email + '.', 'ok');
+        setTimeout(close, 4000);
+      } else {
+        // The welder exists either way; only the email failed. Hand the link over
+        // rather than claim it was sent, so the office can pass it on by hand.
+        say(fullName + ' was added, but the invite email could not be sent. '
+          + 'Send them this link yourself - it is the only way in until they set a password:', 'err');
+        const a = document.createElement('code');
+        a.className = 'wi-link';
+        a.textContent = json.link || '(no link returned - use Set password on their row instead)';
+        msgEl.appendChild(a);
+      }
+    } catch (err) {
+      say(String(err.message || err), 'err');
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send invite';
+    }
+  });
 })();
