@@ -48,3 +48,13 @@
 .sec-error { color: var(--danger); font-size: 14px; padding: 16px;
   background: rgba(236,125,122,.1); border: 1px solid var(--danger); border-radius: 12px; }
 .sec-error span { color: var(--dim); font-size: 12px; }
+
+/* The QR is drawn as a PNG data URI. Keep it crisp and big enough that a phone
+   camera locks on from a comfortable distance, and never scale it below 180px. */
+.sec-qr img { display: block; width: 220px; height: 220px; image-rendering: pixelated; }
+.sec-qr-pending { width: 220px; height: 220px; display: flex; align-items: center;
+  justify-content: center; text-align: center; font-size: 12.5px; color: #555;
+  padding: 12px; line-height: 1.5; }
+
+.sec-open { color: var(--molten); font-weight: 700; }
+.sec-secret + .btn2 { margin-left: 8px; vertical-align: middle; }
