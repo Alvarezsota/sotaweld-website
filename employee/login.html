@@ -6,8 +6,8 @@
 <title>Employee Login | State of the Arc Welding & Services</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260823">
-<link rel="stylesheet" href="login.css?v=20260823">
+<link rel="stylesheet" href="dark-theme.css?v=20260823b">
+<link rel="stylesheet" href="login.css?v=20260823b">
 </head>
 <body class="employee-body">
 <div class="login-bg" aria-hidden="true"></div>
@@ -26,6 +26,16 @@
       <button type="submit" class="btn2 btn2-solid" id="loginBtn">Log In</button>
       <p class="error-msg2" id="errorMsg"></p>
     </form>
+    <form id="mfaForm" style="display:none;">
+      <p class="login-sub" style="margin-bottom:16px;">Enter the six-digit code from your
+         authenticator app.</p>
+      <label class="field-label" for="mfaCode">Code</label>
+      <input class="input" id="mfaCode" inputmode="numeric" autocomplete="one-time-code"
+             maxlength="6" placeholder="000000" style="letter-spacing:.4em;text-align:center;font-size:20px;">
+      <button type="submit" class="btn2 btn2-solid" id="mfaBtn" style="margin-top:14px;">Continue</button>
+      <p class="error-msg2" id="mfaError"></p>
+    </form>
+
     <form id="setPasswordForm" style="display:none;">
       <p class="login-sub" style="margin-bottom:16px;">Welcome! Set a password for your account.</p>
       <label class="field-label">New Password
@@ -41,8 +51,8 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260823"></script>
-<script src="login.js?v=20260823"></script>
+<script src="supabase-client.js?v=20260823b"></script>
+<script src="login.js?v=20260823b"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

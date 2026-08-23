@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>My Weld Log | State of the Arc Welding</title>
+<title>Security | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="dark-theme.css?v=20260823b">
-<link rel="stylesheet" href="my-weld-log.css?v=20260823b">
+<link rel="stylesheet" href="security.css?v=20260823b">
 </head>
 <body>
 
@@ -19,14 +19,14 @@
   <nav class="et-links" id="navLinks">
     <a class="et-link" href="daily-entry.html">Log Work</a>
     <a class="et-link" href="weld-report.html">Weld Report</a>
-    <a class="et-link on" href="my-weld-log.html">My Weld Log</a>
+    <a class="et-link" href="my-weld-log.html">My Weld Log</a>
     <a class="et-link" href="dashboard.html">Office</a>
     <span id="adminNavLinks" style="display:none;">
       <a class="et-link" href="admin-setup.html">Setup</a>
       <a class="et-link" href="approvals.html">Approvals</a>
       <a class="et-link" href="summary.html">Summary</a>
       <a class="et-link" href="weld-log.html">Weld Log</a>
-      <a class="et-link" href="security.html">Security</a>
+      <a class="et-link on" href="security.html">Security</a>
     </span>
   </nav>
   <div class="et-user">
@@ -36,34 +36,18 @@
   </div>
 </header>
 
-<div class="mwl-wrap">
+<div class="sec-wrap">
+  <h1 class="sec-title">Two-step sign-in</h1>
+  <p class="sec-sub">An extra code from your phone, on top of your password. Worth having on an
+     account that can bill customers and see pay rates.</p>
 
-  <div class="mwl-head">
-    <div>
-      <h1 class="mwl-title">My weld log</h1>
-      <p class="mwl-sub">What you turned in. This is a record only &mdash; to change a day, use
-        <a href="weld-report.html">Weld Report</a>.</p>
-    </div>
-  </div>
-
-  <div class="mwl-weeknav">
-    <button class="mwl-nav-btn" id="prevWeek" type="button" aria-label="Previous week">&#8249;</button>
-    <div class="mwl-week-label" id="weekLabel">&nbsp;</div>
-    <button class="mwl-nav-btn" id="nextWeek" type="button" aria-label="Next week">&#8250;</button>
-  </div>
-
-  <div class="mwl-total-card">
-    <span class="mwl-total-label">Week total</span>
-    <span class="mwl-total-value"><span id="weekTotal">0</span><span class="mwl-unit">in</span></span>
-  </div>
-
-  <div id="daysBody"></div>
-
+  <div id="body"><div class="sec-loading">Loading&hellip;</div></div>
 </div>
+
+<div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-client.js?v=20260823b"></script>
-<script src="my-weld-log.js?v=20260823b"></script>
-<div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
+<script src="security.js?v=20260823b"></script>
 </body>
 </html>

@@ -73,6 +73,61 @@
       return;
     }
 
+    // Password accepted. If this account has two-step sign-in, Supabase reports
+    // that a higher assurance level is still needed - ask for the code before
+    // letting them through.
+    // If this check itself fails, do not strand someone who has just given a
+    // correct password. Their session is still only aal1, so anything that
+    // requires the second factor stays refused server-side regardless.
+    try {
+      const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aal && aal.nextLevel === 'aal2' && aal.nextLevel !== aal.currentLevel) {
+        showMfaStep();
+        return;
+      }
+    } catch (err) {
+      console.warn('Could not check two-step status; continuing with password only', err);
+    }
+
     window.location.href = 'daily-entry.html';
   });
+
+  function showMfaStep() {
+    loginForm.style.display = 'none';
+    const mfaForm = document.getElementById('mfaForm');
+    const mfaCode = document.getElementById('mfaCode');
+    const mfaError = document.getElementById('mfaError');
+    const mfaBtn = document.getElementById('mfaBtn');
+    mfaForm.style.display = 'block';
+    mfaCode.focus();
+
+    mfaForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const code = mfaCode.value.replace(/\D/g, '');
+      if (code.length !== 6) { mfaError.textContent = 'Enter the six digits from the app.'; return; }
+
+      mfaBtn.disabled = true; mfaBtn.textContent = 'Checking...';
+      mfaError.textContent = '';
+
+      const { data: factors } = await sb.auth.mfa.listFactors();
+      const factor = (factors?.totp ?? []).find((f) => f.status === 'verified');
+      if (!factor) {
+        mfaError.textContent = 'No authenticator is set up on this account. Call the office.';
+        mfaBtn.disabled = false; mfaBtn.textContent = 'Continue';
+        return;
+      }
+
+      const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
+      if (error) {
+        // A wrong code must not leave a half-signed-in session behind.
+        mfaError.textContent = 'That code was not accepted. Codes change every 30 seconds.';
+        mfaBtn.disabled = false; mfaBtn.textContent = 'Continue';
+        mfaCode.value = '';
+        mfaCode.focus();
+        return;
+      }
+
+      window.location.href = 'daily-entry.html';
+    });
+  }
 })();
