@@ -42,13 +42,21 @@ function renderEnrolled(factors) {
             </td>
           </tr>`).join('')}
       </table>
-      <p class="sec-note">Removing your last device turns two-step sign-in off. If you have lost
-         your phone and cannot get a code, call the office and it can be cleared for you.</p>
+      <button class="btn2 btn2-line" id="addBtn">Add another device</button>
+      <p class="sec-note">${factors.length === 1
+        ? 'A second device is worth having. If you only have one and it is lost or wiped, ' +
+          'you cannot get a code and the office has to clear it for you.'
+        : 'Removing your last device turns two-step sign-in off.'}</p>
     </div>`;
+
+  document.getElementById('addBtn').addEventListener('click', () => startEnrol(true));
 
   body.querySelectorAll('[data-remove]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      if (!confirm('Turn off two-step sign-in for your account?')) return;
+      const last = factors.length === 1;
+      if (!confirm(last
+        ? 'This is your only device. Removing it turns two-step sign-in off. Continue?'
+        : 'Remove this device? You will still be able to sign in with your other one.')) return;
       btn.disabled = true;
       const { error } = await sb.auth.mfa.unenroll({ factorId: btn.dataset.remove });
       if (error) { alert('Could not remove it: ' + error.message); btn.disabled = false; return; }
@@ -71,10 +79,49 @@ function renderOff() {
          Authenticator, Microsoft Authenticator or Authy all work and are free.</p>
       <button class="btn2 btn2-solid" id="startBtn">Turn it on</button>
     </div>`;
-  document.getElementById('startBtn').addEventListener('click', startEnrol);
+  document.getElementById('startBtn').addEventListener('click', () => startEnrol(false));
 }
 
-async function startEnrol() {
+/* Adding a device is the only path that asks for a name: the first-time path
+   stays a single button, and only someone deliberately adding a second one
+   has to answer anything. */
+async function startEnrol(isAdditional) {
+  if (isAdditional !== true) return beginEnrol('Authenticator', false);
+
+  body.innerHTML = `
+    <div class="sec-card">
+      <b class="sec-step">What is this device?</b>
+      <p class="sec-note">A short name, so you can tell it apart from the one you already have.</p>
+      <input class="input" id="devName" maxlength="40" placeholder="Office tablet" value="Second device">
+      <div class="sec-actions">
+        <button class="btn2 btn2-solid" id="nameNext">Next</button>
+        <button class="btn2 btn2-ghost" id="nameCancel">Cancel</button>
+      </div>
+    </div>`;
+  const nameInput = document.getElementById('devName');
+  nameInput.focus();
+  nameInput.select();
+  const go = () => beginEnrol(nameInput.value.trim() || 'Second device', true);
+  document.getElementById('nameNext').addEventListener('click', go);
+  nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  document.getElementById('nameCancel').addEventListener('click', load);
+}
+
+/* A duplicate friendly name is rejected outright by Supabase, which is what
+   stranded enrolment before. Settle the name against what is already there
+   rather than finding out from an error. */
+async function uniqueName(base) {
+  let taken = [];
+  try {
+    const { data } = await sb.auth.mfa.listFactors();
+    taken = (data?.all ?? data?.totp ?? []).map((f) => f.friendly_name || '');
+  } catch { /* the collision path below still covers us */ }
+  let name = base;
+  for (let n = 2; taken.includes(name); n++) name = `${base} ${n}`;
+  return name;
+}
+
+async function beginEnrol(baseName, isAdditional) {
   body.innerHTML = '<div class="sec-loading">Setting up&hellip;</div>';
 
   // A half-finished attempt blocks a new one, and listFactors() reports only
@@ -90,19 +137,28 @@ async function startEnrol() {
     }
   }
 
-  const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
   const { data, error } = await sb.auth.mfa.enroll({
     factorType: 'totp',
-    friendlyName: `Authenticator ${stamp}`,
+    friendlyName: await uniqueName(baseName),
   });
   if (error) {
+    // Enrolling a second factor needs a session that already passed the code
+    // step. Signing in before two-step was on leaves an aal1 session, which
+    // fails here for a reason that reads like nonsense to the user.
+    if (/aal|assurance|insufficient/i.test(error.message || '')) {
+      body.innerHTML = `<div class="sec-error">Sign out and sign back in first.<br>
+        <span>Adding a device needs a fresh sign-in that included your six-digit
+        code. Sign out, sign in again, then come back here.</span></div>`;
+      return;
+    }
     const collision = /already exists/i.test(error.message || '');
     body.innerHTML = `<div class="sec-error">Could not start setup.<br>
       <span>${esc(error.message)}</span>
       ${collision ? `<br><br><button class="btn2 btn2-line small" id="retryBtn">Clear it and try again</button>` : ''}
     </div>`;
     if (collision) {
-      document.getElementById('retryBtn').addEventListener('click', startEnrol);
+      document.getElementById('retryBtn')
+        .addEventListener('click', () => beginEnrol(baseName, isAdditional));
     }
     return;
   }
@@ -126,10 +182,10 @@ async function startEnrol() {
 
   body.innerHTML = `
     <div class="sec-card">
-      <b class="sec-step">Step 1 &mdash; get the code onto your phone</b>
+      <b class="sec-step">Step 1 &mdash; get the code onto ${isAdditional ? 'the new device' : 'your phone'}</b>
       <div class="sec-qr" id="qrBox">${qrMarkup}</div>
 
-      <p class="sec-note">On your phone? Skip the scanning &mdash;
+      <p class="sec-note">Setting it up on the device you are reading this on? Skip the scanning &mdash;
          <a class="sec-open" id="openApp" href="${esc(uri)}">tap here to open your authenticator app</a>.</p>
 
       <p class="sec-note">Or type this key into the app by hand:<br>
@@ -141,7 +197,7 @@ async function startEnrol() {
              maxlength="6" placeholder="000000">
       <p class="sec-error-msg" id="err"></p>
       <div class="sec-actions">
-        <button class="btn2 btn2-solid" id="verifyBtn">Turn on two-step sign-in</button>
+        <button class="btn2 btn2-solid" id="verifyBtn">${isAdditional ? 'Add this device' : 'Turn on two-step sign-in'}</button>
         <button class="btn2 btn2-ghost" id="cancelBtn">Cancel</button>
       </div>
     </div>`;
@@ -183,7 +239,8 @@ async function startEnrol() {
     });
     if (vErr) {
       err.textContent = 'That code was not accepted. Codes change every 30 seconds - try the current one.';
-      btn.disabled = false; btn.textContent = 'Turn on two-step sign-in';
+      btn.disabled = false;
+      btn.textContent = isAdditional ? 'Add this device' : 'Turn on two-step sign-in';
       return;
     }
     pendingFactorId = null;
