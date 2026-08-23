@@ -523,6 +523,9 @@ addJobBtn.addEventListener('click', () => {
 });
 
 let helpersList = [];
+// Whoever the time ticket offered for this day. Kept so that submitting with
+// nobody selected can say who is missing rather than just asking in general.
+let suggestedHelperId = '';
 const helperPick = document.getElementById('helperPick');
 const helperHint = document.getElementById('helperHint');
 
@@ -554,7 +557,8 @@ async function suggestHelperFromTimeTicket(date) {
     const { data: helpers } = await sb.from('daily_entry_helpers')
       .select('helper_id').in('daily_entry_id', ids);
     const first = (helpers || []).find((h) => h.helper_id);
-    setHelper(first ? first.helper_id : '', 'suggested');
+    suggestedHelperId = first ? first.helper_id : '';
+    setHelper(suggestedHelperId, 'suggested');
   } catch {
     setHelper('', '');            // never let this block the report
   }
@@ -564,6 +568,7 @@ helperPick.addEventListener('change', () => setHelper(helperPick.value, 'saved')
 
 async function loadReportsForDate() {
   const date = dateInput.value || todayIso();
+  suggestedHelperId = '';
   entriesContainer.innerHTML = '';
   entries = [];
 
@@ -604,6 +609,23 @@ async function loadReportsForDate() {
 }
 
 submitBtn.addEventListener('click', async () => {
+  // Nobody picked means "worked alone", and that goes on the record. Make him
+  // say so on purpose rather than by leaving a box untouched. If his own time
+  // ticket has a helper on it, name the man - that is the mistake worth catching.
+  if (!helperPick.value) {
+    const missed = helpersList.find((h) => h.id === suggestedHelperId);
+    const ask = missed
+      ? 'You have not put a helper on this weld report, but ' + missed.name
+        + ' is on your time ticket for this day.\n\n'
+        + 'Submit it as working alone anyway?'
+      : 'This will go on the record as you working alone today.\n\n'
+        + 'Is that right?';
+    if (!confirm(ask)) {
+      helperPick.focus();
+      return;
+    }
+  }
+
   submitBtn.disabled = true;
   submitBtn.textContent = 'Saving...';
 
