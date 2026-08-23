@@ -77,19 +77,33 @@ function renderOff() {
 async function startEnrol() {
   body.innerHTML = '<div class="sec-loading">Setting up&hellip;</div>';
 
-  // A previous half-finished attempt would block a new one, so clear any
-  // unverified factor before enrolling again.
+  // A half-finished attempt blocks a new one, and listFactors() reports only
+  // VERIFIED factors under .totp - so the abandoned unverified factor was
+  // invisible to the cleanup and its name collided on the next try. Use .all
+  // when the library provides it, and give each attempt a unique name so a
+  // collision cannot strand enrolment even if cleanup fails.
   const { data: existing } = await sb.auth.mfa.listFactors();
-  for (const f of (existing?.totp ?? [])) {
-    if (f.status !== 'verified') await sb.auth.mfa.unenroll({ factorId: f.id });
+  const known = existing?.all ?? existing?.totp ?? [];
+  for (const f of known) {
+    if (f.status !== 'verified') {
+      await sb.auth.mfa.unenroll({ factorId: f.id }).catch(() => {});
+    }
   }
 
+  const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
   const { data, error } = await sb.auth.mfa.enroll({
     factorType: 'totp',
-    friendlyName: 'Authenticator ' + new Date().toLocaleDateString(),
+    friendlyName: `Authenticator ${stamp}`,
   });
   if (error) {
-    body.innerHTML = `<div class="sec-error">Could not start setup.<br><span>${esc(error.message)}</span></div>`;
+    const collision = /already exists/i.test(error.message || '');
+    body.innerHTML = `<div class="sec-error">Could not start setup.<br>
+      <span>${esc(error.message)}</span>
+      ${collision ? `<br><br><button class="btn2 btn2-line small" id="retryBtn">Clear it and try again</button>` : ''}
+    </div>`;
+    if (collision) {
+      document.getElementById('retryBtn').addEventListener('click', startEnrol);
+    }
     return;
   }
 
