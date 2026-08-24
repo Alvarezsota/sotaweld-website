@@ -489,6 +489,16 @@ function payStatementSheet(kind, r) {
 </div>`;
 }
 
+// The OneDrive folder this week's statements belong in. The office keeps them
+// under New System Pay Stubs, one folder per week, month-day-year. Naming it on
+// screen means the Save dialog can be pointed straight at the synced folder
+// instead of the file being saved somewhere and moved afterwards.
+function weekFolderName() {
+  const us = (d) => String(d.getMonth() + 1).padStart(2, '0') + '-'
+                  + String(d.getDate()).padStart(2, '0') + '-' + d.getFullYear();
+  return `Week of ${us(weekStart)} to ${us(addDays(weekStart, 6))}`;
+}
+
 function payStatementTitle(kind, r) {
   const nameKey = kind === 'welders' ? 'welder_name' : 'helper_name';
   // Browsers offer the document title as the filename in Save as PDF, so this is
@@ -568,7 +578,9 @@ ${PAY_STATEMENT_CSS}
   <button class="ghost" id="qStop">Stop</button>
 </div>
 <div class="qhint">One statement at a time, so each saves as its own PDF named after the man.
-  Save each one, and the next comes up on its own. If it does not, hit Print this one.</div>
+  Save each one, and the next comes up on its own. If it does not, hit Print this one.<br>
+  Save them into <b>OneDrive &rsaquo; New System Pay Stubs &rsaquo; ${esc(weekFolderName())}</b>
+  and they are filed as you go.</div>
 ${sheets}
 <script>
 (function () {
