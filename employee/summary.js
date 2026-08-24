@@ -901,7 +901,10 @@ function renderCrew(kind) {
       <button class="btn2 btn2-solid small" data-print-stubs="${kind}">
         Pay statements &mdash; one PDF each (${rows.length})
       </button>
+      <button class="btn2 btn2-line small" id="odFileBtn"
+        title="Files every welder and helper on this week, not just this table">File week to OneDrive</button>
     </div>
+    <p class="od-file-msg" id="odFileMsg"></p>
     <table class="sum-table">
       <thead><tr>
         <th class="l">Name</th><th>Days</th><th>Hours</th><th class="hide-sm">Hourly pay</th>
@@ -928,6 +931,8 @@ function renderCrew(kind) {
       e.stopPropagation();
       printPayStatement(b.getAttribute('data-stub-kind'), b.getAttribute('data-stub'));
     }));
+
+  wireOneDriveFiling();
 
   document.querySelectorAll('[data-print-stubs]').forEach(b =>
     b.addEventListener('click', () => printAllPayStatements(b.getAttribute('data-print-stubs'))));
@@ -1013,3 +1018,57 @@ document.getElementById('sumTabs').addEventListener('click', (e) => {
     channel: 'summary'
   });
 })();
+
+
+// ---------- File the week to OneDrive ----------
+//
+// The same function the approval trigger calls, so a week filed by hand and a
+// week filed on approval are the same thing. It files everybody on the week -
+// welders and helpers together - whichever table the button was pressed from,
+// because a pay run is the whole crew or it is not a pay run.
+const ONEDRIVE_FILE_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/onedrive-file-statements';
+
+function wireOneDriveFiling() {
+  const btn = document.getElementById('odFileBtn');
+  const msg = document.getElementById('odFileMsg');
+  if (!btn) return;
+
+  const say = (text, kind) => {
+    msg.className = 'od-file-msg' + (kind ? ' ' + kind : '');
+    msg.innerHTML = text || '';
+  };
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.textContent = 'Filing…';
+    say('');
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const res = await fetch(ONEDRIVE_FILE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ week_start: ymd(weekStart) })
+      });
+      const json = await res.json();
+      if (res.status === 403) throw new Error('Admins only.');
+      if (json.error) throw new Error(json.error);
+
+      if (json.failed) {
+        // Say which men are missing by name. "3 failed" sends somebody hunting
+        // through a folder to work out who did not get paid.
+        say(`Filed ${json.filed} into <b>${esc(json.folder)}</b>, but ${json.failed} did not go: `
+          + (json.failures || []).map(f => esc(f.name)).join(', ')
+          + '. Try again, or check the OneDrive connection on Setup.', 'err');
+      } else if (!json.filed) {
+        say(esc(json.note || 'Nothing to file for this week.'));
+      } else {
+        say(`Filed ${json.filed} statement${json.filed === 1 ? '' : 's'} into `
+          + `<b>${esc(json.folder)}</b>.`, 'ok');
+      }
+    } catch (err) {
+      say(esc(err.message), 'err');
+    }
+    btn.disabled = false;
+    btn.textContent = 'File week to OneDrive';
+  });
+}
