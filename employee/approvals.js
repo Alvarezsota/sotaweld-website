@@ -39,22 +39,58 @@ async function requireAuth() {
   return session.user;
 }
 
-function personLine(role, name, hours, payRate, billRate, perDiemAmt, perDiem, entryId, helperRowId, description, realJobId, realOneOffName, helperId, perDiemFlag, parts, welderId, entryDate, forJobId, isStainless, stainlessRate) {
-  const pd = perDiem ? perDiemAmt : 0;
-  const isFlat = Array.isArray(parts);
-  const partsSum = isFlat ? parts.reduce((s, p) => s + Number(p.quantity) * Number(p.rate), 0) : 0;
-  const effectiveBillRate = (isStainless && !isFlat) ? stainlessRate : billRate;
-  const revenue = (isFlat ? partsSum : hours * effectiveBillRate) + pd;
-  const cost = hours * payRate + pd;
+// Picks the first candidate that is an actual number. A blank override is not a
+// zero - it means "nothing was set here, keep going" - which is what lets a rate
+// be overridden to nothing on purpose without every empty box doing the same.
+// This is coalesce(), and it is deliberately coalesce(), because the rate chains
+// below have to come out the same as the ones in SQL.
+function rateOr(...candidates) {
+  for (const c of candidates) {
+    if (c === null || c === undefined || c === '') continue;
+    const n = Number(c);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+}
+
+// One line on a ticket - a welder or a helper, his hours, and the money that
+// falls out of them. Rates arrive already resolved; resolving them is the part
+// that has to agree with SQL, and it happens in buildJobGroups.
+//
+// `overrides` and `fallbacks` are carried through untouched so the edit form can
+// show what was typed and what the box would fall back to if it were cleared.
+function personLine(o) {
+  const pd = o.perDiem ? o.perDiemRate : 0;
+  const isFlat = Array.isArray(o.parts);
+  const partsSum = isFlat ? o.parts.reduce((s, p) => s + Number(p.quantity) * Number(p.rate), 0) : 0;
+  const effectiveBillRate = (o.isStainless && !isFlat) ? o.stainlessRate : o.billRate;
+  const revenue = (isFlat ? partsSum : o.hours * effectiveBillRate) + pd;
+  const cost = o.hours * o.payRate + pd;
   return {
-    role, name, hours, billRate: effectiveBillRate, pd: perDiem ? pd : null, revenue, cost, margin: revenue - cost,
-    entryId, helperRowId, description: description || '',
-    realJobId: realJobId || null, realOneOffName: realOneOffName || '',
-    helperId: helperId || null, perDiemFlag: !!perDiemFlag,
-    parts: isFlat ? parts : null,
-    welderId: welderId || null, entryDate: entryDate || null, forJobId: forJobId || null,
-    isStainless: !!isStainless
+    role: o.role, name: o.name, hours: o.hours,
+    payRate: o.payRate, billRate: effectiveBillRate,
+    pd: o.perDiem ? pd : null, revenue, cost, margin: revenue - cost,
+    entryId: o.entryId, helperRowId: o.helperRowId || null, description: o.description || '',
+    realJobId: o.realJobId || null, realOneOffName: o.realOneOffName || '',
+    helperId: o.helperId || null, perDiemFlag: !!o.perDiem,
+    parts: isFlat ? o.parts : null,
+    welderId: o.welderId || null, entryDate: o.entryDate || null, forJobId: o.forJobId || null,
+    isStainless: !!o.isStainless,
+    overrides: o.overrides || {}, fallbacks: o.fallbacks || {}
   };
+}
+
+// A line carrying a set rate looks exactly like a line on the standing rate once
+// it is drawn, so say so on its face. Otherwise the only way to find one is to
+// open every line on the ticket.
+function rateTag(l) {
+  const o = l.overrides || {};
+  const set = [];
+  if (o.pay != null) set.push('pay');
+  if (o.bill != null) set.push('bill');
+  if (o.stainless != null) set.push('stainless');
+  if (o.perDiem != null) set.push('per diem');
+  return set.length ? `<div class="line-desc rate-tag">Rate set on this line: ${esc(set.join(', '))}</div>` : '';
 }
 
 function buildJobGroups(entries, jobs) {
@@ -80,19 +116,77 @@ function buildJobGroups(entries, jobs) {
     if (!g.days[e.entry_date]) g.days[e.entry_date] = { descs: [], lines: [] };
     const d = g.days[e.entry_date];
 
+    // ---- Rates ----------------------------------------------------------
+    //
+    // These chains are the same ones v_work_lines uses, term for term. They are
+    // written out twice because the job log is drawn here and the invoice is
+    // drawn in SQL, and if the two ever disagree the office signs off on one
+    // number and bills another. Change a chain here, change it there:
+    // supabase/migrations/20260824_per_line_rate_overrides.sql.
+    //
+    // A rate typed on the line wins. Blank falls back the way it always did.
     const prof = e.profiles || {};
-    const perDiemAmt = effectiveJob ? Number(effectiveJob.per_diem) : 0;
     const isFlatJob = effectiveJob && effectiveJob.billing_type === 'flat';
-    const stainlessRate = effectiveJob ? Number(effectiveJob.stainless_bill_rate || 125) : 125;
-    const jobBillRateOverride = effectiveJob && effectiveJob.bill_rate != null ? Number(effectiveJob.bill_rate) : null;
-    const welderBillRate = jobBillRateOverride != null ? jobBillRateOverride : Number(prof.bill_rate || 0);
-    d.lines.push(personLine('welder', prof.full_name || '—', Number(e.hours), Number(prof.pay_rate || 0), welderBillRate, perDiemAmt, e.per_diem, e.id, null, e.description, e.job_id, e.one_off_name, null, e.per_diem, isFlatJob ? (e.daily_entry_parts || []) : undefined, e.welder_id, e.entry_date, e.for_job_id, e.is_stainless, stainlessRate));
+    const jobPerDiem = effectiveJob ? effectiveJob.per_diem : null;
+    const jobBillRate = effectiveJob ? effectiveJob.bill_rate : null;
+    const jobStainlessRate = effectiveJob ? effectiveJob.stainless_bill_rate : null;
+
+    d.lines.push(personLine({
+      role: 'welder',
+      name: prof.full_name || '—',
+      hours: Number(e.hours),
+      payRate: rateOr(e.pay_rate_override, prof.pay_rate),
+      billRate: rateOr(e.bill_rate_override, jobBillRate, prof.bill_rate),
+      // A bill rate typed on a stainless line still counts, so entering one
+      // does something rather than being quietly ignored for the job rate.
+      stainlessRate: rateOr(e.stainless_rate_override, e.bill_rate_override, jobStainlessRate, prof.bill_rate),
+      perDiemRate: rateOr(e.per_diem_override, jobPerDiem),
+      perDiem: e.per_diem,
+      isStainless: e.is_stainless,
+      entryId: e.id,
+      description: e.description,
+      realJobId: e.job_id,
+      realOneOffName: e.one_off_name,
+      parts: isFlatJob ? (e.daily_entry_parts || []) : undefined,
+      welderId: e.welder_id,
+      entryDate: e.entry_date,
+      forJobId: e.for_job_id,
+      overrides: {
+        pay: e.pay_rate_override, bill: e.bill_rate_override,
+        stainless: e.stainless_rate_override, perDiem: e.per_diem_override
+      },
+      fallbacks: {
+        pay: rateOr(prof.pay_rate),
+        bill: rateOr(jobBillRate, prof.bill_rate),
+        stainless: rateOr(jobStainlessRate, prof.bill_rate),
+        perDiem: rateOr(jobPerDiem)
+      }
+    }));
     if (e.description) d.descs.push(e.description);
 
     (e.daily_entry_helpers || []).forEach(dh => {
       const hp = dh.helpers || {};
-      const helperBillRate = jobBillRateOverride != null ? jobBillRateOverride : Number(hp.bill_rate || 0);
-      d.lines.push(personLine('helper', hp.name || '—', Number(dh.hours), Number(hp.pay_rate || 0), helperBillRate, perDiemAmt, dh.per_diem, e.id, dh.id, null, null, null, dh.helper_id, dh.per_diem));
+      // A helper bills at his own rate. The job bill rate and the stainless rate
+      // are what the welding goes out at and neither one reaches him, so the only
+      // thing that can move a helper line is an override typed on that line.
+      d.lines.push(personLine({
+        role: 'helper',
+        name: hp.name || '—',
+        hours: Number(dh.hours),
+        payRate: rateOr(dh.pay_rate_override, hp.pay_rate),
+        billRate: rateOr(dh.bill_rate_override, hp.bill_rate),
+        perDiemRate: rateOr(dh.per_diem_override, jobPerDiem),
+        perDiem: dh.per_diem,
+        entryId: e.id,
+        helperRowId: dh.id,
+        helperId: dh.helper_id,
+        overrides: {
+          pay: dh.pay_rate_override, bill: dh.bill_rate_override, perDiem: dh.per_diem_override
+        },
+        fallbacks: {
+          pay: rateOr(hp.pay_rate), bill: rateOr(hp.bill_rate), perDiem: rateOr(jobPerDiem)
+        }
+      }));
     });
   });
 
@@ -223,7 +317,7 @@ function renderDetail(groupId) {
               <tbody>
                 ${d.lines.map((l, li) => `
                   <tr data-entry-id="${esc(l.entryId)}" data-helper-row-id="${l.helperRowId ? esc(l.helperRowId) : ''}" data-line-key="${dateStr}-${li}">
-                    <td class="l-name">${esc(l.name)}<span class="role-tag2">${l.role}</span>${l.role === 'welder' && l.description ? `<div class="line-desc">${esc(l.description)}</div>` : ''}${l.isStainless ? `<div class="line-desc stainless-tag">Stainless</div>` : ''}${l.parts ? `<div class="line-desc flat-tag">Flat rate</div>${l.parts.map(p => `<div class="line-desc part-line-desc">${esc(p.description)} — ${p.quantity} &times; $${p.rate} = ${money(Number(p.quantity) * Number(p.rate))}</div>`).join('')}` : ''}</td>
+                    <td class="l-name">${esc(l.name)}<span class="role-tag2">${l.role}</span>${l.role === 'welder' && l.description ? `<div class="line-desc">${esc(l.description)}</div>` : ''}${l.isStainless ? `<div class="line-desc stainless-tag">Stainless</div>` : ''}${rateTag(l)}${l.parts ? `<div class="line-desc flat-tag">Flat rate</div>${l.parts.map(p => `<div class="line-desc part-line-desc">${esc(p.description)} — ${p.quantity} &times; $${p.rate} = ${money(Number(p.quantity) * Number(p.rate))}</div>`).join('')}` : ''}</td>
                     <td class="l-num line-hours">${l.hours}</td>
                     <td class="l-num dim">${l.parts ? '—' : '$' + l.billRate}</td>
                     <td class="l-num dim">${l.pd ? money(l.pd) : '—'}</td>
@@ -296,6 +390,72 @@ function renderDetail(groupId) {
   });
 }
 
+// Approving a week freezes it into week_summaries, and a rate changed afterwards
+// reaches that frozen copy only when the week is rebuilt. Doing it here rather
+// than leaving the office to remember is the difference between an override
+// working and a snapshot that quietly disagrees with its own tickets.
+//
+// Nothing to do on a week nobody has approved yet: those are read live.
+async function rebuildIfFrozen() {
+  const frozen = Object.values(currentJobWeeks)
+    .some(r => r.status === 'approved' || r.status === 'synced');
+  if (!frozen) return;
+  const { error } = await sb.rpc('rebuild_week_summaries', { p_week: ymd(weekStart) });
+  if (error) {
+    alert('The ticket was saved, but this week could not be rebuilt: ' + error.message
+        + '\n\nThe ticket itself is right. The approved summary for this week is now behind it '
+        + 'until the week is rebuilt.');
+  }
+}
+
+// ---------- Rate overrides on the edit form ----------
+//
+// A rate box holds whatever was typed on this line, and shows the rate that
+// applies anyway as its placeholder. Clearing a box therefore says what it is
+// falling back to instead of leaving the office guessing, which matters because
+// clearing one is how a line is put back on the standing rates.
+function rateFieldHtml(cls, label, override, fallback) {
+  const typed = override === null || override === undefined ? '' : String(override);
+  return `
+          <div class="edit-field edit-field-sm edit-field-rate">
+            <label>${label}</label>
+            <input type="number" step="0.01" min="0" class="input ${cls}" value="${escAttr(typed)}" placeholder="${escAttr(fallback)}">
+          </div>`;
+}
+
+const WELDER_RATE_FIELDS = [
+  ['pay_rate_override', '.edit-pay-rate-input', 'Pay rate'],
+  ['bill_rate_override', '.edit-bill-rate-input', 'Bill rate'],
+  ['stainless_rate_override', '.edit-stainless-rate-input', 'Stainless rate'],
+  ['per_diem_override', '.edit-per-diem-rate-input', 'Per diem']
+];
+const HELPER_RATE_FIELDS = [
+  ['pay_rate_override', '.edit-pay-rate-input', 'Pay rate'],
+  ['bill_rate_override', '.edit-bill-rate-input', 'Bill rate'],
+  ['per_diem_override', '.edit-per-diem-rate-input', 'Per diem']
+];
+
+// An empty box has to reach the database as null, not as 0: null is "use the
+// rates as they stand" and 0 is "this line is worth nothing", and a ticket
+// silently zeroed because a box was left blank would be the worst outcome here.
+function andList(items) {
+  if (items.length < 2) return items[0] || '';
+  return items.slice(0, -1).join(', ') + ' and ' + items[items.length - 1];
+}
+
+function readRateOverrides(row, fields) {
+  const patch = {};
+  const bad = [];
+  fields.forEach(([column, cls, label]) => {
+    const raw = row.querySelector(cls).value.trim();
+    if (raw === '') { patch[column] = null; return; }
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) { bad.push(label); return; }
+    patch[column] = n;
+  });
+  return { patch, bad };
+}
+
 function startEditLine(row, line, groupId) {
   const isHelper = !!line.helperRowId;
 
@@ -316,6 +476,10 @@ function startEditLine(row, line, groupId) {
           <div class="edit-field edit-field-sm edit-field-pd">
             <label><input type="checkbox" class="edit-pd-input" ${line.perDiemFlag ? 'checked' : ''}> Per diem</label>
           </div>
+          ${rateFieldHtml('edit-pay-rate-input', 'Pay rate', line.overrides.pay, line.fallbacks.pay)}
+          ${rateFieldHtml('edit-bill-rate-input', 'Bill rate', line.overrides.bill, line.fallbacks.bill)}
+          ${rateFieldHtml('edit-per-diem-rate-input', 'Per diem', line.overrides.perDiem, line.fallbacks.perDiem)}
+          <div class="edit-rate-note">Leave a rate blank to keep his standing rate. Anything typed here changes this line only.</div>
           <div class="edit-field-actions">
             <button type="button" class="row-edit" data-action="save-line">Save</button>
             <button type="button" class="row-del" data-action="cancel-line">Cancel</button>
@@ -325,14 +489,18 @@ function startEditLine(row, line, groupId) {
 
     row.querySelector('[data-action="cancel-line"]').addEventListener('click', () => renderDetail(groupId));
     row.querySelector('[data-action="save-line"]').addEventListener('click', async () => {
+      const { patch: rates, bad } = readRateOverrides(row, HELPER_RATE_FIELDS);
+      if (bad.length) { alert(andList(bad) + ' must be a number, or left blank.'); return; }
       const patch = {
         helper_id: row.querySelector('.edit-helper-select').value,
         hours: Number(row.querySelector('.edit-hours-input').value),
-        per_diem: row.querySelector('.edit-pd-input').checked
+        per_diem: row.querySelector('.edit-pd-input').checked,
+        ...rates
       };
       const { error } = await sb.from('daily_entry_helpers').update(patch).eq('id', line.helperRowId);
       if (error) { alert('Could not save: ' + error.message); return; }
       await loadWeek();
+      await rebuildIfFrozen();
     });
     return;
   }
@@ -408,6 +576,11 @@ function startEditLine(row, line, groupId) {
         <div class="edit-field edit-field-sm edit-field-pd">
           <label><input type="checkbox" class="edit-stainless-input" ${line.isStainless ? 'checked' : ''}> Stainless</label>
         </div>
+        ${rateFieldHtml('edit-pay-rate-input', 'Pay rate', line.overrides.pay, line.fallbacks.pay)}
+        ${rateFieldHtml('edit-bill-rate-input', 'Bill rate', line.overrides.bill, line.fallbacks.bill)}
+        ${rateFieldHtml('edit-stainless-rate-input', 'Stainless rate', line.overrides.stainless, line.fallbacks.stainless)}
+        ${rateFieldHtml('edit-per-diem-rate-input', 'Per diem', line.overrides.perDiem, line.fallbacks.perDiem)}
+        <div class="edit-rate-note">Leave a rate blank to keep the job rate, then his standing rate. Anything typed here changes this ticket only. The stainless rate is used in place of the bill rate while Stainless is ticked.</div>
         <div class="edit-field edit-flat-wrap" style="display:${startsFlat ? 'block' : 'none'};">
           <label>Parts billed (qty &times; rate)</label>
           <div class="edit-parts-wrap">${editPartsHtml()}</div>
@@ -464,6 +637,8 @@ function startEditLine(row, line, groupId) {
     const other = jobVal === 'other';
     const yardNow = isYardJob(jobVal);
     const flatNow = isFlatJob(jobVal);
+    const { patch: rates, bad } = readRateOverrides(row, WELDER_RATE_FIELDS);
+    if (bad.length) { alert(andList(bad) + ' must be a number, or left blank.'); return; }
     const patch = {
       welder_id: row.querySelector('.edit-welder-select').value,
       entry_date: row.querySelector('.edit-date-input').value,
@@ -473,7 +648,8 @@ function startEditLine(row, line, groupId) {
       description: row.querySelector('.edit-desc-input').value.trim(),
       hours: Number(row.querySelector('.edit-hours-input').value),
       per_diem: row.querySelector('.edit-pd-input').checked,
-      is_stainless: row.querySelector('.edit-stainless-input').checked
+      is_stainless: row.querySelector('.edit-stainless-input').checked,
+      ...rates
     };
     const { error: entryErr } = await sb.from('daily_entries').update(patch).eq('id', line.entryId);
     if (entryErr) { alert('Could not save: ' + entryErr.message); return; }
@@ -507,6 +683,7 @@ function startEditLine(row, line, groupId) {
       if (dropErr) alert('The hours were saved, but the parts lines could not be removed: ' + dropErr.message);
     }
     await loadWeek();
+    await rebuildIfFrozen();
   });
 }
 
@@ -528,6 +705,7 @@ async function deleteLine(line, groupId) {
     return;
   }
   await loadWeek();
+  await rebuildIfFrozen();
 }
 
 async function upsertJobWeek(groupId, patch) {

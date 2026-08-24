@@ -79,6 +79,11 @@
 .flat-tag { color: var(--ok); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 10px; margin-top: 4px; }
 .stainless-tag { color: var(--arc); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 10px; margin-top: 4px; }
 .part-line-desc { margin-top: 2px; white-space: normal; overflow-wrap: break-word; word-break: break-word; }
+/* A chip rather than another line of uppercase text: stainless and flat rate
+   already own that shape, and this has to be told apart at a glance. */
+.rate-tag { display: inline-block; color: var(--molten-2); background: var(--gold-soft);
+  border: 1px solid rgba(233,162,59,.35); border-radius: 5px; padding: 2px 6px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 10px; margin-top: 5px; }
 .line-actions { white-space: nowrap; }
 .row-edit, .row-del { border: none; background: none; cursor: pointer; font-size: 11px; font-weight: 700; padding: 4px 7px; border-radius: 5px; font-family: inherit; }
 .row-edit { color: var(--dim); }
@@ -113,6 +118,12 @@
 .edit-field-actions .row-edit, .edit-field-actions .row-del { padding: 9px 14px; font-size: 12px; border: 1px solid var(--line); }
 .edit-field-actions .row-edit { color: var(--text); background: var(--steel-700); }
 .edit-field-actions .row-del { color: var(--dim); }
+/* Rate boxes sit with Hours and the tick boxes. Blank is the normal state, so
+   they are drawn quietly and the placeholder carries the rate in force. */
+.edit-field-rate { min-width: 96px; }
+.edit-field-rate .input { width: 96px; text-align: right; }
+.edit-field-rate .input::placeholder { color: var(--dim2); opacity: .75; }
+.edit-rate-note { flex-basis: 100%; font-size: 11.5px; color: var(--dim2); line-height: 1.45; margin-top: -4px; }
 
 .totals2 { display: flex; flex-wrap: wrap; gap: 14px; margin: 18px 0; background: var(--steel-850); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; }
 .tot-item2 { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 120px; }
