@@ -112,6 +112,13 @@
 .edit-part-row .remove-part { width: 30px; height: 30px; flex: 0 0 auto; border-radius: 7px; background: var(--steel-700); border: 1px solid var(--line); color: var(--danger); font-size: 15px; cursor: pointer; }
 .edit-part-row .nt-helper-select { flex: 1; min-width: 120px; }
 .edit-part-row .nt-helper-hours { width: 64px; flex: 0 0 auto; text-align: center; }
+/* Which kind of ticket this is. Two buttons rather than a dropdown: it changes
+   what the rest of the form asks for, so it should be visible at a glance. */
+.nt-mode { display: flex; gap: 8px; margin: 4px 0 14px; }
+.nt-mode-btn { flex: 0 0 auto; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+  background: var(--steel-700); border: 1px solid var(--line); color: var(--dim);
+  font-family: inherit; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.nt-mode-btn.on { background: var(--gold-soft); border-color: rgba(233,162,59,.45); color: var(--molten-2); }
 .new-ticket-helper-pd { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--dim); white-space: nowrap; flex: 0 0 auto; }
 .edit-parts-wrap .add-part { padding: 8px; font-size: 12px; border-radius: 8px; background: none; border: 1px dashed rgba(87,201,140,.45); color: var(--ok); cursor: pointer; font-family: inherit; font-weight: 700; }
 .edit-field-actions { display: flex; gap: 8px; margin-left: auto; }

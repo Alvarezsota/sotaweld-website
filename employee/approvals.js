@@ -76,6 +76,7 @@ function personLine(o) {
     parts: isFlat ? o.parts : null,
     welderId: o.welderId || null, entryDate: o.entryDate || null, forJobId: o.forJobId || null,
     isStainless: !!o.isStainless,
+    entryHasWelder: o.entryHasWelder !== false,
     overrides: o.overrides || {}, fallbacks: o.fallbacks || {}
   };
 }
@@ -131,7 +132,10 @@ function buildJobGroups(entries, jobs) {
     const jobBillRate = effectiveJob ? effectiveJob.bill_rate : null;
     const jobStainlessRate = effectiveJob ? effectiveJob.stainless_bill_rate : null;
 
-    d.lines.push(personLine({
+    // A helper-only ticket has no welder line at all. v_work_lines does the same
+    // thing by inner-joining profiles, so the job log and the invoice agree on
+    // what a ticket with no welder contains: just its helpers.
+    if (e.welder_id) d.lines.push(personLine({
       role: 'welder',
       name: prof.full_name || '—',
       hours: Number(e.hours),
@@ -180,6 +184,12 @@ function buildJobGroups(entries, jobs) {
         entryId: e.id,
         helperRowId: dh.id,
         helperId: dh.helper_id,
+        entryHasWelder: !!e.welder_id,
+        entryDate: e.entry_date,
+        realJobId: e.job_id,
+        realOneOffName: e.one_off_name,
+        forJobId: e.for_job_id,
+        description: e.description,
         overrides: {
           pay: dh.pay_rate_override, bill: dh.bill_rate_override, perDiem: dh.per_diem_override
         },
@@ -460,9 +470,44 @@ function startEditLine(row, line, groupId) {
   const isHelper = !!line.helperRowId;
 
   if (isHelper) {
+    // On a normal ticket the welder's row is where the date, job and description
+    // are edited. A helper-only ticket has no welder row, so those fields have to
+    // appear here or a mistyped date on one could only be fixed by deleting it.
+    const ownsTicket = !line.entryHasWelder;
+    const ticketJobs = Object.values(jobsById).sort((a, b) => a.name.localeCompare(b.name));
+    const ticketIsOther = !line.realJobId;
+    const ticketIsYard = (jobId) => { const j = jobsById[jobId]; return !!(j && j.is_yard); };
+
     row.innerHTML = `
       <td colspan="7">
         <div class="edit-row-form">
+          ${ownsTicket ? `
+            <div class="edit-field edit-field-sm">
+              <label>Date</label>
+              <input type="date" class="input edit-date-input" value="${esc(line.entryDate)}">
+            </div>
+            <div class="edit-field">
+              <label>Job</label>
+              <select class="input edit-job-select">
+                ${ticketJobs.map(j => `<option value="${esc(j.id)}" ${j.id === line.realJobId ? 'selected' : ''}>${esc(j.name)}${j.is_yard ? ' (yard)' : ''}</option>`).join('')}
+                <option value="other" ${ticketIsOther ? 'selected' : ''}>Other / one-off…</option>
+              </select>
+            </div>
+            <div class="edit-field edit-oneoff-wrap" style="display:${ticketIsOther ? 'block' : 'none'};">
+              <label>One-off job name</label>
+              <input type="text" class="input edit-oneoff-input" value="${esc(line.realOneOffName)}">
+            </div>
+            <div class="edit-field edit-forjob-wrap" style="display:${ticketIsYard(line.realJobId) ? 'block' : 'none'};">
+              <label>Which job is this yard work for?</label>
+              <select class="input edit-forjob-select">
+                <option value="">Pick the job it's for…</option>
+                ${ticketJobs.filter(j => !j.is_yard).map(j => `<option value="${esc(j.id)}" ${j.id === line.forJobId ? 'selected' : ''}>${esc(j.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="edit-field">
+              <label>Description</label>
+              <textarea class="input edit-desc-input">${esc(line.description)}</textarea>
+            </div>` : ''}
           <div class="edit-field">
             <label>Helper</label>
             <select class="input edit-helper-select">
@@ -487,10 +532,35 @@ function startEditLine(row, line, groupId) {
         </div>
       </td>`;
 
+    if (ownsTicket) {
+      const jobSel = row.querySelector('.edit-job-select');
+      jobSel.addEventListener('change', () => {
+        row.querySelector('.edit-oneoff-wrap').style.display = jobSel.value === 'other' ? 'block' : 'none';
+        row.querySelector('.edit-forjob-wrap').style.display = ticketIsYard(jobSel.value) ? 'block' : 'none';
+      });
+    }
+
     row.querySelector('[data-action="cancel-line"]').addEventListener('click', () => renderDetail(groupId));
     row.querySelector('[data-action="save-line"]').addEventListener('click', async () => {
       const { patch: rates, bad } = readRateOverrides(row, HELPER_RATE_FIELDS);
       if (bad.length) { alert(andList(bad) + ' must be a number, or left blank.'); return; }
+
+      if (ownsTicket) {
+        const jobVal = row.querySelector('.edit-job-select').value;
+        const other = jobVal === 'other';
+        const oneOff = other ? row.querySelector('.edit-oneoff-input').value.trim() : '';
+        if (other && !oneOff) { alert('Name the one-off job.'); return; }
+        const ticketPatch = {
+          entry_date: row.querySelector('.edit-date-input').value,
+          job_id: other ? null : jobVal,
+          one_off_name: other ? oneOff : null,
+          for_job_id: ticketIsYard(jobVal) ? (row.querySelector('.edit-forjob-select').value || null) : null,
+          description: row.querySelector('.edit-desc-input').value.trim()
+        };
+        const { error: ticketErr } = await sb.from('daily_entries').update(ticketPatch).eq('id', line.entryId);
+        if (ticketErr) { alert('Could not save: ' + ticketErr.message); return; }
+      }
+
       const patch = {
         helper_id: row.querySelector('.edit-helper-select').value,
         hours: Number(row.querySelector('.edit-hours-input').value),
@@ -704,6 +774,16 @@ async function deleteLine(line, groupId) {
         + 'Nothing was removed. This is a permissions problem rather than something you did wrong.');
     return;
   }
+
+  // Taking the last helper off a helper-only ticket leaves a row with no welder
+  // and nobody on it: invisible on the job log, still sitting in the week. Clear
+  // it out with the line that was the whole reason it existed.
+  if (line.helperRowId && !line.entryHasWelder) {
+    const { count } = await sb.from('daily_entry_helpers')
+      .select('id', { count: 'exact', head: true }).eq('daily_entry_id', line.entryId);
+    if (!count) await sb.from('daily_entries').delete().eq('id', line.entryId);
+  }
+
   await loadWeek();
   await rebuildIfFrozen();
 }
@@ -735,7 +815,7 @@ async function setJobWeekStatus(groupId, status) {
 let newTicketState = null;
 
 function emptyNewTicketState() {
-  return { welderId: '', entryDate: ymd(new Date()), jobId: '', oneOffName: '', forJobId: '', description: '', hours: 8, perDiem: true, stainless: false, parts: [{ id: null, description: '', quantity: 1, rate: '' }], helpers: [] };
+  return { mode: 'welder', welderId: '', entryDate: ymd(new Date()), jobId: '', oneOffName: '', forJobId: '', description: '', hours: 8, perDiem: true, stainless: false, parts: [{ id: null, description: '', quantity: 1, rate: '' }], helpers: [{ helperId: '', hours: 8, perDiem: false }] };
 }
 
 function newTicketHelpersHtml(state) {
@@ -773,6 +853,11 @@ function newTicketPartsHtml(state) {
 }
 
 function newTicketCardHtml(state) {
+  // A ticket with no welder on it: the helpers did the day on their own. The
+  // welder half of the form comes off rather than being left there to be
+  // ignored, because a welder picked and then not wanted is how a helper's day
+  // ends up hung off someone who was not there.
+  const welderMode = state.mode !== 'helpers';
   const other = state.jobId === 'other';
   const allJobs = Object.values(jobsById).sort((a, b) => a.name.localeCompare(b.name));
   const job = jobsById[state.jobId];
@@ -784,14 +869,19 @@ function newTicketCardHtml(state) {
         <span class="new-ticket-title">New ticket</span>
         <button type="button" class="remove-job" data-action="cancel-new-ticket">&times; Cancel</button>
       </div>
+      <div class="nt-mode">
+        <button type="button" class="nt-mode-btn${welderMode ? ' on' : ''}" data-action="mode-welder">Welder${welderMode ? ' &amp; helpers' : ''}</button>
+        <button type="button" class="nt-mode-btn${welderMode ? '' : ' on'}" data-action="mode-helpers">Helpers only</button>
+      </div>
       <div class="new-ticket-row">
-        <div class="new-ticket-field">
-          <label>Welder</label>
-          <select class="input nt-welder-select">
-            <option value="">Pick welder…</option>
-            ${weldersList.map(w => `<option value="${esc(w.id)}" ${w.id === state.welderId ? 'selected' : ''}>${esc(w.full_name)}</option>`).join('')}
-          </select>
-        </div>
+        ${welderMode ? `
+          <div class="new-ticket-field">
+            <label>Welder</label>
+            <select class="input nt-welder-select">
+              <option value="">Pick welder…</option>
+              ${weldersList.map(w => `<option value="${esc(w.id)}" ${w.id === state.welderId ? 'selected' : ''}>${esc(w.full_name)}</option>`).join('')}
+            </select>
+          </div>` : ''}
         <div class="new-ticket-field new-ticket-field-sm">
           <label>Date</label>
           <input type="date" class="input nt-date-input" value="${esc(state.entryDate)}">
@@ -830,23 +920,24 @@ function newTicketCardHtml(state) {
           <textarea class="input nt-desc-input">${esc(state.description)}</textarea>
         </div>
       </div>
-      <div class="new-ticket-row">
-        <div class="new-ticket-field new-ticket-field-sm">
-          <label>Hours</label>
-          <input type="number" step="0.5" min="0" class="input nt-hours-input" value="${esc(state.hours)}">
+      ${welderMode ? `
+        <div class="new-ticket-row">
+          <div class="new-ticket-field new-ticket-field-sm">
+            <label>Hours</label>
+            <input type="number" step="0.5" min="0" class="input nt-hours-input" value="${esc(state.hours)}">
+          </div>
         </div>
-      </div>
-      <div class="new-ticket-checks">
-        <label><input type="checkbox" class="nt-pd-input" ${state.perDiem ? 'checked' : ''}> Per diem</label>
-        <label><input type="checkbox" class="nt-stainless-input" ${state.stainless ? 'checked' : ''}> Stainless</label>
-      </div>
+        <div class="new-ticket-checks">
+          <label><input type="checkbox" class="nt-pd-input" ${state.perDiem ? 'checked' : ''}> Per diem</label>
+          <label><input type="checkbox" class="nt-stainless-input" ${state.stainless ? 'checked' : ''}> Stainless</label>
+        </div>` : ''}
       <div class="new-ticket-row" style="margin-top:12px;">
         <div class="new-ticket-field" style="flex-basis:100%;">
-          <label>Helpers on this job</label>
+          <label>${welderMode ? 'Helpers on this job' : 'Helpers on this ticket'}</label>
           <div class="nt-helpers-wrap">${newTicketHelpersHtml(state)}</div>
         </div>
       </div>
-      ${flat ? `
+      ${welderMode && flat ? `
         <div class="new-ticket-row" style="margin-top:12px;">
           <div class="new-ticket-field" style="flex-basis:100%;">
             <label>Parts billed (qty &times; rate)</label>
@@ -889,6 +980,19 @@ document.getElementById('newTicketBtn').addEventListener('click', () => {
 document.getElementById('newTicketCard').addEventListener('click', async (e) => {
   if (!newTicketState) return;
   if (e.target.closest('[data-action="cancel-new-ticket"]')) { newTicketState = null; renderNewTicketCard(); return; }
+  const modeBtn = e.target.closest('[data-action="mode-welder"], [data-action="mode-helpers"]');
+  if (modeBtn) {
+    syncNewTicketPartsFromDom();
+    syncNewTicketHelpersFromDom();
+    newTicketState.mode = modeBtn.dataset.action === 'mode-helpers' ? 'helpers' : 'welder';
+    // A helper-only ticket always needs at least one helper, so start it with a
+    // row rather than an empty list and an Add button to find.
+    if (newTicketState.mode === 'helpers' && !newTicketState.helpers.length) {
+      newTicketState.helpers.push({ helperId: '', hours: 8, perDiem: false });
+    }
+    renderNewTicketCard();
+    return;
+  }
   if (e.target.closest('[data-action="add-new-part"]')) {
     syncNewTicketPartsFromDom();
     newTicketState.parts.push({ id: null, description: '', quantity: 1, rate: '' });
@@ -970,30 +1074,38 @@ async function saveNewTicket() {
   syncNewTicketPartsFromDom();
   syncNewTicketHelpersFromDom();
   const s = newTicketState;
+  const welderMode = s.mode !== 'helpers';
   const other = s.jobId === 'other';
   const job = jobsById[s.jobId];
   const yard = !!(job && job.is_yard);
-  const flat = !!(job && job.billing_type === 'flat');
+  const flat = welderMode && !!(job && job.billing_type === 'flat');
+  const namedHelpers = s.helpers.filter(h => h.helperId);
 
-  if (!s.welderId || !s.entryDate || !s.jobId) { alert('Welder, date, and job are all required.'); return; }
+  if (welderMode && !s.welderId) { alert('Pick the welder, or switch to Helpers only.'); return; }
+  if (!s.entryDate || !s.jobId) { alert('Date and job are both required.'); return; }
   if (other && !s.oneOffName.trim()) { alert('Name the one-off job.'); return; }
   if (yard && !s.forJobId) { alert("Pick which job the yard work is for."); return; }
   if (!s.description.trim()) { alert('Add a description.'); return; }
+  if (!welderMode && !namedHelpers.length) {
+    alert('A helpers-only ticket needs at least one helper on it.'); return;
+  }
 
   const btn = document.querySelector('#newTicketCard [data-action="save-new-ticket"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
 
   try {
+    // With no welder there are no welder hours, no welder per diem and nothing
+    // to call stainless - all of that belongs to a man who is not on this ticket.
     const { data, error } = await sb.from('daily_entries').insert({
-      welder_id: s.welderId,
+      welder_id: welderMode ? s.welderId : null,
       entry_date: s.entryDate,
       job_id: other ? null : s.jobId,
       one_off_name: other ? s.oneOffName.trim() : null,
       for_job_id: yard ? s.forJobId : null,
       description: s.description.trim(),
-      hours: Number(s.hours) || 0,
-      per_diem: s.perDiem,
-      is_stainless: s.stainless
+      hours: welderMode ? (Number(s.hours) || 0) : 0,
+      per_diem: welderMode ? s.perDiem : false,
+      is_stainless: welderMode ? s.stainless : false
     }).select().single();
     if (error) throw error;
 
@@ -1007,12 +1119,16 @@ async function saveNewTicket() {
       }
     }
 
-    const validHelpers = s.helpers
-      .filter(h => h.helperId)
+    const validHelpers = namedHelpers
       .map(h => ({ daily_entry_id: data.id, helper_id: h.helperId, hours: Number(h.hours) || 0, per_diem: h.perDiem }));
     if (validHelpers.length) {
       const { error: helpersErr } = await sb.from('daily_entry_helpers').insert(validHelpers);
-      if (helpersErr) throw helpersErr;
+      if (helpersErr) {
+        // A helper-only ticket with no helpers on it is an empty row nothing can
+        // reach, so take it back out rather than leave it on the week.
+        if (!welderMode) await sb.from('daily_entries').delete().eq('id', data.id);
+        throw helpersErr;
+      }
     }
 
     newTicketState = null;
