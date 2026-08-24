@@ -247,6 +247,8 @@ let passwordEditId = null;
 const ADMIN_SET_PASSWORD_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/admin-set-password';
 const ADMIN_INVITE_WELDER_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/admin-invite-welder';
 const ADMIN_CREATE_WELDER_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/admin-create-welder';
+const ONEDRIVE_START_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/onedrive-oauth-start';
+const ONEDRIVE_DISCONNECT_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/onedrive-disconnect';
 
 function renderWelders() {
   const table = document.getElementById('weldersTable');
@@ -486,7 +488,8 @@ function wireCompanyInfo() {
   });
 
   wireCompanyInfo();
-  await Promise.all([loadJobs(), loadWelders(), loadHelpers(), loadCompanyInfo()]);
+  wireOneDrive();
+  await Promise.all([loadJobs(), loadWelders(), loadHelpers(), loadCompanyInfo(), loadOneDrive()]);
 })();
 
 
@@ -612,3 +615,99 @@ function wireCompanyInfo() {
     }
   });
 })();
+
+
+// ---------- Pay statements to OneDrive ----------
+//
+// The page never reads the tokens - they are a standing key to the company's
+// OneDrive and RLS keeps them to the service role. onedrive_status() answers the
+// only question the office has: is it connected, and to whom.
+//
+// Connecting is a POST rather than a link, because the function that mints the
+// consent state admits admins only. It hands back a URL and the browser goes
+// there; a plain link would let anyone who found it point the company's pay
+// statements at their own OneDrive.
+function odSay(text, kind) {
+  const el = document.getElementById('odMsg');
+  if (!el) return;
+  el.className = 'od-msg' + (kind ? ' ' + kind : '');
+  el.innerHTML = text || '';
+}
+
+async function loadOneDrive() {
+  const stateEl = document.getElementById('odState');
+  const connectBtn = document.getElementById('odConnectBtn');
+  const disconnectBtn = document.getElementById('odDisconnectBtn');
+  if (!stateEl) return;
+
+  const { data, error } = await sb.rpc('onedrive_status');
+  if (error) {
+    stateEl.className = 'od-state';
+    stateEl.innerHTML = 'Could not check: <b>' + esc(error.message) + '</b>';
+    return;
+  }
+  if (data && data.connected) {
+    stateEl.className = 'od-state od-on';
+    stateEl.innerHTML = 'Connected as <b>' + esc(data.account || 'a Microsoft account') + '</b>';
+    connectBtn.hidden = true;
+    disconnectBtn.hidden = false;
+    if (!data.folder_ready) {
+      odSay('Connected, but the <b>New System Pay Stubs</b> folder could not be found or made. '
+          + 'Disconnect and connect again, or make that folder in OneDrive first.', 'err');
+    }
+  } else {
+    stateEl.className = 'od-state od-off';
+    stateEl.innerHTML = 'Not connected — <b>statements are not being filed</b>';
+    connectBtn.hidden = false;
+    disconnectBtn.hidden = true;
+  }
+}
+
+function wireOneDrive() {
+  const connectBtn = document.getElementById('odConnectBtn');
+  const disconnectBtn = document.getElementById('odDisconnectBtn');
+  if (!connectBtn) return;
+
+  connectBtn.addEventListener('click', async () => {
+    connectBtn.disabled = true;
+    connectBtn.textContent = 'Opening Microsoft…';
+    odSay('');
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const res = await fetch(ONEDRIVE_START_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: '{}'
+      });
+      const json = await res.json();
+      if (!res.ok || !json.url) throw new Error(json.error || 'Could not start the connection.');
+      window.location.href = json.url;
+    } catch (err) {
+      odSay(esc(err.message), 'err');
+      connectBtn.disabled = false;
+      connectBtn.textContent = 'Connect OneDrive';
+    }
+  });
+
+  disconnectBtn.addEventListener('click', async () => {
+    if (!confirm('Disconnect OneDrive?\n\nApproved weeks stop filing their pay statements until it is connected again. Nothing already filed is touched.')) return;
+    disconnectBtn.disabled = true;
+    disconnectBtn.textContent = 'Disconnecting…';
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const res = await fetch(ONEDRIVE_DISCONNECT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: '{}'
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Could not disconnect.');
+      odSay('Disconnected. Nothing already filed was touched.', 'ok');
+      await loadOneDrive();
+    } catch (err) {
+      odSay(esc(err.message), 'err');
+    }
+    disconnectBtn.disabled = false;
+    disconnectBtn.textContent = 'Disconnect';
+  });
+}

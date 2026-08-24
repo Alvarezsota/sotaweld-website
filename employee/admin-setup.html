@@ -6,8 +6,8 @@
 <title>Setup | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260823i">
-<link rel="stylesheet" href="admin-setup.css?v=20260823i">
+<link rel="stylesheet" href="dark-theme.css?v=20260824f">
+<link rel="stylesheet" href="admin-setup.css?v=20260824f">
 </head>
 <body>
 
@@ -57,6 +57,21 @@
           <input class="cell-in" id="coPhone" placeholder="(432) 555-0100"></label>
         <span class="co-saved" id="coSaved"></span>
       </div>
+    </div>
+
+    <!-- Where approved weeks file their pay statements. The office keeps them in
+         OneDrive, one folder per week; connecting once lets an approved week put
+         them there itself instead of somebody saving fifteen PDFs by hand. -->
+    <div class="co-card">
+      <div class="co-head">Pay statements to OneDrive</div>
+      <p class="co-note">Approve a week and its pay statements file themselves into
+        <b>New System Pay Stubs</b>, one folder per week, named month-day-year.</p>
+      <div class="od-row">
+        <span class="od-state" id="odState">Checking&hellip;</span>
+        <button class="btn2 btn2-solid small" id="odConnectBtn" hidden>Connect OneDrive</button>
+        <button class="btn2 btn2-line small" id="odDisconnectBtn" hidden>Disconnect</button>
+      </div>
+      <p class="od-msg" id="odMsg"></p>
     </div>
 
     <div id="jobsPanel">
@@ -141,8 +156,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260823i"></script>
-<script src="admin-setup.js?v=20260823i"></script>
+<script src="supabase-client.js?v=20260824f"></script>
+<script src="admin-setup.js?v=20260824f"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

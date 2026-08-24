@@ -158,3 +158,13 @@
   .wi-grid .input.num { max-width: none; }
   .wi-actions { flex-direction: column; }
 }
+
+/* OneDrive connection, on the Setup page beside the letterhead it prints. */
+.od-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.od-state { font-size: 13px; color: var(--dim, #9aa3b2); }
+.od-state b { color: var(--text, #eef2f7); }
+.od-state.od-on b { color: var(--ok, #57c98c); }
+.od-state.od-off b { color: var(--dim, #9aa3b2); }
+.od-msg { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--dim2, #6e7681); }
+.od-msg.err { color: var(--danger, #ec7d7a); }
+.od-msg.ok { color: var(--ok, #57c98c); }
