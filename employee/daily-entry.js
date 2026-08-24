@@ -74,7 +74,8 @@ async function loadWeekPanel() {
   const end = ymd(addDays(weekPanelStart, 6));
 
   const [{ data: rows }, { data: jwRows }] = await Promise.all([
-    sb.from('daily_entries').select('*').eq('welder_id', currentUser.id)
+    sb.from('daily_entries').select('*')
+      .or(`welder_id.eq.${currentUser.id},supervisor_id.eq.${currentUser.id}`)
       .gte('entry_date', start).lte('entry_date', end).order('entry_date'),
     sb.from('job_weeks').select('*').eq('week_start', start)
   ]);
@@ -145,7 +146,7 @@ function weekEntryHtml(d) {
     <div class="week-entry" data-entry-id="${e.id}">
       <div class="week-entry-row">
         <span class="week-entry-name">${esc(jobLabelFor(e))}</span>
-        <span class="week-entry-hrs">${hoursTracked(e.job_id) ? e.hours + ' hrs' : ''}${e.per_diem ? ' · PD' : ''}${e.is_stainless ? ' · Stainless' : ''}</span>
+        <span class="week-entry-hrs">${!e.welder_id ? 'Helpers only' : `${hoursTracked(e.job_id) ? e.hours + ' hrs' : ''}${e.per_diem ? ' · PD' : ''}${e.is_stainless ? ' · Stainless' : ''}`}</span>
       </div>
       ${e.bid_item_id ? `<div class="week-entry-bid">${esc(bidItemName(e.bid_item_id))}</div>` : ''}
       ${e.description ? `<div class="week-entry-desc">${esc(e.description)}</div>` : ''}
@@ -183,6 +184,7 @@ function startEditEntry(entryId) {
     hours: Number(e.hours) || 0,
     perDiem: !!e.per_diem,
     stainless: !!e.is_stainless,
+    helpersOnly: !e.welder_id,
     helpers: found.helpers.map(h => ({ uid: uid(), helperId: h.helper_id, hours: Number(h.hours), perDiem: !!h.per_diem })),
     parts: found.parts.length ? found.parts.map(p => ({ uid: uid(), name: p.description, qty: p.quantity, rate: p.rate })) : [newPart()],
     // How many child rows are on this ticket in the database right now. Saving
@@ -201,6 +203,9 @@ async function saveEditEntry(entryId) {
 
   if (!editState.jobId) { alert('Pick a job.'); return; }
   if (!editState.description.trim()) { alert('Add a description.'); return; }
+  if (editState.helpersOnly && !editState.helpers.some(h => h.helperId)) {
+    alert('Pick the helper on this ticket, or turn Helpers only off.'); return;
+  }
   if (other && !editState.oneOffName.trim()) { alert('Name the one-off job.'); return; }
   if (yard && !editState.forJobId) { alert('Pick which job this yard work is for.'); return; }
 
@@ -215,8 +220,8 @@ async function saveEditEntry(entryId) {
     const sig = dupSigForCard(editState);
     if (sig && editState.entryDate) {
       const { data: sameDay, error: sdErr } = await sb.from('daily_entries')
-        .select('id,job_id,one_off_name,hours,description')
-        .eq('welder_id', currentUser.id)
+        .select('id,welder_id,job_id,one_off_name,hours,description')
+        .or(`welder_id.eq.${currentUser.id},supervisor_id.eq.${currentUser.id}`)
         .eq('entry_date', editState.entryDate)
         .neq('id', entryId);
       if (sdErr) throw sdErr;
@@ -232,15 +237,18 @@ async function saveEditEntry(entryId) {
       }
     }
 
+    const helpersOnly = !!editState.helpersOnly;
     const { error: upErr } = await sb.from('daily_entries').update({
+      welder_id: helpersOnly ? null : currentUser.id,
+      supervisor_id: helpersOnly ? currentUser.id : null,
       job_id: other ? null : editState.jobId,
       one_off_name: other ? editState.oneOffName.trim() : null,
       for_job_id: yard ? editState.forJobId : null,
       bid_item_id: editState.bidItemId || null,
       description: editState.description.trim(),
-      hours: editState.hours,
-      per_diem: editState.perDiem,
-      is_stainless: editState.stainless
+      hours: helpersOnly ? 0 : editState.hours,
+      per_diem: helpersOnly ? false : editState.perDiem,
+      is_stainless: helpersOnly ? false : editState.stainless
     }).eq('id', entryId);
     if (upErr) throw upErr;
 
@@ -406,6 +414,12 @@ weekPanelBody.addEventListener('click', async (e) => {
     renderWeekPanelBody();
     return;
   }
+  if (e.target.closest('[data-action="toggle-helpers-only"]')) {
+    editState.helpersOnly = !editState.helpersOnly;
+    if (editState.helpersOnly && !editState.helpers.length) editState.helpers.push(newHelperRow());
+    renderWeekPanelBody();
+    return;
+  }
   const stainlessToggle = e.target.closest('.stainless-toggle');
   if (stainlessToggle) {
     editState.stainless = !editState.stainless;
@@ -480,7 +494,15 @@ function esc(str) {
 function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
 
 function newEntry() {
-  return { uid: uid(), jobId: '', oneOffName: '', forJobId: '', bidItemId: '', description: '', hours: 10, perDiem: true, stainless: false, helpers: [], parts: [newPart()] };
+  return { uid: uid(), jobId: '', oneOffName: '', forJobId: '', bidItemId: '', description: '', hours: 10, perDiem: true, stainless: false, helpersOnly: false, helpers: [], parts: [newPart()] };
+}
+
+// A card for a day the helpers worked and you did not. Your hours, per diem,
+// stainless and parts all come off it, because they are yours and you were not
+// there; what is left is the job, what was done, and who did it.
+function helpersOnlyToggleHtml(on) {
+  return `<button type="button" class="ho-toggle${on ? ' ho-on' : ''}" data-action="toggle-helpers-only">
+    <span class="pd-knob"></span><span class="pd-text">Helpers only<br><b>${on ? 'ON' : 'OFF'}</b></span></button>`;
 }
 
 /* ---- Duplicate ticket guard ----
@@ -496,16 +518,22 @@ function jobKeyFor(jobId, oneOffName) {
     ? 'other:' + (oneOffName || '').trim().toLowerCase()
     : 'job:' + jobId;
 }
+// A helpers-only ticket carries no hours of his own, so on an hours-tracked job
+// every one of them would sign as "0 hrs" and collide with his own ticket and
+// with each other. They get their own key, off the description, which still
+// catches the double-tap it is there to catch.
 function dupSigForCard(entry) {
   if (!entry.jobId) return null;
   if (entry.jobId === 'other' && !entry.oneOffName.trim()) return null;
   const key = jobKeyFor(entry.jobId, entry.oneOffName);
+  if (entry.helpersOnly) return 'ho:' + key + '|d:' + entry.description.trim().toLowerCase();
   return hoursTracked(entry.jobId)
     ? key + '|h:' + Number(entry.hours)
     : key + '|d:' + entry.description.trim().toLowerCase();
 }
 function dupSigForRow(row) {
   const key = jobKeyFor(row.job_id || 'other', row.one_off_name);
+  if (!row.welder_id) return 'ho:' + key + '|d:' + (row.description || '').trim().toLowerCase();
   return hoursTracked(row.job_id)
     ? key + '|h:' + Number(row.hours)
     : key + '|d:' + (row.description || '').trim().toLowerCase();
@@ -517,8 +545,9 @@ async function loadLoggedForDate() {
   loggedForDate = [];
   if (!d || !currentUser) { updateSubmitState(); return; }
   const { data } = await sb.from('daily_entries')
-    .select('id,job_id,one_off_name,hours,description')
-    .eq('welder_id', currentUser.id).eq('entry_date', d);
+    .select('id,welder_id,job_id,one_off_name,hours,description')
+    .or(`welder_id.eq.${currentUser.id},supervisor_id.eq.${currentUser.id}`)
+    .eq('entry_date', d);
   if (dateInput.value !== d) return;  // they changed the date while this was in flight
   loggedForDate = data || [];
   updateSubmitState();
@@ -700,7 +729,7 @@ function editCardHtml(entry) {
       ${bidPickerHtml(entry)}
       <label class="field-label">What did you work on?</label>
       <textarea class="input descr-input" rows="2">${esc(entry.description)}</textarea>
-      ${flat ? `
+      ${flat && !entry.helpersOnly ? `
         <div class="oneoff flat">
           <label class="field-label">Parts billed that day</label>
           <div class="parts-list">
@@ -713,10 +742,13 @@ function editCardHtml(entry) {
           </div>
         </div>` : ''}
       <div class="you-row">
-        ${hrsOn ? stepperHtml('Your hours', entry.hours) : ''}
-        ${pdToggleHtml(entry.perDiem)}
-        ${stainlessToggleHtml(entry.stainless)}
+        ${entry.helpersOnly ? '' : `
+          ${hrsOn ? stepperHtml('Your hours', entry.hours) : ''}
+          ${pdToggleHtml(entry.perDiem)}
+          ${stainlessToggleHtml(entry.stainless)}`}
+        ${helpersOnlyToggleHtml(entry.helpersOnly)}
       </div>
+      ${entry.helpersOnly ? '<span class="oneoff-note ho-note">You are not on this ticket — it is the helpers\' day only. The office will see you turned it in.</span>' : ''}
       ${entry.helpers.map(h => helperBlockHtml(h)).join('')}
       <button type="button" class="add-helper" data-action="add-helper">+ Add helper</button>
       <div class="edit-card-footer">
@@ -762,7 +794,7 @@ function entryCardHtml(entry, idx) {
       ${bidPickerHtml(entry)}
       <label class="field-label">What did you work on?</label>
       <textarea class="input descr-input" rows="2" placeholder="e.g. Cont. fab on compressor piping">${esc(entry.description)}</textarea>
-      ${flat ? `
+      ${flat && !entry.helpersOnly ? `
         <div class="oneoff flat">
           <label class="field-label">Parts billed today</label>
           <span class="oneoff-note" style="margin:0 0 10px;">List each different part you built — quantity &times; rate gets billed to the customer.${hrsOn ? ' Your hours below are still tracked separately for your pay.' : ''}</span>
@@ -776,10 +808,13 @@ function entryCardHtml(entry, idx) {
           </div>
         </div>` : ''}
       <div class="you-row">
-        ${hrsOn ? stepperHtml('Your hours', entry.hours) : ''}
-        ${pdToggleHtml(entry.perDiem)}
-        ${stainlessToggleHtml(entry.stainless)}
+        ${entry.helpersOnly ? '' : `
+          ${hrsOn ? stepperHtml('Your hours', entry.hours) : ''}
+          ${pdToggleHtml(entry.perDiem)}
+          ${stainlessToggleHtml(entry.stainless)}`}
+        ${helpersOnlyToggleHtml(entry.helpersOnly)}
       </div>
+      ${entry.helpersOnly ? '<span class="oneoff-note ho-note">You are not on this ticket — it is the helpers\' day only. The office will see you turned it in.</span>' : ''}
       ${entry.helpers.map(h => helperBlockHtml(h)).join('')}
       <button type="button" class="add-helper" data-action="add-helper">+ Add helper</button>
     </div>`;
@@ -791,7 +826,11 @@ function render() {
 }
 
 function updateSubmitState() {
-  const total = entries.reduce((sum, e) => sum + Number(e.hours) + e.helpers.reduce((s, h) => s + (h.helperId ? Number(h.hours) : 0), 0), 0);
+  // His own hours are zero on a helpers-only card whatever the stepper last held,
+  // so the day's total counts the helpers on it and nothing of his.
+  const total = entries.reduce((sum, e) =>
+    sum + (e.helpersOnly ? 0 : Number(e.hours))
+        + e.helpers.reduce((s, h) => s + (h.helperId ? Number(h.hours) : 0), 0), 0);
   totalHoursEl.textContent = total;
 
   let missing = '';
@@ -803,6 +842,7 @@ function updateSubmitState() {
       if (e.jobId === 'other' && !e.oneOffName.trim()) { missing = 'Name the one-off job.'; break; }
       if (isYard(e.jobId) && !e.forJobId) { missing = 'Pick which job the yard work is for.'; break; }
       if (!e.description.trim()) { missing = 'Add a description of the work for every entry.'; break; }
+      if (e.helpersOnly && !e.helpers.some(h => h.helperId)) { missing = 'Pick the helper on the helpers-only ticket.'; break; }
     }
     if (!missing && needGloves && !gloveSize) missing = 'Pick a glove size.';
   }
@@ -875,6 +915,14 @@ entriesContainer.addEventListener('click', (e) => {
     return;
   }
 
+  if (e.target.closest('[data-action="toggle-helpers-only"]')) {
+    entry.helpersOnly = !entry.helpersOnly;
+    // Turning it on with nobody on the ticket leaves a card that cannot be
+    // submitted and no obvious reason why, so put a helper row there to fill in.
+    if (entry.helpersOnly && !entry.helpers.length) entry.helpers.push(newHelperRow());
+    render();
+    return;
+  }
   const stainlessToggle = e.target.closest('.stainless-toggle');
   if (stainlessToggle) {
     entry.stainless = !entry.stainless;
@@ -1027,8 +1075,9 @@ async function handleSubmit() {
     // Last line of defence: re-check the server right before inserting, in case
     // this day was already turned in from another device or on a double-tap.
     const { data: freshRows, error: freshErr } = await sb.from('daily_entries')
-      .select('id,job_id,one_off_name,hours,description')
-      .eq('welder_id', currentUser.id).eq('entry_date', entryDate);
+      .select('id,welder_id,job_id,one_off_name,hours,description')
+      .or(`welder_id.eq.${currentUser.id},supervisor_id.eq.${currentUser.id}`)
+      .eq('entry_date', entryDate);
     if (freshErr) throw freshErr;
     loggedForDate = freshRows || [];
     loggedForDateKey = entryDate;
@@ -1053,17 +1102,22 @@ async function handleSubmit() {
       const yard = isYard(entry.jobId);
       const flat = isFlat(entry.jobId);
 
+      // On a helpers-only ticket he is the supervisor, not the welder: no hours,
+      // no per diem, nothing stainless, because none of that is his. supervisor_id
+      // is only so the ticket stays visible to the man who turned it in.
+      const helpersOnly = !!entry.helpersOnly;
       const { data: deData, error: deError } = await sb.from('daily_entries').insert({
-        welder_id: currentUser.id,
+        welder_id: helpersOnly ? null : currentUser.id,
+        supervisor_id: helpersOnly ? currentUser.id : null,
         entry_date: entryDate,
         job_id: other ? null : entry.jobId,
         one_off_name: other ? entry.oneOffName.trim() : null,
         for_job_id: yard ? entry.forJobId : null,
         bid_item_id: entry.bidItemId || null,
         description: entry.description.trim(),
-        hours: entry.hours,
-        per_diem: entry.perDiem,
-        is_stainless: entry.stainless
+        hours: helpersOnly ? 0 : entry.hours,
+        per_diem: helpersOnly ? false : entry.perDiem,
+        is_stainless: helpersOnly ? false : entry.stainless
       }).select().single();
 
       if (deError) throw deError;
@@ -1077,7 +1131,7 @@ async function handleSubmit() {
         if (heError) throw heError;
       }
 
-      if (flat) {
+      if (flat && !helpersOnly) {
         const partRows = entry.parts
           .filter(p => p.name.trim() && Number(p.qty) > 0 && Number(p.rate) > 0)
           .map(p => ({ daily_entry_id: deData.id, description: p.name.trim(), quantity: Number(p.qty), rate: Number(p.rate) }));

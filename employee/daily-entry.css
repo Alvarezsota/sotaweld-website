@@ -89,6 +89,13 @@
 .pd-on .pd-knob { background: rgba(87,201,140,.35); }
 .pd-on .pd-knob::after { left: 23px; background: var(--ok); }
 
+/* Helpers only: the day was the helpers', not his. Same shape as the per diem
+   and stainless toggles beside it so it reads as one row of switches. */
+.ho-toggle { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px;
+  background: var(--steel-700); border: 1px solid var(--line); color: var(--dim);
+  font-family: inherit; font-size: 12px; line-height: 1.25; text-align: left; cursor: pointer; }
+.ho-toggle.ho-on { background: var(--gold-soft); border-color: rgba(233,162,59,.45); color: var(--molten-2); }
+.ho-note { display: block; margin: 8px 0 4px; }
 .stainless-toggle { width: 96px; flex-shrink: 0; border: 2px solid var(--line); background: var(--steel-800); border-radius: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 10px 6px; color: var(--dim2); transition: background .15s, border-color .15s; font-family: inherit; }
 .stainless-on { color: var(--ok); background: rgba(87,201,140,.14); border-color: var(--ok); }
 .stainless-on .pd-knob { background: rgba(87,201,140,.35); }
