@@ -75,16 +75,28 @@ Deno.serve(async (req) => {
   const fullName = String(body.fullName ?? '').trim();
   const password = String(body.password ?? '');
   const emailIn = String(body.email ?? '').trim().toLowerCase();
-  const payRate = Number(body.payRate ?? 0);
-  const billRate = Number(body.billRate ?? 0);
+
+  // The rate boxes are optional and arrive as empty strings when the office
+  // leaves them alone. Number('') is 0, so reading them straight would put a
+  // welder on the books at nothing an hour for having skipped a field. Blank
+  // has to stay blank, so the column default stands. admin-invite-welder reads
+  // them the same way.
+  const rate = (v: unknown) =>
+    v === undefined || v === null || String(v).trim() === '' ? null : Number(v);
+  const payRate = rate(body.payRate);
+  const billRate = rate(body.billRate);
 
   if (!fullName) return reply({ error: 'Enter the name of the welder.' }, 400);
   if (password.length < 6) return reply({ error: 'Password must be at least 6 characters.' }, 400);
   if (emailIn && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailIn)) {
     return reply({ error: 'Enter a valid email address.' }, 400);
   }
-  if (!Number.isFinite(payRate) || payRate < 0) return reply({ error: 'Pay rate must be a number.' }, 400);
-  if (!Number.isFinite(billRate) || billRate < 0) return reply({ error: 'Bill rate must be a number.' }, 400);
+  if (payRate !== null && (!Number.isFinite(payRate) || payRate < 0)) {
+    return reply({ error: 'Pay rate must be a number.' }, 400);
+  }
+  if (billRate !== null && (!Number.isFinite(billRate) || billRate < 0)) {
+    return reply({ error: 'Bill rate must be a number.' }, 400);
+  }
 
   const email = emailIn || placeholderEmail(fullName);
   const admin = createClient(url, serviceKey);
@@ -109,12 +121,19 @@ Deno.serve(async (req) => {
 
   // A signup trigger may already have written the profile row, so upsert rather
   // than insert - otherwise this collides with the trigger's row.
+  //
+  // role is 'employee'. profiles_role_check allows 'employee' or 'admin' and
+  // nothing else, so the 'welder' this used to write was rejected outright - the
+  // insert failed, the rollback below deleted the account it had just made, and
+  // the office got "Could not save the welder" every time. A welder is an
+  // employee here; the word welder is what the portal calls him, not a role.
+  const row: Record<string, unknown> = { id: newId, full_name: fullName, role: 'employee' };
+  if (payRate !== null) row.pay_rate = payRate;
+  if (billRate !== null) row.bill_rate = billRate;
+
   const { data: profile, error: profileErr } = await admin
     .from('profiles')
-    .upsert(
-      { id: newId, full_name: fullName, pay_rate: payRate, bill_rate: billRate, role: 'welder' },
-      { onConflict: 'id' },
-    )
+    .upsert(row, { onConflict: 'id' })
     .select()
     .single();
 
