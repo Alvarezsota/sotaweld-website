@@ -216,6 +216,12 @@ async function loadWeek() {
 
   document.getElementById('weekLabel').textContent = formatWeekLabel(weekStart);
 
+  // The profiles embed below is unhinted, which means daily_entries must keep
+  // exactly one foreign key to profiles. Add a second one - another column
+  // pointing at a person - and PostgREST can no longer tell which relationship
+  // this means, fails the whole query, and the page draws an empty week with no
+  // error on screen. That has happened once. Point new person columns at
+  // auth.users instead; see 20260824_supervisor_fk_unambiguous.sql.
   const [{ data: entries }, { data: jobs }, { data: jw }, { data: hlprs }, { data: welders }] = await Promise.all([
     sb.from('daily_entries')
       .select('*, profiles(full_name, pay_rate, bill_rate), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate)), daily_entry_parts(*)')
