@@ -34,9 +34,12 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'Use POST' }, 405);
 
-  const clientId = Deno.env.get('MS_CLIENT_ID');
+  // Trimmed: a value pasted into a dashboard field often carries a trailing
+  // newline, and Microsoft rejects that with the same message it uses for a
+  // completely wrong value.
+  const clientId = (Deno.env.get('MS_CLIENT_ID') || '').trim();
   if (!clientId) return json({ error: 'MS_CLIENT_ID is not set on this project yet.' }, 500);
-  const tenant = Deno.env.get('MS_TENANT_ID') || 'organizations';
+  const tenant = (Deno.env.get('MS_TENANT_ID') || '').trim() || 'organizations';
 
   const authHeader = req.headers.get('Authorization') ?? '';
   if (!authHeader.startsWith('Bearer ')) return json({ error: 'Not signed in' }, 401);

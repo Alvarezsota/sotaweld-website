@@ -48,8 +48,13 @@ Deno.serve(async (req) => {
   if (err) return page('Microsoft turned that down', `<p>${err}</p>`, false);
   if (!code || !state) return page('Something is missing', '<p>That link did not carry a code and a state, so there is nothing to finish.</p>', false);
 
-  const clientId = Deno.env.get('MS_CLIENT_ID');
-  const clientSecret = Deno.env.get('MS_CLIENT_SECRET');
+  // Trimmed on the way in. A secret pasted into a dashboard field very often
+  // arrives with a trailing newline or a stray space, and Microsoft rejects it
+  // with the same message it uses for a completely wrong secret - so an invisible
+  // character looks exactly like the wrong column.
+  const clientId = (Deno.env.get('MS_CLIENT_ID') || '').trim();
+  const clientSecret = (Deno.env.get('MS_CLIENT_SECRET') || '').trim();
+  const rawSecret = Deno.env.get('MS_CLIENT_SECRET') || '';
   if (!clientId || !clientSecret) {
     return page('Not set up yet', '<p>MS_CLIENT_ID and MS_CLIENT_SECRET are not set on this project. Add them under Edge Functions secrets and connect again.</p>', false);
   }
@@ -78,8 +83,26 @@ Deno.serve(async (req) => {
   });
   const tok = await tokenRes.json().catch(() => ({}));
   if (!tokenRes.ok || !tok.access_token || !tok.refresh_token) {
+    // "Invalid client secret" is the one failure a person cannot debug from the
+    // message, because the secret is write-only once it is saved. So describe the
+    // shape of what this project is actually using - never the value itself -
+    // which is enough to tell the Secret ID from the Value, or to catch a stray
+    // newline, without anybody having to reveal a credential to read an error.
+    let hint = '';
+    if (String(tok.error_description || '').includes('7000215')) {
+      const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientSecret);
+      const notes: string[] = [`${clientSecret.length} characters`];
+      if (rawSecret !== clientSecret) notes.push('with a space or newline around it, which has been trimmed off');
+      if (!/[~._-]/.test(clientSecret)) notes.push('with none of the ~ . _ - marks a secret Value normally carries');
+      hint = `<p style="background:#faf9f7;border:1px solid #e7e5e4;border-radius:8px;padding:12px 14px;">
+        <b>What this project is using:</b> ${notes.join(', ')}.<br>` +
+        (isGuid
+          ? 'That is a GUID, so it is the <b>Secret ID</b> column. You need the <b>Value</b> column beside it, which is only shown at the moment the secret is created.'
+          : 'A client secret Value is usually around 40 characters and mixes letters, digits and punctuation. If that does not match what you copied, the paste was cut short.')
+        + '</p>';
+    }
     return page('Microsoft would not issue a token',
-      `<p>${tok.error_description || tokenRes.status}</p>`, false);
+      `<p>${tok.error_description || tokenRes.status}</p>${hint}`, false);
   }
 
   const access = tok.access_token as string;
