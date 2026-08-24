@@ -153,6 +153,7 @@
 /* Print button above the welder / helper tables */
 .sum-print-bar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
   margin: 0 0 10px;

@@ -378,13 +378,48 @@ async function printInvoice(jobId, internal) {
 /** One printable statement for one welder or helper for the week — letterhead,
  *  day-by-day hours, per diem, and what he is owed. These men are paid as
  *  contractors, so there is no withholding on it: it states hours and amount due. */
-function printPayStatement(kind, personId) {
-  const rows = (kind === 'welders' ? weekData.welders : weekData.helpers) || [];
-  const idKey = kind === 'welders' ? 'welder_id' : 'helper_id';
-  const nameKey = kind === 'welders' ? 'welder_name' : 'helper_name';
-  const r = rows.find(x => x[idKey] === personId);
-  if (!r) { alert('Could not find that person in this week.'); return; }
+// The statement is built in three pieces so one copy of it serves both the
+// single "Pay statement" button and the run that turns out every man's own PDF.
+// Two copies would drift, and the day they drifted one man would be paid off a
+// sheet that no longer matched the one beside it.
+const PAY_STATEMENT_CSS = `  body{margin:0;background:#f4f3f1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1c1917;font-size:13px;line-height:1.5;}
+  .sheet{max-width:740px;margin:0 auto;background:#fff;padding:30px 34px 40px;min-height:9in;}
+  .lh{display:flex;align-items:center;gap:18px;border-bottom:3px solid #1c1917;padding-bottom:14px;}
+  .logo{width:132px;height:auto;}
+  .lh-txt h1{margin:0;font-size:17px;letter-spacing:.02em;text-transform:uppercase;}
+  .lh-txt .a{margin-top:3px;font-size:12px;color:#78716c;}
+  .title{display:flex;justify-content:space-between;align-items:flex-end;margin:20px 0 4px;}
+  .title h2{margin:0;font-size:15px;text-transform:uppercase;letter-spacing:.09em;color:#B4541E;}
+  .title .wk{font-size:12.5px;color:#78716c;}
+  .who{font-size:22px;font-weight:700;margin:10px 0 2px;}
+  .who-sub{font-size:12.5px;color:#78716c;margin-bottom:16px;}
+  .meta{display:flex;gap:26px;margin:0 0 18px;padding:10px 12px;background:#faf9f7;border:1px solid #e7e5e4;border-radius:8px;}
+  .meta label{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:#78716c;display:block;margin-bottom:3px;}
+  .meta input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid #d6d3d1;border-radius:5px;background:#fff;width:150px;}
+  table{width:100%;border-collapse:collapse;}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#78716c;text-align:right;padding:7px 8px;border-bottom:1.5px solid #1c1917;font-weight:600;}
+  th.l,td.l{text-align:left;}
+  td{padding:8px;border-bottom:1px solid #e7e5e4;text-align:right;font-variant-numeric:tabular-nums;}
+  .d{font-size:11px;color:#78716c;}
+  .nw{white-space:nowrap;width:74px;}
+  .jl + .jl{margin-top:6px;}
+  tr.tot td{border-top:2px solid #1c1917;border-bottom:none;font-weight:700;background:#faf9f7;}
+  .totals{margin-top:20px;margin-left:auto;width:320px;}
+  .totals div{display:flex;justify-content:space-between;padding:7px 10px;border-bottom:1px solid #e7e5e4;}
+  .totals .grand{border:none;border-top:2px solid #1c1917;background:#faf9f7;font-size:17px;font-weight:700;}
+  .grand .v{color:#B4541E;}
+  .sig{margin-top:46px;display:flex;gap:40px;}
+  .sig div{flex:1;border-top:1px solid #1c1917;padding-top:6px;font-size:11px;color:#78716c;}
+  .note{margin-top:22px;font-size:11px;color:#78716c;}
+  .bar{max-width:740px;margin:0 auto;padding:12px 34px;display:flex;gap:10px;justify-content:flex-end;}
+  .bar button{font:inherit;font-weight:600;padding:8px 16px;border-radius:7px;border:1px solid #1c1917;background:#1c1917;color:#fff;cursor:pointer;}
+  @media print{body{background:#fff}.sheet{max-width:none;padding:0;min-height:0}.bar{display:none}
+    .meta input{border:none;padding-left:0}}
+`;
 
+// One man's sheet, without the page around it.
+function payStatementSheet(kind, r) {
+  const nameKey = kind === 'welders' ? 'welder_name' : 'helper_name';
   // One row per DAY, not per ticket. A man who split a day across two jobs still
   // collects a single per diem, so per diem is counted once per date here or the
   // statement would pay him twice for the same day.
@@ -420,45 +455,7 @@ function printPayStatement(kind, personId) {
   const logo = `<img class="logo" src="sota-logo.png" alt="" onerror="this.remove()">`;
   const addr = [companyAddress, companyPhone].filter(Boolean).map(esc).join(' &middot; ');
 
-  const html = `<!doctype html><html><head><meta charset="utf-8">
-<title>Pay statement — ${esc(r[nameKey])} — ${esc(formatWeekLabel(weekStart))}</title>
-<style>
-  body{margin:0;background:#f4f3f1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1c1917;font-size:13px;line-height:1.5;}
-  .sheet{max-width:740px;margin:0 auto;background:#fff;padding:30px 34px 40px;min-height:9in;}
-  .lh{display:flex;align-items:center;gap:18px;border-bottom:3px solid #1c1917;padding-bottom:14px;}
-  .logo{width:132px;height:auto;}
-  .lh-txt h1{margin:0;font-size:17px;letter-spacing:.02em;text-transform:uppercase;}
-  .lh-txt .a{margin-top:3px;font-size:12px;color:#78716c;}
-  .title{display:flex;justify-content:space-between;align-items:flex-end;margin:20px 0 4px;}
-  .title h2{margin:0;font-size:15px;text-transform:uppercase;letter-spacing:.09em;color:#B4541E;}
-  .title .wk{font-size:12.5px;color:#78716c;}
-  .who{font-size:22px;font-weight:700;margin:10px 0 2px;}
-  .who-sub{font-size:12.5px;color:#78716c;margin-bottom:16px;}
-  .meta{display:flex;gap:26px;margin:0 0 18px;padding:10px 12px;background:#faf9f7;border:1px solid #e7e5e4;border-radius:8px;}
-  .meta label{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:#78716c;display:block;margin-bottom:3px;}
-  .meta input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid #d6d3d1;border-radius:5px;background:#fff;width:150px;}
-  table{width:100%;border-collapse:collapse;}
-  th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#78716c;text-align:right;padding:7px 8px;border-bottom:1.5px solid #1c1917;font-weight:600;}
-  th.l,td.l{text-align:left;}
-  td{padding:8px;border-bottom:1px solid #e7e5e4;text-align:right;font-variant-numeric:tabular-nums;}
-  .d{font-size:11px;color:#78716c;}
-  .nw{white-space:nowrap;width:74px;}
-  .jl + .jl{margin-top:6px;}
-  tr.tot td{border-top:2px solid #1c1917;border-bottom:none;font-weight:700;background:#faf9f7;}
-  .totals{margin-top:20px;margin-left:auto;width:320px;}
-  .totals div{display:flex;justify-content:space-between;padding:7px 10px;border-bottom:1px solid #e7e5e4;}
-  .totals .grand{border:none;border-top:2px solid #1c1917;background:#faf9f7;font-size:17px;font-weight:700;}
-  .grand .v{color:#B4541E;}
-  .sig{margin-top:46px;display:flex;gap:40px;}
-  .sig div{flex:1;border-top:1px solid #1c1917;padding-top:6px;font-size:11px;color:#78716c;}
-  .note{margin-top:22px;font-size:11px;color:#78716c;}
-  .bar{max-width:740px;margin:0 auto;padding:12px 34px;display:flex;gap:10px;justify-content:flex-end;}
-  .bar button{font:inherit;font-weight:600;padding:8px 16px;border-radius:7px;border:1px solid #1c1917;background:#1c1917;color:#fff;cursor:pointer;}
-  @media print{body{background:#fff}.sheet{max-width:none;padding:0;min-height:0}.bar{display:none}
-    .meta input{border:none;padding-left:0}}
-</style></head><body>
-<div class="bar"><button onclick="window.print()">Print / Save as PDF</button></div>
-<div class="sheet">
+  return `<div class="sheet">
   <div class="lh">${logo}<div class="lh-txt"><h1>${esc(companyName)}</h1>
     ${addr ? `<div class="a">${addr}</div>` : ''}</div></div>
 
@@ -489,13 +486,119 @@ function printPayStatement(kind, personId) {
   <div class="sig"><div>Received by</div><div>Date</div></div>
   <p class="note">Paid as an independent contractor &mdash; no taxes withheld. Per diem is counted once
   per day worked. Questions on this statement, contact the office.</p>
-</div></body></html>`;
+</div>`;
+}
 
+function payStatementTitle(kind, r) {
+  const nameKey = kind === 'welders' ? 'welder_name' : 'helper_name';
+  // Browsers offer the document title as the filename in Save as PDF, so this is
+  // what the office ends up with on disk. Name first, since that is what they
+  // will be looking for in a folder of them.
+  return `${r[nameKey]} — pay statement — ${formatWeekLabel(weekStart)}`;
+}
+
+function openPrintWindow(html) {
   const win = window.open('', '_blank');
-  if (!win) { alert('Your browser blocked the pop-up. Allow pop-ups for sotaweld.com and try again.'); return; }
+  if (!win) {
+    alert('Your browser blocked the pop-up. Allow pop-ups for sotaweld.com and try again.');
+    return null;
+  }
   win.document.open();
   win.document.write(html);
   win.document.close();
+  return win;
+}
+
+function printPayStatement(kind, personId) {
+  const rows = (kind === 'welders' ? weekData.welders : weekData.helpers) || [];
+  const idKey = kind === 'welders' ? 'welder_id' : 'helper_id';
+  const r = rows.find(x => x[idKey] === personId);
+  if (!r) { alert('Could not find that person in this week.'); return; }
+
+  openPrintWindow(`<!doctype html><html><head><meta charset="utf-8">
+<title>${esc(payStatementTitle(kind, r))}</title>
+<style>
+${PAY_STATEMENT_CSS}</style></head><body>
+<div class="bar"><button onclick="window.print()">Print / Save as PDF</button></div>
+${payStatementSheet(kind, r)}
+</body></html>`);
+}
+
+/** Every man's statement as its own PDF.
+ *
+ *  A browser cannot write several files from one print job, so this does the only
+ *  thing that actually produces separate PDFs: shows one man's sheet at a time and
+ *  prints it, then moves to the next. One Save dialog per man, each already named
+ *  after him. Printing them as one document would be one file, which is the thing
+ *  being complained about.
+ *
+ *  It advances by itself on afterprint, which is what makes it a run rather than a
+ *  chore, but afterprint is not reliable everywhere - Safari in particular. So the
+ *  bar drives it by hand too, and if the automatic step never comes the page is
+ *  still perfectly usable one button at a time. */
+function printAllPayStatements(kind) {
+  const rows = (kind === 'welders' ? weekData.welders : weekData.helpers) || [];
+  if (!rows.length) { alert('Nothing to print for this week.'); return; }
+
+  const sheets = rows.map(r => payStatementSheet(kind, r)).join('\n');
+  const titles = JSON.stringify(rows.map(r => payStatementTitle(kind, r)));
+  const label = kind === 'welders' ? 'welder' : 'helper';
+
+  openPrintWindow(`<!doctype html><html><head><meta charset="utf-8">
+<title>${esc(rows.length + ' ' + label + ' statements')}</title>
+<style>
+${PAY_STATEMENT_CSS}
+  .qbar{position:sticky;top:0;z-index:5;background:#1c1917;color:#fff;padding:10px 16px;
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;}
+  .qbar .who{font-weight:700;margin-right:auto;}
+  .qbar button{font:inherit;font-weight:600;padding:7px 14px;border-radius:7px;
+    border:1px solid #fff;background:#fff;color:#1c1917;cursor:pointer;}
+  .qbar button.ghost{background:transparent;color:#fff;}
+  .qbar button[disabled]{opacity:.4;cursor:default;}
+  .qhint{padding:10px 16px;background:#faf9f7;border-bottom:1px solid #e7e5e4;font-size:12px;color:#57534e;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;}
+  @media print{.qbar,.qhint{display:none}}
+</style></head><body>
+<div class="qbar">
+  <span class="who" id="qWho"></span>
+  <button class="ghost" id="qPrev">&larr; Back</button>
+  <button id="qPrint">Print this one</button>
+  <button class="ghost" id="qNext">Skip &rarr;</button>
+  <button class="ghost" id="qStop">Stop</button>
+</div>
+<div class="qhint">One statement at a time, so each saves as its own PDF named after the man.
+  Save each one, and the next comes up on its own. If it does not, hit Print this one.</div>
+${sheets}
+<script>
+(function () {
+  var sheets = [].slice.call(document.querySelectorAll('.sheet'));
+  var titles = ${titles};
+  var i = 0, auto = true;
+  var who = document.getElementById('qWho');
+  function show(n) {
+    sheets.forEach(function (s, k) { s.style.display = k === n ? '' : 'none'; });
+    document.title = titles[n];
+    who.textContent = (n + 1) + ' of ' + sheets.length + ' \u00b7 ' + titles[n].split(' \u2014 ')[0];
+    document.getElementById('qPrev').disabled = n === 0;
+    document.getElementById('qNext').disabled = n === sheets.length - 1;
+  }
+  function go(n) { if (n < 0 || n >= sheets.length) return; i = n; show(i); }
+  document.getElementById('qPrev').onclick = function () { auto = false; go(i - 1); };
+  document.getElementById('qNext').onclick = function () { auto = false; go(i + 1); };
+  document.getElementById('qStop').onclick = function () { auto = false; };
+  document.getElementById('qPrint').onclick = function () { window.print(); };
+  window.onafterprint = function () {
+    if (!auto) return;
+    if (i + 1 >= sheets.length) { auto = false; who.textContent = 'All ' + sheets.length + ' done.'; return; }
+    go(i + 1);
+    setTimeout(function () { if (auto) window.print(); }, 400);
+  };
+  show(0);
+  setTimeout(function () { window.print(); }, 250);
+})();
+<\/script>
+</body></html>`);
 }
 
 // ---------- printable crew summary ----------
@@ -783,6 +886,9 @@ function renderCrew(kind) {
       <button class="btn2 btn2-line small" data-print-crew="${kind}">
         Print ${kind === 'welders' ? 'welder' : 'helper'} summary
       </button>
+      <button class="btn2 btn2-solid small" data-print-stubs="${kind}">
+        Pay statements &mdash; one PDF each (${rows.length})
+      </button>
     </div>
     <table class="sum-table">
       <thead><tr>
@@ -810,6 +916,9 @@ function renderCrew(kind) {
       e.stopPropagation();
       printPayStatement(b.getAttribute('data-stub-kind'), b.getAttribute('data-stub'));
     }));
+
+  document.querySelectorAll('[data-print-stubs]').forEach(b =>
+    b.addEventListener('click', () => printAllPayStatements(b.getAttribute('data-print-stubs'))));
 
   document.querySelectorAll('[data-print-crew]').forEach(b =>
     b.addEventListener('click', (e) => {
