@@ -155,3 +155,72 @@
 .load-error p { margin: 0 0 10px; font-size: 13px; color: var(--dim, #98a1ae); line-height: 1.5; }
 .load-error ul { margin: 0 0 14px; padding-left: 18px; font-size: 12.5px; color: var(--text, #eef2f7); line-height: 1.6; }
 .load-error .le-hint { color: var(--dim2, #6e7681); font-size: 11.5px; }
+
+/* --- The invoice, before it leaves ---------------------------------------- */
+.inv2 { display: flex; align-items: center; gap: 8px; }
+.inv-note2 { color: var(--dim2); font-size: 12px; margin-top: 8px; }
+
+.inv-sheet { position: fixed; inset: 0; z-index: 95; display: flex; align-items: flex-end; justify-content: center; }
+.inv-sheet[hidden] { display: none; }
+.inv-sheet-back { position: absolute; inset: 0; background: rgba(0,0,0,.68); }
+body.inv-open { overflow: hidden; }
+.inv-card {
+  position: relative; width: 100%; max-width: 700px; max-height: 90vh; overflow-y: auto;
+  background: var(--steel-850); border: 1px solid var(--line);
+  border-radius: 18px 18px 0 0; padding: 24px 22px 30px;
+}
+@media (min-width: 700px) {
+  .inv-sheet { align-items: center; }
+  .inv-card { border-radius: 18px; }
+}
+.inv-x {
+  position: absolute; top: 12px; right: 14px; background: none; border: none;
+  color: var(--dim2); font-size: 26px; line-height: 1; cursor: pointer; padding: 4px 8px;
+}
+.inv-x:hover { color: var(--text); }
+
+.inv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding-right: 46px; }
+.inv-head h3 { margin: 0; font-size: 21px; font-weight: 800; }
+.inv-sub { color: var(--dim); font-size: 13px; margin-top: 4px; }
+.inv-total-big { font-size: 24px; font-weight: 800; color: var(--ok); white-space: nowrap; }
+
+.inv-loading, .inv-none { color: var(--dim); font-size: 14px; line-height: 1.6; }
+.inv-hint { color: var(--molten); font-size: 12.5px; line-height: 1.6; margin: 12px 0 0; }
+.inv-memo {
+  margin: 16px 0 14px; padding: 10px 12px; font-size: 12.5px; color: var(--dim);
+  background: var(--steel-800); border: 1px solid var(--line); border-radius: 8px;
+}
+
+/* A phone must scroll the lines sideways rather than the whole page. */
+.inv-lines-scroll { overflow-x: auto; }
+.inv-lines { width: 100%; min-width: 460px; border-collapse: collapse; font-size: 13.5px; }
+.inv-lines th {
+  text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--dim2); padding: 6px 8px; border-bottom: 1px solid var(--line); font-weight: 700;
+}
+.inv-lines td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.inv-lines .r { text-align: right; white-space: nowrap; }
+.inv-lines tfoot td { font-weight: 800; font-size: 15px; border-bottom: none; padding-top: 12px; }
+
+.inv-blockers {
+  margin-top: 18px; padding: 12px 14px; border-radius: 10px;
+  background: rgba(236,125,122,.08); border: 1px solid rgba(236,125,122,.35);
+}
+.inv-blockers-h { font-weight: 800; font-size: 13px; color: var(--danger); margin-bottom: 6px; }
+.inv-blockers ul { margin: 0; padding-left: 18px; color: var(--text); font-size: 13px; line-height: 1.65; }
+
+.inv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 20px; }
+.inv-caveat, .inv-done { color: var(--dim2); font-size: 12px; }
+.inv-status { font-size: 13px; line-height: 1.6; margin: 12px 0 0; }
+.inv-ok { color: var(--ok); }
+.inv-err { color: var(--danger); }
+
+/* On a phone the Amount column is the one that matters, so Qty and Rate fold
+   into a note under the description rather than pushing Amount off the edge. */
+.inv-qty-note { display: none; color: var(--dim2); font-size: 11.5px; margin-top: 3px; }
+@media (max-width: 560px) {
+  .inv-lines { min-width: 0; }
+  .inv-c-qty, .inv-c-rate { display: none; }
+  .inv-qty-note { display: block; }
+  .inv-total-big { font-size: 20px; }
+}

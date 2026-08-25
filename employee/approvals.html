@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="dark-theme.css?v=20260825b">
-<link rel="stylesheet" href="approvals.css?v=20260825b">
+<link rel="stylesheet" href="approvals.css?v=20260825c">
 </head>
 <body>
 
@@ -59,12 +59,21 @@
     <div id="jobGrid" class="job-grid"></div>
     <div id="jobDetail" style="display:none;"></div>
 
+    <!-- The invoice exactly as QuickBooks would receive it. Hidden until asked for. -->
+    <div class="inv-sheet" id="invSheet" hidden>
+      <div class="inv-sheet-back" data-inv-close></div>
+      <div class="inv-card" role="dialog" aria-modal="true" aria-labelledby="invName">
+        <button type="button" class="inv-x" data-inv-close aria-label="Close">&times;</button>
+        <div id="invSheetBody"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-client.js?v=20260825b"></script>
-<script src="approvals.js?v=20260825b"></script>
+<script src="approvals.js?v=20260825c"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

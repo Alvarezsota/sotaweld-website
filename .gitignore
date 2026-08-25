@@ -3,3 +3,6 @@ Thumbs.db
 
 # Brochure originals: already deduped into assets/img/work, OneDrive backs these up
 _source/brochure-images/
+
+# scratch left behind by the Supabase CLI
+supabase/.temp/
