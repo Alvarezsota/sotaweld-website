@@ -6,6 +6,7 @@ let weekStart = getMonday(new Date());
 let openJobId = null;
 let currentGroups = [];
 let currentJobWeeks = {};
+let weekAlreadyFiled = false;   // has this week's pay run gone to OneDrive yet
 
 function esc(str) {
   const div = document.createElement('div');
@@ -272,6 +273,12 @@ async function loadWeek() {
   const entries = entriesRes.data || [];
   const jobs = jobsRes.data || [];
 
+  // Only used to word the unlock warning honestly, so a failure here is not worth
+  // stopping the week over.
+  const { data: filedRow } = await sb.from('onedrive_file_log')
+    .select('filed_count').eq('week_start', start).maybeSingle();
+  weekAlreadyFiled = !!(filedRow && filedRow.filed_count > 0);
+
   jobsById = {};
   jobs.forEach(j => jobsById[j.id] = j);
   helpersList = hlprsRes.data || [];
@@ -423,13 +430,21 @@ function renderDetail(groupId) {
     document.getElementById('kickBtn').addEventListener('click', () => setJobWeekStatus(g.id, 'open'));
     document.getElementById('approveBtn').addEventListener('click', () => setJobWeekStatus(g.id, 'approved'));
   } else if (status === 'approved') {
+    // Approved is not final. Nothing has gone to QuickBooks yet, so a mistake
+    // found now is still just a mistake - it becomes expensive only once the
+    // invoice is over there. Hence an unlock here and none on a synced week.
     actBtns.innerHTML = `
       <span class="locked-note2">Locked · ready for QuickBooks</span>
+      <button class="btn2 btn2-ghost" id="unlockBtn">Unlock to edit</button>
       <button class="btn2 btn2-line" id="qboBtn" disabled title="QuickBooks integration not set up yet">Sync to QuickBooks Online</button>
       <span class="qbo-note">Requires QuickBooks setup — coming later</span>
     `;
+    document.getElementById('unlockBtn').addEventListener('click', () => unlockJobWeek(g.id));
   } else {
-    actBtns.innerHTML = `<span class="locked-note2">Synced to QuickBooks</span>`;
+    actBtns.innerHTML = `
+      <span class="locked-note2">Synced to QuickBooks</span>
+      <span class="qbo-note">Reverse it in QuickBooks before changing anything here.</span>
+    `;
   }
 
   document.getElementById('invoiceInput').addEventListener('blur', async (e) => {
@@ -834,26 +849,91 @@ async function deleteLine(line, groupId) {
   await rebuildIfFrozen();
 }
 
+// Returns { error } so callers can tell a refusal from a success. It used to
+// return nothing and drop whatever came back, which meant an approval the database
+// declined - a synced week, a permissions problem - looked exactly like one that
+// worked, right up until the page reloaded and the status was unchanged.
 async function upsertJobWeek(groupId, patch) {
   const job = jobsById[groupId];
-  if (!job) return; // one-off jobs without a real job id can't be tracked in job_weeks yet
+  if (!job) return { error: null }; // one-off jobs have no real job id to track yet
   const start = ymd(weekStart);
   const existing = currentJobWeeks[groupId];
 
   if (existing) {
-    await sb.from('job_weeks').update(patch).eq('id', existing.id);
+    const { error } = await sb.from('job_weeks').update(patch).eq('id', existing.id);
+    if (error) return { error };
     Object.assign(existing, patch);
-  } else {
-    const { data } = await sb.from('job_weeks').insert({ job_id: groupId, week_start: start, ...patch }).select().single();
-    if (data) currentJobWeeks[groupId] = data;
+    return { error: null };
   }
+  const { data, error } = await sb.from('job_weeks')
+    .insert({ job_id: groupId, week_start: start, ...patch }).select().single();
+  if (error) return { error };
+  if (data) currentJobWeeks[groupId] = data;
+  return { error: null };
 }
 
 async function setJobWeekStatus(groupId, status) {
   const patch = { status };
   if (status === 'approved') patch.approved_at = new Date().toISOString();
-  await upsertJobWeek(groupId, patch);
+  // Reopening clears the approval time too. Leaving it behind would have the week
+  // reading "approved 2am Tuesday" while sitting open, which is the sort of thing
+  // that gets believed months later when nobody remembers.
+  if (status === 'open') patch.approved_at = null;
+  const { error } = await upsertJobWeek(groupId, patch);
+  if (error) {
+    alert('That did not save: ' + error.message);
+    return;
+  }
   renderGrid();
+  renderDetail(groupId);
+}
+
+/** Puts an approved week back to open so its tickets can be corrected.
+ *
+ *  Only offered while the week is approved and not synced. Once it has gone to
+ *  QuickBooks the money has left this system's control, and quietly reopening the
+ *  week behind it would put the two out of step with nothing on either side
+ *  saying so. The database refuses that case as well, so this is not the only
+ *  thing standing between a synced week and an edit.
+ */
+async function unlockJobWeek(groupId) {
+  const g = currentGroups.find(x => x.id === groupId);
+  const name = g ? g.name : 'this job';
+  const filed = weekAlreadyFiled;
+
+  if (!confirm(
+    `Unlock ${name} for ${formatWeekLabel(weekStart)}?\n\n`
+    + `It goes back to open so the tickets can be changed, and it has not been `
+    + `synced to QuickBooks, so nothing has been sent anywhere that matters.\n\n`
+    + (filed
+       ? `The pay statements already in OneDrive stay exactly as they are. They are `
+         + `rewritten with the corrected numbers when you approve the week again.`
+       : `Approve it again when you are done.`))) return;
+
+  const btn = document.getElementById('unlockBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Unlocking…'; }
+
+  const { error } = await upsertJobWeek(groupId, { status: 'open', approved_at: null });
+  if (error) {
+    alert('Could not unlock: ' + error.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Unlock to edit'; }
+    return;
+  }
+
+  // Release this week's OneDrive filing claim. The log row is what stops two
+  // approvals filing the same week twice, and left in place it would also stop the
+  // corrected week ever being filed again - leaving the statements in OneDrive
+  // showing the numbers from before the correction, with nothing on screen to say
+  // so. Not fatal if it fails: the Summary page can always file the week by hand.
+  const { error: claimErr } = await sb.from('onedrive_file_log')
+    .delete().eq('week_start', ymd(weekStart));
+  if (claimErr) {
+    alert('The week is unlocked, but its OneDrive filing record could not be cleared.\n\n'
+        + 'When you approve it again the pay statements may not refile on their own. '
+        + 'Use "File week to OneDrive" on the Summary page to force them.');
+  }
+
+  await loadWeek();
   renderDetail(groupId);
 }
 
