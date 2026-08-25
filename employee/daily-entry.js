@@ -1286,6 +1286,16 @@ async function requireAuth() {
   render();
   loadLoggedForDate();
 
+  // A phone leaves this page open for days. A helper hired this morning would
+  // not be in a list fetched on Monday, so pick the list up again whenever the
+  // page comes back to the front. No render here on purpose -- the next one
+  // draws the new man, and forcing one would wipe what is half typed.
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) return;
+    const { data } = await sb.from('helpers_public').select('*').eq('active', true).order('name');
+    if (data && data.length) helpers = data;
+  });
+
   // Only the saved-work views, never `render()` — that would clear the entries
   // the welder is part way through typing.
   await liveData({

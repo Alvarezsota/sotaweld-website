@@ -526,6 +526,10 @@ let helpersList = [];
 // Whoever the time ticket offered for this day. Kept so that submitting with
 // nobody selected can say who is missing rather than just asking in general.
 let suggestedHelperId = '';
+// Whether the man himself touched the picker. "Worked alone" chosen on purpose
+// and a suggestion that never landed look identical in the box; this tells them
+// apart, so only the second one gets fixed up at submit.
+let helperTouched = false;
 const helperPick = document.getElementById('helperPick');
 const helperHint = document.getElementById('helperHint');
 
@@ -534,6 +538,28 @@ function fillHelperPicker() {
   helperPick.innerHTML = '<option value="">Worked alone</option>'
     + helpersList.map((h) => `<option value="${h.id}">${esc(h.name)}</option>`).join('');
   if (keep) helperPick.value = keep;
+}
+
+/* The picker is filled once, when the page opens. A helper added after that --
+   hired this afternoon, put on a ticket this evening -- is not in it, so setting
+   him selects nothing at all and the report goes in saying "worked alone" over a
+   time ticket that names him and pays him. That is how Damian Silva's and Juan
+   Calleros's August 24 reports came out blank. Fetch the list again before
+   giving up on a man, and if he is still missing (deactivated since, say) put
+   him in the picker by hand rather than dropping him. */
+async function ensureHelperListed(id) {
+  if (!id || helpersList.some((h) => h.id === id)) return;
+  try {
+    const { data } = await sb.from('helpers_public').select('id, name').eq('active', true).order('name');
+    if (data && data.length) helpersList = data;
+    if (!helpersList.some((h) => h.id === id)) {
+      const { data: one } = await sb.from('helpers_public').select('id, name').eq('id', id).maybeSingle();
+      if (one) helpersList = helpersList.concat([one]).sort((a, b) => a.name.localeCompare(b.name));
+    }
+    fillHelperPicker();
+  } catch {
+    /* leave the picker as it was - a failed refresh must not empty it */
+  }
 }
 
 function setHelper(id, why) {
@@ -558,13 +584,17 @@ async function suggestHelperFromTimeTicket(date) {
       .select('helper_id').in('daily_entry_id', ids);
     const first = (helpers || []).find((h) => h.helper_id);
     suggestedHelperId = first ? first.helper_id : '';
+    await ensureHelperListed(suggestedHelperId);
     setHelper(suggestedHelperId, 'suggested');
   } catch {
     setHelper('', '');            // never let this block the report
   }
 }
 
-helperPick.addEventListener('change', () => setHelper(helperPick.value, 'saved'));
+helperPick.addEventListener('change', () => {
+  helperTouched = true;
+  setHelper(helperPick.value, 'saved');
+});
 
 async function loadReportsForDate() {
   const date = dateInput.value || todayIso();
@@ -596,7 +626,7 @@ async function loadReportsForDate() {
     });
     submitBtn.textContent = 'Update Weld Report';
     const saved = data.find(r => r.helper_id);
-    if (saved) setHelper(saved.helper_id, 'saved');
+    if (saved) { await ensureHelperListed(saved.helper_id); setHelper(saved.helper_id, 'saved'); }
     else await suggestHelperFromTimeTicket(date);
   } else {
     const entry = newEntry();
@@ -612,6 +642,12 @@ submitBtn.addEventListener('click', async () => {
   // Nobody picked means "worked alone", and that goes on the record. Make him
   // say so on purpose rather than by leaving a box untouched. If his own time
   // ticket has a helper on it, name the man - that is the mistake worth catching.
+  // An empty box he never touched, with a helper on his ticket, is the picker
+  // having failed rather than an answer. Put the man back before asking.
+  if (!helperPick.value && suggestedHelperId && !helperTouched) {
+    await ensureHelperListed(suggestedHelperId);
+    setHelper(suggestedHelperId, 'suggested');
+  }
   if (!helperPick.value) {
     const missed = helpersList.find((h) => h.id === suggestedHelperId);
     const ask = missed
@@ -766,6 +802,14 @@ async function requireAuth() {
   weldersList = weldersData || [];
   helpersList = helpersData || [];
   fillHelperPicker();
+
+  // Same reason as ensureHelperListed: a page left open all week has a stale
+  // list. fillHelperPicker keeps whoever is already selected.
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) return;
+    const { data } = await sb.from('helpers_public').select('id, name').eq('active', true).order('name');
+    if (data && data.length) { helpersList = data; fillHelperPicker(); }
+  });
 
   await loadReportsForDate();
 })();
