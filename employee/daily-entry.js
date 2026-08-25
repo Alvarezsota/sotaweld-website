@@ -73,15 +73,25 @@ async function loadWeekPanel() {
   const start = ymd(weekPanelStart);
   const end = ymd(addDays(weekPanelStart, 6));
 
-  const [{ data: rows }, { data: jwRows }] = await Promise.all([
+  const [rowsRes, jwRes] = await Promise.all([
     sb.from('daily_entries').select('*')
       .or(`welder_id.eq.${currentUser.id},supervisor_id.eq.${currentUser.id}`)
       .gte('entry_date', start).lte('entry_date', end).order('entry_date'),
     sb.from('job_weeks').select('*').eq('week_start', start)
   ]);
 
-  const weekEntries = rows || [];
-  weekPanelLockedJobIds = new Set((jwRows || []).filter(r => r.status === 'approved' || r.status === 'synced').map(r => r.job_id));
+  // Same trap as the office page had: drop the error and a failed read becomes an
+  // empty week. A man who has turned in his hours all week deserves better than a
+  // panel calmly telling him he has logged nothing.
+  if (rowsRes.error) {
+    weekPanelBody.innerHTML = `<div class="week-day-empty">Your week could not be loaded &mdash;
+      your hours are still there. ${esc(rowsRes.error.message)}</div>`;
+    return;
+  }
+
+  const weekEntries = rowsRes.data || [];
+  const jwRows = jwRes.data || [];
+  weekPanelLockedJobIds = new Set(jwRows.filter(r => r.status === 'approved' || r.status === 'synced').map(r => r.job_id));
 
   let helperRows = [];
   let partRows = [];

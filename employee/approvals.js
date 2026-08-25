@@ -222,7 +222,7 @@ async function loadWeek() {
   // this means, fails the whole query, and the page draws an empty week with no
   // error on screen. That has happened once. Point new person columns at
   // auth.users instead; see 20260824_supervisor_fk_unambiguous.sql.
-  const [{ data: entries }, { data: jobs }, { data: jw }, { data: hlprs }, { data: welders }] = await Promise.all([
+  const [entriesRes, jobsRes, jwRes, hlprsRes, weldersRes] = await Promise.all([
     sb.from('daily_entries')
       .select('*, profiles(full_name, pay_rate, bill_rate), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate)), daily_entry_parts(*)')
       .gte('entry_date', start).lte('entry_date', end),
@@ -232,15 +232,48 @@ async function loadWeek() {
     sb.from('profiles').select('*').order('full_name')
   ]);
 
+  // A query that fails and a week nobody worked used to look identical. The error
+  // was destructured away, the missing rows became an empty list, and the page
+  // announced "No work logged this week yet." over a full database.
+  //
+  // That is how both of this system's disappearing-week incidents presented: not
+  // as an error, but as a calm and confident zero. The cause was sitting in an
+  // error object the whole time with nobody reading it. So read it, and never let
+  // a failure wear the same face as an empty week again.
+  const failed = [
+    ['the tickets', entriesRes], ['the jobs', jobsRes], ['the approvals', jwRes],
+    ['the helpers', hlprsRes], ['the welders', weldersRes]
+  ].filter(([, r]) => r.error);
+
+  if (failed.length) {
+    document.getElementById('jobDetail').style.display = 'none';
+    document.getElementById('jobGrid').style.display = 'grid';
+    document.getElementById('weekSummary').innerHTML = '';
+    document.getElementById('jobGrid').innerHTML = `
+      <div class="card load-error">
+        <h3>This week could not be loaded</h3>
+        <p>Your work is still there. The page could not read it, which is a
+           different thing from there being none &mdash; nothing has been lost.</p>
+        <ul>${failed.map(([what, r]) => `<li>Reading ${esc(what)} failed: ${esc(r.error.message)}${
+          r.error.hint ? `<br><span class="le-hint">${esc(r.error.hint)}</span>` : ''}</li>`).join('')}</ul>
+        <button type="button" class="btn2 btn2-solid small" id="retryWeekBtn">Try again</button>
+      </div>`;
+    document.getElementById('retryWeekBtn').addEventListener('click', () => loadWeek());
+    return;
+  }
+
+  const entries = entriesRes.data || [];
+  const jobs = jobsRes.data || [];
+
   jobsById = {};
-  (jobs || []).forEach(j => jobsById[j.id] = j);
-  helpersList = hlprs || [];
-  weldersList = welders || [];
+  jobs.forEach(j => jobsById[j.id] = j);
+  helpersList = hlprsRes.data || [];
+  weldersList = weldersRes.data || [];
 
   currentJobWeeks = {};
-  (jw || []).forEach(row => currentJobWeeks[row.job_id] = row);
+  (jwRes.data || []).forEach(row => currentJobWeeks[row.job_id] = row);
 
-  currentGroups = buildJobGroups(entries || [], jobs || []);
+  currentGroups = buildJobGroups(entries, jobs);
   renderGrid();
   if (openJobId) renderDetail(openJobId);
 }

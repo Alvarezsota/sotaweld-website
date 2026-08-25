@@ -147,3 +147,11 @@
 .act-btns2 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .locked-note2 { color: var(--arc); font-size: 13px; font-weight: 700; }
 .qbo-note { font-size: 11px; color: var(--dim2); }
+
+/* A week that could not be read. Deliberately loud: the failure mode this
+   replaces was a silent, confident "no work logged", which cost two evenings. */
+.load-error { border-color: rgba(236,125,122,.45); }
+.load-error h3 { margin: 0 0 8px; font-size: 15px; color: var(--danger, #ec7d7a); }
+.load-error p { margin: 0 0 10px; font-size: 13px; color: var(--dim, #98a1ae); line-height: 1.5; }
+.load-error ul { margin: 0 0 14px; padding-left: 18px; font-size: 12.5px; color: var(--text, #eef2f7); line-height: 1.6; }
+.load-error .le-hint { color: var(--dim2, #6e7681); font-size: 11.5px; }
