@@ -147,19 +147,34 @@ Deno.serve(async (req) => {
     let toEmail = DEFAULT_ALERT_EMAIL;
     let ccList: string[] = [];
 
+    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
     if (body.date || body.to) {
-      const authHeader = req.headers.get("Authorization") || "";
-      const callerClient = createClient(SUPABASE_URL, ANON_KEY, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: userData } = await callerClient.auth.getUser();
-      if (!userData?.user) {
-        return new Response(JSON.stringify({ ok: false, error: "Not authenticated" }), { status: 401, headers: CORS_HEADERS });
-      }
-      const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-      const { data: profile } = await admin.from("profiles").select("role").eq("id", userData.user.id).maybeSingle();
-      if (!profile || profile.role !== "admin") {
-        return new Response(JSON.stringify({ ok: false, error: "Admins only" }), { status: 403, headers: CORS_HEADERS });
+      // Two ways to ask for a particular day: an admin's token from the portal,
+      // or the shared hook secret, which is how the database re-sends a day that
+      // needs doing again. Without the second, re-running a specific date meant
+      // having a browser session to hand.
+      const secret = req.headers.get("x-sota-secret");
+      let allowed = false;
+      if (secret) {
+        const { data: row } = await supabase.from("app_settings").select("value").eq("key", "summary_hook_secret").maybeSingle();
+        allowed = !!row?.value && secret === row.value;
+        if (!allowed) {
+          return new Response(JSON.stringify({ ok: false, error: "Bad secret" }), { status: 403, headers: CORS_HEADERS });
+        }
+      } else {
+        const authHeader = req.headers.get("Authorization") || "";
+        const callerClient = createClient(SUPABASE_URL, ANON_KEY, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: userData } = await callerClient.auth.getUser();
+        if (!userData?.user) {
+          return new Response(JSON.stringify({ ok: false, error: "Not authenticated" }), { status: 401, headers: CORS_HEADERS });
+        }
+        const { data: profile } = await supabase.from("profiles").select("role").eq("id", userData.user.id).maybeSingle();
+        if (!profile || profile.role !== "admin") {
+          return new Response(JSON.stringify({ ok: false, error: "Admins only" }), { status: 403, headers: CORS_HEADERS });
+        }
       }
       targetDate = body.date || chicagoDateString(new Date());
       toEmail = body.to || DEFAULT_ALERT_EMAIL;
@@ -173,7 +188,6 @@ Deno.serve(async (req) => {
       targetDate = yesterday.toISOString().slice(0, 10);
     }
 
-    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
     const [{ data: reports, error }, { data: jobs, error: jobsError }, { data: entries, error: entriesError }, { data: helpers }] = await Promise.all([
       supabase
         .from("weld_reports")
@@ -181,7 +195,7 @@ Deno.serve(async (req) => {
         .eq("report_date", targetDate)
         .order("total_inches", { ascending: false }),
       supabase.from("jobs").select("id, name, is_yard, bill_to"),
-      supabase.from("daily_entries").select("welder_id, hours").eq("entry_date", targetDate),
+      supabase.from("daily_entries").select("id, welder_id, hours").eq("entry_date", targetDate),
       supabase.from("helpers_public").select("id, name"),
     ]);
 
@@ -200,9 +214,40 @@ Deno.serve(async (req) => {
     (helpers || []).forEach((h: { id: string; name: string }) => { helperNameById[h.id] = h.name; });
 
     const hoursByWelder: Record<string, number> = {};
+    const welderByEntryId: Record<string, string> = {};
     (entries || []).forEach((e) => {
       hoursByWelder[e.welder_id] = (hoursByWelder[e.welder_id] || 0) + Number(e.hours);
+      welderByEntryId[e.id] = e.welder_id;
     });
+
+    // Who was with him, taken off the hours ticket as well as off the weld report.
+    //
+    // The weld report has its own helper question, and it is the welder's own
+    // answer, so it wins. But it is answered from a list loaded when the page was
+    // opened: a helper added to the system after that is not on it, and the man
+    // has nothing to pick. The report then says nobody, while the hours ticket -
+    // filed later, from a fresh list - names him and pays him.
+    //
+    // That is exactly how Damian Silva and Juan Calleros came to read "worked
+    // alone" on 2026-08-24 with Alexander Fuentes and Alvaro Esquivel on their
+    // tickets. So when the report is silent, ask the ticket. A helper who was paid
+    // for the day was there, whatever the report managed to record, and this picks
+    // up newly added helpers with nothing to remember to do.
+    const ticketHelpersByWelder: Record<string, string[]> = {};
+    const entryIds = (entries || []).map((e) => e.id);
+    if (entryIds.length) {
+      const { data: helperRows } = await supabase
+        .from("daily_entry_helpers")
+        .select("daily_entry_id, helper_id")
+        .in("daily_entry_id", entryIds);
+      (helperRows || []).forEach((hr: { daily_entry_id: string; helper_id: string }) => {
+        const welderId = welderByEntryId[hr.daily_entry_id];
+        const name = helperNameById[hr.helper_id];
+        if (!welderId || !name) return;
+        const list = ticketHelpersByWelder[welderId] = ticketHelpersByWelder[welderId] || [];
+        if (!list.includes(name)) list.push(name);
+      });
+    }
 
     // Yard work belongs to the job it was done for, so both the job name and the
     // customer follow the same hop. Otherwise a day in the yard for Targa would
@@ -256,6 +301,12 @@ Deno.serve(async (req) => {
         if (!byWelder[key].helper && r.helper_id) {
           byWelder[key].helper = helperNameById[r.helper_id] || "a helper";
         }
+      });
+      // Anyone the report left blank gets his ticket's helpers instead.
+      Object.keys(byWelder).forEach((key) => {
+        if (byWelder[key].helper) return;
+        const fromTicket = ticketHelpersByWelder[key];
+        if (fromTicket && fromTicket.length) byWelder[key].helper = fromTicket.join(", ");
       });
       const welders = Object.values(byWelder).sort((a, b) => b.total - a.total);
 
