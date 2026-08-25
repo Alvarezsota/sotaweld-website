@@ -1,0 +1,60 @@
+-- Correction to 20260824_supervisor_fk_unambiguous.sql. Read this before touching
+-- any column that points at a person.
+--
+-- ---------------------------------------------------------------------------
+-- WHAT THAT MIGRATION GOT WRONG
+-- ---------------------------------------------------------------------------
+--
+-- Adding supervisor_id gave daily_entries two foreign keys to profiles, and
+-- PostgREST refuses an unhinted "profiles(...)" embed when it can find more than
+-- one relationship between two tables. That broke the Approvals week query and
+-- the page drew an empty week.
+--
+-- The fix was to repoint supervisor_id at auth.users instead, on the reasoning
+-- that daily_entries would then have a single relationship to profiles. That
+-- reasoning was wrong, and it was wrong in a way that looked right for an hour.
+--
+-- profiles.id IS auth.users.id - it is both the primary key and a foreign key to
+-- auth.users. So after the change PostgREST could still walk
+--
+--     daily_entries.supervisor_id -> auth.users <- profiles.id
+--
+-- and arrive at a second path to profiles. Nothing about the ambiguity went away.
+-- The page recovered only because PostgREST was serving a schema cache from
+-- before the column existed; when that cache refreshed, the same failure came
+-- straight back with no deploy and no schema change in between. From the office's
+-- side the week simply vanished again.
+--
+-- ---------------------------------------------------------------------------
+-- THE ACTUAL FIX, AND WHERE IT LIVES
+-- ---------------------------------------------------------------------------
+--
+-- In the query, not the schema. approvals.js now asks for
+--
+--     profiles!daily_entries_welder_id_fkey(full_name, pay_rate, bill_rate)
+--
+-- which names the relationship and cannot be confused by any number of other
+-- columns pointing at a person. weld-log.js names its one too, pre-emptively.
+--
+-- So: no schema change here. supervisor_id stays on auth.users, which is still
+-- the right target for a visibility-only column - it just is not, on its own, a
+-- defence against this.
+--
+-- If you add another person column to a table the portal embeds from, you do not
+-- need to think about which table to point it at. You need to make sure every
+-- embed of that table names its foreign key.
+--
+-- ---------------------------------------------------------------------------
+-- AND THE REASON IT COST TWO EVENINGS
+-- ---------------------------------------------------------------------------
+--
+-- Both times, the page had the error in hand and threw it away:
+--
+--     const [{ data: entries }, ...] = await Promise.all([...]);
+--     buildJobGroups(entries || [], ...)
+--
+-- A failed read became an empty list became "No work logged this week yet." over
+-- a full database. The pages now read the error and say what failed, which is how
+-- this cause was identified in one refresh instead of a schema audit.
+
+notify pgrst, 'reload schema';

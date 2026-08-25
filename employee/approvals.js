@@ -216,15 +216,22 @@ async function loadWeek() {
 
   document.getElementById('weekLabel').textContent = formatWeekLabel(weekStart);
 
-  // The profiles embed below is unhinted, which means daily_entries must keep
-  // exactly one foreign key to profiles. Add a second one - another column
-  // pointing at a person - and PostgREST can no longer tell which relationship
-  // this means, fails the whole query, and the page draws an empty week with no
-  // error on screen. That has happened once. Point new person columns at
-  // auth.users instead; see 20260824_supervisor_fk_unambiguous.sql.
+  // The welder embed names its foreign key on purpose. Do not shorten it back to
+  // plain "profiles(...)".
+  //
+  // supervisor_id was added for helper-only tickets and first pointed at profiles,
+  // which gave daily_entries two relationships to that table and broke this whole
+  // query. Repointing it at auth.users looked like the fix and was not: profiles.id
+  // IS auth.users.id, so PostgREST can still walk
+  // daily_entries.supervisor_id -> auth.users <- profiles.id and find a second
+  // path. It simply took until its schema cache refreshed to notice, which is why
+  // the page worked for an hour and then failed again with nothing having changed.
+  //
+  // Naming the constraint ends the argument. It costs one identifier and it does
+  // not care how many other columns ever point at a person.
   const [entriesRes, jobsRes, jwRes, hlprsRes, weldersRes] = await Promise.all([
     sb.from('daily_entries')
-      .select('*, profiles(full_name, pay_rate, bill_rate), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate)), daily_entry_parts(*)')
+      .select('*, profiles!daily_entries_welder_id_fkey(full_name, pay_rate, bill_rate), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate)), daily_entry_parts(*)')
       .gte('entry_date', start).lte('entry_date', end),
     sb.from('jobs').select('*'),
     sb.from('job_weeks').select('*').eq('week_start', start),

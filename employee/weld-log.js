@@ -758,7 +758,11 @@ async function loadWeek() {
   const [{ data: reports }, { data: jobs }, { data: welders }, { data: entries },
          { data: helpers }] = await Promise.all([
     sb.from('weld_reports')
-      .select('*, profiles(full_name)')
+      // Named on purpose, same as the Approvals embed. weld_reports has only one
+      // person column today, so this is not needed yet - it is here so that the day
+      // somebody adds a second one, this page keeps working instead of quietly
+      // reporting that nobody welded anything.
+      .select('*, profiles!weld_reports_welder_id_fkey(full_name)')
       .gte('report_date', start).lte('report_date', end)
       .order('report_date'),
     sb.from('jobs').select('*'),
