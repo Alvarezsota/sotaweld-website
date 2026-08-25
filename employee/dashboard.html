@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="dark-theme.css?v=20260823b">
-<link rel="stylesheet" href="dashboard.css?v=20260823b">
+<link rel="stylesheet" href="dashboard.css?v=20260825a">
 </head>
 <body>
 
@@ -41,9 +41,19 @@
 
   <div class="card" id="quoteRequestsCard" style="display:none;">
     <h2 class="card-h">Quote Requests <span class="admin-pill">Admin</span></h2>
-    <ul class="entry-list2" id="quoteRequestsList">
+    <p class="qr-hint">Tap a request to see who he is and how he found you.</p>
+    <ul class="entry-list2 qr-list" id="quoteRequestsList">
       <li class="empty-state2">Loading...</li>
     </ul>
+  </div>
+
+  <!-- The whole story of one lead. Hidden until a request is opened. -->
+  <div class="qr-sheet" id="quoteSheet" hidden>
+    <div class="qr-sheet-back" data-close></div>
+    <div class="qr-card" role="dialog" aria-modal="true" aria-labelledby="qrName">
+      <button type="button" class="qr-x" data-close aria-label="Close">&times;</button>
+      <div id="quoteSheetBody"></div>
+    </div>
   </div>
 
   <div class="card">
@@ -64,7 +74,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-client.js?v=20260823b"></script>
-<script src="dashboard.js?v=20260823b"></script>
+<script src="dashboard.js?v=20260825a"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>
