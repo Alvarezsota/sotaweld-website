@@ -414,7 +414,7 @@ Deno.serve(async (req) => {
         }),
       });
       const resData = await res.json();
-      sent.push({ customer, ok: res.ok, inches: Number(grandTotal.toFixed(2)), welders: welders.length, gaps: gaps.length, resend: resData });
+      sent.push({ customer, ok: res.ok, inches: Number(grandTotal.toFixed(2)), welders: welders.length, gaps: gaps.length, helpers: welders.map((w) => `${w.name}: ${w.helper || "alone"}`), resend: resData });
     }
 
     return new Response(JSON.stringify({

@@ -844,15 +844,31 @@ document.getElementById('sendLogEmailBtn').addEventListener('click', async () =>
       body: JSON.stringify({ date, to, cc })
     });
     const json = await res.json();
-    if (!res.ok || !json.ok) throw new Error(json.error || 'Send failed');
+    if (!res.ok) throw new Error(json.error || `Send failed (${res.status})`);
 
     if (json.skipped) {
       statusEl.textContent = `No weld reports found for ${date} — nothing to send.`;
       statusEl.className = 'wl-email-status wl-email-err';
     } else {
+      // The day goes out as one email per customer now, so what came back is a
+      // list rather than one total. Reading it as one total is what made a send
+      // that worked report itself as a failure.
+      const all = Array.isArray(json.sent) ? json.sent : [];
+      const done = all.filter(s => s.ok);
+      const failed = all.filter(s => !s.ok);
+      if (!done.length) throw new Error(json.error || 'Send failed');
+
       const ccNote = json.ccList && json.ccList.length ? ` (cc: ${json.ccList.join(', ')})` : '';
-      statusEl.textContent = `Sent — ${json.grandTotal.toFixed(2)} in across ${json.welders} welder(s) to ${to}${ccNote}.`;
+      const list = done.map(s => `${s.customer} ${Number(s.inches || 0).toFixed(2)} in`).join(' · ');
+      const lead = done.length === 1 ? 'Sent one email' : `Sent ${done.length} emails, one per customer,`;
+      statusEl.textContent = `${lead} to ${to}${ccNote} — ${list}.`;
       statusEl.className = 'wl-email-status wl-email-ok';
+
+      // A customer whose email bounced must not hide behind the ones that went.
+      if (failed.length) {
+        statusEl.textContent += ` Could not send ${failed.map(s => s.customer).join(', ')} — try that date again.`;
+        statusEl.className = 'wl-email-status wl-email-err';
+      }
     }
   } catch (err) {
     statusEl.textContent = 'Could not send: ' + err.message;
