@@ -8,8 +8,6 @@ let currentGroups = [];
 let currentJobWeeks = {};
 let weekAlreadyFiled = false;   // has this week's pay run gone to OneDrive yet
 let nextInvoiceNumber = '';    // what an unnumbered week would be given, for the button
-let previewJobId = null;       // which job the open invoice preview belongs to
-let previewPayload = null;     // the invoice that preview is showing
 
 function esc(str) {
   const div = document.createElement('div');
@@ -463,7 +461,15 @@ function renderDetail(groupId) {
   }
 
   const previewBtn = document.getElementById('previewInvBtn');
-  if (previewBtn) previewBtn.addEventListener('click', () => openInvoicePreview(g.id));
+  if (previewBtn) previewBtn.addEventListener('click', () => {
+    const week = currentJobWeeks[g.id];
+    InvoicePreview.open({
+      jobWeekId: week ? week.id : null,
+      name: g.name,
+      qbInvoiceId: week ? week.qb_invoice_id : null,
+      onPushed: loadWeek,
+    });
+  });
 
   const assignBtn = document.getElementById('assignInvBtn');
   if (assignBtn) assignBtn.addEventListener('click', () => assignInvoiceNo(g.id));
@@ -910,203 +916,10 @@ async function assignInvoiceNo(groupId) {
   renderDetail(groupId);
 }
 
-/* ---------------------------------------------------------------------------
-   THE INVOICE, BEFORE IT LEAVES
-   ---------------------------------------------------------------------------
-   What this shows is not a drawing of the invoice, it is the invoice: the same
-   call that pushes, with dryRun on, so the lines here are the lines QuickBooks
-   would be sent. Anything that would stop the push comes back with it and is
-   listed underneath, which is the difference between knowing why the button is
-   grey and pressing it to find out. */
-const QB_PUSH_URL = `${SUPABASE_URL}/functions/v1/qb-push-invoice`;
-
-async function callPush(jobWeekId, dryRun) {
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) throw new Error('Your session expired. Log in again.');
-  const res = await fetch(QB_PUSH_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-    body: JSON.stringify({ job_week_id: jobWeekId, dryRun }),
-  });
-  const json = await res.json().catch(() => ({}));
-  return { res, json };
-}
-
-function invMoney(n) {
-  return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-async function openInvoicePreview(groupId) {
-  const g = currentGroups.find(x => x.id === groupId);
-  const jw = currentJobWeeks[groupId];
-  const sheet = document.getElementById('invSheet');
-  const body = document.getElementById('invSheetBody');
-  if (!sheet || !body) return;
-
-  previewJobId = groupId;
-  previewPayload = null;
-  body.innerHTML = '<p class="inv-loading">Building the invoice…</p>';
-  sheet.hidden = false;
-  document.body.classList.add('inv-open');
-
-  if (!jw) {
-    body.innerHTML = `
-      <div class="inv-head"><h3 id="invName">${esc(g ? g.name : 'This job')}</h3></div>
-      <p class="inv-none">Nothing has been saved for this job this week yet, so there is no invoice to build.
-      Approve the week and it will have one.</p>`;
-    return;
-  }
-
-  let result;
-  try {
-    result = await callPush(jw.id, true);
-  } catch (err) {
-    body.innerHTML = `<p class="inv-none">Could not build the invoice: ${esc(err.message)}</p>`;
-    return;
-  }
-
-  const { res, json } = result;
-  if (!res.ok && !json.payload) {
-    body.innerHTML = `<p class="inv-none">Could not build the invoice: ${esc(json.error || res.statusText)}</p>`;
-    return;
-  }
-
-  previewPayload = json.payload || null;
-  renderInvoicePreview(groupId, json);
-}
-
-function renderInvoicePreview(groupId, json) {
-  const body = document.getElementById('invSheetBody');
-  const p = json.payload || {};
-  const jw = currentJobWeeks[groupId];
-  const blockers = Array.isArray(json.blockers) ? json.blockers : [];
-  const canPush = blockers.length === 0;
-  const lines = Array.isArray(p.lines) ? p.lines : [];
-  const number = p.invoice_no || null;
-
-  if (p.error) {
-    body.innerHTML = `
-      <div class="inv-head"><h3 id="invName">${esc(p.job_name || 'This job')}</h3></div>
-      <p class="inv-none">${esc(p.error)}</p>`;
-    return;
-  }
-
-  body.innerHTML = `
-    <div class="inv-head">
-      <div>
-        <h3 id="invName">Invoice ${number ? '#' + esc(number) : 'draft'}</h3>
-        <div class="inv-sub">${esc(p.customer_name || '')} · dated ${esc(p.transaction_date || '')}</div>
-      </div>
-      <div class="inv-total-big">${invMoney(p.lines_total)}</div>
-    </div>
-
-    ${number ? '' : `<p class="inv-hint">No number on this week yet. Approving it takes
-      ${esc(p.next_invoice_no || 'the next one')}; QuickBooks would otherwise number it itself.</p>`}
-
-    <div class="inv-memo">${esc(p.memo || '')}</div>
-
-    <div class="inv-lines-scroll">
-    <table class="inv-lines">
-      <thead><tr><th>Line</th><th class="r inv-c-qty">Qty</th><th class="r inv-c-rate">Rate</th><th class="r">Amount</th></tr></thead>
-      <tbody>
-        ${lines.map(l => `
-          <tr>
-            <td>
-              ${esc(l.description)}
-              ${l.quantity ? `<div class="inv-qty-note">${esc(l.quantity)} &times; ${invMoney(l.unit_price)}</div>` : ''}
-            </td>
-            <td class="r inv-c-qty">${l.quantity ? esc(l.quantity) : ''}</td>
-            <td class="r inv-c-rate">${l.unit_price ? invMoney(l.unit_price) : ''}</td>
-            <td class="r">${invMoney(l.amount)}</td>
-          </tr>`).join('')}
-      </tbody>
-      <tfoot>
-        <tr><td class="r">Total</td><td class="r inv-c-qty"></td><td class="r inv-c-rate"></td><td class="r">${invMoney(p.lines_total)}</td></tr>
-      </tfoot>
-    </table>
-    </div>
-
-    ${blockers.length ? `
-      <div class="inv-blockers">
-        <div class="inv-blockers-h">${blockers.length === 1 ? 'This is in the way' : 'These are in the way'}</div>
-        <ul>${blockers.map(b => `<li>${esc(b.message)}</li>`).join('')}</ul>
-      </div>` : ''}
-
-    <div class="inv-actions">
-      ${jw && jw.qb_invoice_id
-        ? `<span class="inv-done">Already on QuickBooks invoice ${esc(jw.qb_invoice_id)}.</span>`
-        : `<button class="btn2 ${canPush ? 'btn2-solid' : 'btn2-line'}" id="invPushBtn" ${canPush ? '' : 'disabled'}>
-             Push to QuickBooks
-           </button>
-           <span class="inv-caveat">${canPush
-             ? 'Creates it in QuickBooks unsent, and locks this week here.'
-             : 'Fix what is listed above and this will work.'}</span>`}
-      <button class="btn2 btn2-ghost" data-inv-close>Close</button>
-    </div>
-    <p class="inv-status" id="invStatus"></p>
-  `;
-
-  const pushBtn = document.getElementById('invPushBtn');
-  if (pushBtn) pushBtn.addEventListener('click', () => pushInvoice(groupId));
-}
-
-async function pushInvoice(groupId) {
-  const jw = currentJobWeeks[groupId];
-  const p = previewPayload || {};
-  if (!jw) return;
-
-  const ok = confirm(
-    `Create invoice ${p.invoice_no ? '#' + p.invoice_no : '(unnumbered)'} for ` +
-    `${p.customer_name} in QuickBooks, for ${invMoney(p.lines_total)}?\n\n` +
-    `It goes in unsent, so you can look at it there before it goes to the customer. ` +
-    `This week locks here once it does, and only reversing it in QuickBooks unlocks it.`
-  );
-  if (!ok) return;
-
-  const btn = document.getElementById('invPushBtn');
-  const statusEl = document.getElementById('invStatus');
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-  if (statusEl) { statusEl.textContent = ''; statusEl.className = 'inv-status'; }
-
-  try {
-    const { res, json } = await callPush(jw.id, false);
-    if (!res.ok || !json.ok) throw new Error(json.error || `Push failed (${res.status})`);
-
-    if (json.alreadyPushed) {
-      if (statusEl) {
-        statusEl.textContent = json.note || 'This week was already on an invoice.';
-        statusEl.className = 'inv-status inv-ok';
-      }
-    } else {
-      // QuickBooks may number it something other than what we proposed. Say so
-      // rather than leaving him to notice the two do not match.
-      const renumbered = json.number_changed_by_quickbooks
-        ? ` QuickBooks numbered it ${json.doc_number} rather than ${json.proposed_number}, so that is the number now.`
-        : '';
-      if (statusEl) {
-        statusEl.textContent = `Created invoice ${json.doc_number || json.qb_invoice_id} for ${invMoney(json.total)}. `
-          + `It is in QuickBooks unsent — look it over there before it goes out.${renumbered}`;
-        statusEl.className = 'inv-status inv-ok';
-      }
-    }
-    if (btn) btn.remove();
-    await loadWeek();
-  } catch (err) {
-    if (statusEl) {
-      statusEl.textContent = 'Nothing was created: ' + err.message;
-      statusEl.className = 'inv-status inv-err';
-    }
-    if (btn) { btn.disabled = false; btn.textContent = 'Push to QuickBooks'; }
-  }
-}
-
-function closeInvoicePreview() {
-  const sheet = document.getElementById('invSheet');
-  if (sheet) sheet.hidden = true;
-  document.body.classList.remove('inv-open');
-  previewJobId = null;
-  previewPayload = null;
-}
+/* The invoice preview and the QuickBooks push live in invoice-preview.js, which
+   the parts-invoice page loads too. One copy on purpose: the day these two
+   drifted, one screen would be showing a customer a different invoice from the
+   one being sent. */
 
 async function upsertJobWeek(groupId, patch) {
   const job = jobsById[groupId];
@@ -1550,16 +1363,7 @@ document.getElementById('nextWeekBtn').addEventListener('click', () => { weekSta
   await refreshNextInvoiceNumber();
   await loadWeek();
 
-  // Escape and the backdrop both close the invoice, same as everywhere else.
-  const invSheet = document.getElementById('invSheet');
-  if (invSheet) {
-    invSheet.addEventListener('click', (e) => {
-      if (e.target.closest('[data-inv-close]')) closeInvoicePreview();
-    });
-  }
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && invSheet && !invSheet.hidden) closeInvoicePreview();
-  });
+  InvoicePreview.wire();
 
   await liveData({
     reload: loadWeek,

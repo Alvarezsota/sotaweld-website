@@ -24,6 +24,18 @@
 // invoice and name the problem underneath it.
 //
 // ---------------------------------------------------------------------------
+// TWO KINDS OF INVOICE, ONE PUSH
+// ---------------------------------------------------------------------------
+//
+// A job week is a week of labour that has been approved. A parts invoice is
+// plate that went on the laser and came off as parts, with no week and nobody's
+// hours behind it. They are different things and they are billed the same way,
+// so both build a payload of the same shape in Postgres and everything from
+// there down -- the refusals, the token, the number, the write-back -- is one
+// piece of code. Pass job_week_id or parts_invoice_id; the rest does not care
+// which arrived.
+//
+// ---------------------------------------------------------------------------
 // THE INVOICE NUMBER
 // ---------------------------------------------------------------------------
 //
@@ -140,9 +152,16 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     jobWeekId = body.job_week_id ?? null;
+    const partsInvoiceId: string | null = body.parts_invoice_id ?? null;
     const dryRun = Boolean(body.dryRun);
     const forceBad = Boolean(body.__testBadRequest);
-    if (!jobWeekId) return json({ ok: false, error: "job_week_id is required" }, 400);
+    if (!jobWeekId && !partsInvoiceId) {
+      return json({ ok: false, error: "job_week_id or parts_invoice_id is required" }, 400);
+    }
+    if (jobWeekId && partsInvoiceId) {
+      return json({ ok: false, error: "pass one of job_week_id or parts_invoice_id, not both" }, 400);
+    }
+    const isParts = Boolean(partsInvoiceId);
 
     // Everything that would stop a push, gathered rather than thrown, so the
     // preview can show all of it at once instead of one problem per attempt.
@@ -157,24 +176,33 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: jw } = await db.from("job_weeks")
-      .select("id, status, qb_invoice_id, invoice_no").eq("id", jobWeekId).maybeSingle();
-    if (!jw) return json({ ok: false, error: "job week not found" }, 404);
+    const table = isParts ? "parts_invoices" : "job_weeks";
+    const rowId = isParts ? partsInvoiceId : jobWeekId;
+    const { data: row } = await db.from(table)
+      .select("id, status, qb_invoice_id, invoice_no").eq("id", rowId).maybeSingle();
+    if (!row) return json({ ok: false, error: `${isParts ? "invoice" : "job week"} not found` }, 404);
 
-    if (jw.qb_invoice_id) {
+    if (row.qb_invoice_id) {
       blockers.push({
         code: "already_pushed",
-        message: `This week is already on QuickBooks invoice ${jw.qb_invoice_id}. Nothing would be created.`,
+        message: `${isParts ? "This invoice is" : "This week is"} already on QuickBooks invoice ${row.qb_invoice_id}. Nothing would be created.`,
       });
     }
-    if (jw.status !== "approved") {
+    // A week is ready when it has been approved; a parts invoice when it has
+    // been marked finished. Same idea, different word on each screen.
+    const readyStatus = isParts ? "ready" : "approved";
+    if (row.status !== readyStatus && row.status !== "synced") {
       blockers.push({
         code: "not_approved",
-        message: `This week is "${jw.status}". Approve it before it can be invoiced.`,
+        message: isParts
+          ? `This invoice is still a draft. Mark it finished before it can be sent.`
+          : `This week is "${row.status}". Approve it before it can be invoiced.`,
       });
     }
 
-    const { data: payload, error: pErr } = await db.rpc("qb_invoice_payload", { p_job_week_id: jobWeekId });
+    const { data: payload, error: pErr } = isParts
+      ? await db.rpc("parts_invoice_payload", { p_invoice_id: partsInvoiceId })
+      : await db.rpc("qb_invoice_payload", { p_job_week_id: jobWeekId });
     if (pErr) throw new Error(`payload build failed: ${pErr.message}`);
     if (payload?.error) {
       blockers.push({ code: "payload", message: payload.error });
@@ -202,12 +230,13 @@ Deno.serve(async (req) => {
       const first = blockers[0];
       // Already pushed is not a failure -- it is the right answer to asking twice.
       if (first.code === "already_pushed" && blockers.length === 1) {
-        return json({ ok: true, alreadyPushed: true, qb_invoice_id: jw.qb_invoice_id, note: first.message });
+        return json({ ok: true, alreadyPushed: true, qb_invoice_id: row.qb_invoice_id, note: first.message });
       }
       await db.from("qb_push_log").insert({
         job_week_id: jobWeekId, action: "push_invoice", status: "blocked",
         amount: linesTotal || null,
-        detail: blockers.map((b) => `${b.code}: ${b.message}`).join(" | ").slice(0, 800),
+        detail: (isParts ? `parts invoice ${partsInvoiceId}: ` : "") +
+          blockers.map((b) => `${b.code}: ${b.message}`).join(" | ").slice(0, 780),
       });
       return json({ ok: false, error: first.message, blockers }, 409);
     }
@@ -225,6 +254,9 @@ Deno.serve(async (req) => {
         TxnDate: payload.transaction_date,
         PrivateNote: payload.memo,
         ...(docNumber ? { DocNumber: docNumber } : {}),
+        // A PO number is what the customer's own accounts department matches
+        // against, so it goes where QuickBooks prints it rather than into a memo.
+        ...(payload.po_number ? { CustomerMemo: { value: `PO ${payload.po_number}` } } : {}),
         Line: (payload.lines as Array<Record<string, unknown>>).map((l) => ({
           Amount: Number(l.amount),
           Description: l.description,
@@ -269,7 +301,7 @@ Deno.serve(async (req) => {
       return json({
         ok: false,
         error: duplicate
-          ? `QuickBooks already has an invoice numbered ${docNumber}. Change the number on this week and push again.`
+          ? `QuickBooks already has an invoice numbered ${docNumber}. Change the number on this one and push again.`
           : "QuickBooks rejected the invoice",
         duplicate_number: duplicate ? docNumber : null,
         quickbooks_message: fault?.Message ?? null,
@@ -293,13 +325,13 @@ Deno.serve(async (req) => {
       status: "synced",
     };
     if (assigned && assigned !== payload.invoice_no) update.invoice_no = assigned;
-    await db.from("job_weeks").update(update).eq("id", jobWeekId);
+    await db.from(table).update(update).eq("id", rowId);
 
     await db.from("qb_push_log").insert({
       job_week_id: jobWeekId, action: "push_invoice", status: "sent",
       qb_invoice_id: String(inv.Id), amount: Number(inv.TotalAmt),
       intuit_tid: tid, http_status: res.status,
-      detail: `${payload.job_name} -> ${payload.customer_name} as invoice ${assigned ?? "(unnumbered)"} by ${me?.full_name ?? who.user.email}`,
+      detail: `${isParts ? "Parts cut" : payload.job_name} -> ${payload.customer_name} as invoice ${assigned ?? "(unnumbered)"} by ${me?.full_name ?? who.user.email}`,
     });
 
     return json({

@@ -1,0 +1,86 @@
+/* --- Parts invoices ------------------------------------------------------- */
+/* card-h and entry-list2 live in dashboard.css, which this page does not load.
+   Restated here rather than pulling in a stylesheet for two rules. */
+.card-h {
+  font-size: 17px; font-weight: 800; display: flex; align-items: center;
+  justify-content: space-between; margin-bottom: 16px;
+}
+.entry-list2 { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+
+.pi-body { padding: 24px 16px 60px; display: flex; flex-direction: column; gap: 20px; }
+.pi-intro { color: var(--dim); font-size: 13.5px; line-height: 1.6; margin: 6px 0 0; max-width: 62ch; }
+
+.pi-list li { border-bottom: none; padding-bottom: 0; }
+.pi-row {
+  display: flex; gap: 14px; align-items: flex-start;
+  background: var(--steel-800); border: 1px solid var(--line);
+  border-radius: 12px; padding: 13px 15px;
+}
+.pi-row-main { flex: 1; min-width: 0; }
+.pi-row-top { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.pi-row-no { font-weight: 800; font-size: 15px; }
+.pi-row-cust { font-size: 14px; margin-top: 3px; }
+.pi-row-meta { color: var(--dim2); font-size: 12px; margin-top: 3px; }
+.pi-row-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+.pi-row-total { font-size: 17px; font-weight: 800; color: var(--ok); white-space: nowrap; }
+.pi-row-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+.pi-pill {
+  display: inline-block; padding: 2px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+  border: 1px solid var(--line); background: var(--steel-700);
+}
+.pi-draft  { color: var(--dim); }
+.pi-ready  { color: var(--molten); border-color: rgba(233,162,59,.4); }
+.pi-synced { color: var(--ok); border-color: rgba(87,201,140,.4); }
+
+/* --- the editor ----------------------------------------------------------- */
+.pi-editor .card-h { gap: 12px; }
+.pi-fields { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 20px; }
+.pi-field { flex: 1 1 170px; min-width: 0; }
+.pi-field-wide { flex: 2 1 300px; }
+.pi-opt { color: var(--dim2); font-weight: 400; }
+.pi-notes { margin-top: 16px; flex: 1 1 100%; }
+
+.pi-lines-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--dim2); padding-bottom: 8px; border-bottom: 1px solid var(--line);
+}
+.pi-lines-total { color: var(--ok); font-size: 13px; letter-spacing: 0; text-transform: none; }
+.pi-lines { display: flex; flex-direction: column; gap: 12px; margin: 14px 0; }
+
+.pi-line { display: flex; gap: 10px; align-items: flex-start; }
+.pi-line-n {
+  flex-shrink: 0; width: 22px; height: 22px; margin-top: 9px; border-radius: 50%;
+  background: var(--steel-700); color: var(--dim2);
+  font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+.pi-line-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pi-desc { width: 100%; }
+.pi-line-nums { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.pi-mini { display: flex; flex-direction: column; gap: 3px; flex: 0 1 100px; }
+.pi-mini-wide { flex: 1 1 170px; }
+.pi-mini span { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); }
+.pi-line-amt {
+  margin-left: auto; font-weight: 800; font-size: 14px; color: var(--ok);
+  white-space: nowrap; padding-bottom: 9px;
+}
+.pi-line-x {
+  background: none; border: none; color: var(--dim2); font-size: 22px; line-height: 1;
+  cursor: pointer; padding: 0 4px 8px;
+}
+.pi-line-x:hover { color: var(--danger); }
+
+.pi-editor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 20px; }
+.pi-editor-note { flex: 1 1 100%; color: var(--dim2); font-size: 12px; margin: 2px 0 0; }
+.pi-status { font-size: 13px; line-height: 1.6; margin: 12px 0 0; }
+.pi-ok  { color: var(--ok); }
+.pi-err { color: var(--danger); }
+
+@media (max-width: 560px) {
+  .pi-row { flex-direction: column; }
+  .pi-row-side { align-items: flex-start; flex-direction: row; width: 100%;
+                 justify-content: space-between; align-items: center; }
+  .pi-line-amt { margin-left: 0; }
+}
