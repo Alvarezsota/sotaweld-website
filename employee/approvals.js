@@ -125,14 +125,22 @@ function buildJobGroups(entries, jobs) {
     // written out twice because the job log is drawn here and the invoice is
     // drawn in SQL, and if the two ever disagree the office signs off on one
     // number and bills another. Change a chain here, change it there:
-    // supabase/migrations/20260824_per_line_rate_overrides.sql.
+    // supabase/migrations/20260824_per_line_rate_overrides.sql and
+    // supabase/migrations/20260827_internal_jobs.sql.
     //
     // A rate typed on the line wins. Blank falls back the way it always did.
     const prof = e.profiles || {};
     const isFlatJob = effectiveJob && effectiveJob.billing_type === 'flat';
-    const jobPerDiem = effectiveJob ? effectiveJob.per_diem : null;
-    const jobBillRate = effectiveJob ? effectiveJob.bill_rate : null;
-    const jobStainlessRate = effectiveJob ? effectiveJob.stainless_bill_rate : null;
+
+    // Overhead. Shop time is paid and never billed, and that has to hold for a
+    // helper as well as a welder -- a helper ignores the job rate on purpose, so
+    // zeroing the job rate alone would have looked right and corrected almost
+    // nothing, most of what lands on Shop being helpers. Per diem goes with it:
+    // there is no per diem on a day spent in the yard.
+    const internal = !!(effectiveJob && effectiveJob.is_internal);
+    const jobPerDiem = internal ? 0 : (effectiveJob ? effectiveJob.per_diem : null);
+    const jobBillRate = internal ? 0 : (effectiveJob ? effectiveJob.bill_rate : null);
+    const jobStainlessRate = internal ? 0 : (effectiveJob ? effectiveJob.stainless_bill_rate : null);
 
     // A helper-only ticket has no welder line at all. v_work_lines does the same
     // thing by inner-joining profiles, so the job log and the invoice agree on
@@ -180,8 +188,10 @@ function buildJobGroups(entries, jobs) {
         name: hp.name || '—',
         hours: Number(dh.hours),
         payRate: rateOr(dh.pay_rate_override, hp.pay_rate),
-        billRate: rateOr(dh.bill_rate_override, hp.bill_rate),
-        perDiemRate: rateOr(dh.per_diem_override, jobPerDiem),
+        // internal first: a helper otherwise falls straight through to his own
+        // rate, which is exactly the case a zero job rate cannot reach.
+        billRate: internal ? 0 : rateOr(dh.bill_rate_override, hp.bill_rate),
+        perDiemRate: internal ? 0 : rateOr(dh.per_diem_override, jobPerDiem),
         perDiem: dh.per_diem,
         entryId: e.id,
         helperRowId: dh.id,
@@ -196,7 +206,9 @@ function buildJobGroups(entries, jobs) {
           pay: dh.pay_rate_override, bill: dh.bill_rate_override, perDiem: dh.per_diem_override
         },
         fallbacks: {
-          pay: rateOr(hp.pay_rate), bill: rateOr(hp.bill_rate), perDiem: rateOr(jobPerDiem)
+          pay: rateOr(hp.pay_rate),
+          bill: internal ? 0 : rateOr(hp.bill_rate),
+          perDiem: internal ? 0 : rateOr(jobPerDiem)
         }
       }));
     });
