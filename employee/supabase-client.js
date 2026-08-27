@@ -106,3 +106,69 @@ function setLiveDot(status) {
     ? 'Live — this page updates as tickets change'
     : 'Not live — this page refreshes when you come back to it';
 }
+
+
+/* ---------------------------------------------------------------------------
+   STALE PHONES
+   ---------------------------------------------------------------------------
+   A phone that keeps the portal on its home screen holds on to the page itself,
+   not just the scripts. The ?v= on each script tag only busts the browser's
+   cache for the script -- if the HTML that names it is old, the old version
+   number is what gets asked for, and the phone quite correctly serves the old
+   file back. The man then sits looking at last week's code with no way to tell.
+
+   That is not hypothetical: the iPhone in the shop spent two days querying
+   daily_entries by welder_id alone, which is how the code read before
+   helpers-only tickets existed, so a ticket filed against a helper simply was
+   not there. Every request came back 200. Nothing looked broken anywhere.
+
+   So the running page checks what the live build is, and when it has fallen
+   behind it says so. It does not reload by itself: a welder halfway through
+   typing his hours should not have the page pulled out from under him. He taps
+   when he is ready, and the tap goes to a URL the phone has never seen, which
+   is the only reliable way to make it fetch the page again rather than serve
+   its copy. */
+async function checkBuild() {
+  const meta = document.querySelector('meta[name="sota-build"]');
+  if (!meta) return;                       // page predates this check
+  try {
+    const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const live = (await res.json()).build;
+    if (!live || live === meta.content) return;
+    showUpdateBar(live);
+  } catch (_) {
+    /* offline in the field is normal; say nothing */
+  }
+}
+
+function showUpdateBar(live) {
+  if (document.getElementById('sotaUpdateBar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'sotaUpdateBar';
+  bar.setAttribute('role', 'status');
+  bar.style.cssText =
+    'position:fixed;left:0;right:0;bottom:0;z-index:9999;display:flex;gap:12px;' +
+    'align-items:center;justify-content:center;flex-wrap:wrap;padding:12px 16px;' +
+    'background:#E9A23B;color:#150F04;font:600 14px/1.4 -apple-system,BlinkMacSystemFont,' +
+    "'Segoe UI',Helvetica,Arial,sans-serif;box-shadow:0 -4px 18px rgba(0,0,0,.35)";
+  bar.innerHTML =
+    '<span>This page is out of date and may be missing work.</span>' +
+    '<button type="button" style="background:#150F04;color:#fff;border:none;border-radius:8px;' +
+    'padding:8px 16px;font:inherit;cursor:pointer">Update now</button>';
+  bar.querySelector('button').addEventListener('click', () => {
+    // A URL it has never seen. location.reload() would be served the same
+    // cached page straight back.
+    const u = new URL(window.location.href);
+    u.searchParams.set('b', live);
+    window.location.replace(u.toString());
+  });
+  document.body.appendChild(bar);
+}
+
+checkBuild();
+// A phone left on the home screen for a week only comes back into view; that is
+// the moment worth re-checking, not some timer.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkBuild();
+});

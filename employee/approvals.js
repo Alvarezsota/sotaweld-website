@@ -1295,6 +1295,11 @@ async function saveNewTicket() {
     // to call stainless - all of that belongs to a man who is not on this ticket.
     const { data, error } = await sb.from('daily_entries').insert({
       welder_id: welderMode ? s.welderId : null,
+      // A helpers-only ticket has no welder on it, so without a supervisor it
+      // belongs to nobody: every Log Work page filters on one or the other, and
+      // an ownerless ticket appears on none of them. Two of Isidro Hinojosa's
+      // days went in that way and were only ever visible from this page.
+      supervisor_id: welderMode ? null : currentUser.id,
       entry_date: s.entryDate,
       job_id: other ? null : s.jobId,
       one_off_name: other ? s.oneOffName.trim() : null,
