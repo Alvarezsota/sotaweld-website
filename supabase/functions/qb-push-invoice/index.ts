@@ -220,10 +220,27 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Where this invoice gets emailed. QuickBooks holds one address on the
+    // customer record and has nowhere to keep carbon copies, so the CC list has
+    // to ride on the invoice itself or the send window comes up with a blank Cc.
+    const env = String(ready?.connected_environment ?? "production");
+    const custId = String((payload.customer as { id?: string } | undefined)?.id ?? "");
+    let billTo = "", billCc = "";
+    if (custId) {
+      const { data: cust } = await db.from("qb_customers")
+        .select("bill_email, bill_email_cc")
+        .eq("id", custId).eq("environment", env).maybeSingle();
+      billTo = (cust?.bill_email ?? "").trim();
+      billCc = (cust?.bill_email_cc ?? "").trim();
+    }
+
     // A preview never refuses and never touches QuickBooks. It draws the invoice
     // and hands back whatever would stand in the way of sending it.
     if (dryRun) {
-      return json({ ok: true, dryRun: true, payload, blockers, readiness: ready });
+      return json({
+        ok: true, dryRun: true, payload, blockers, readiness: ready,
+        emailTo: billTo || null, emailCc: billCc || null,
+      });
     }
 
     if (blockers.length && !forceBad) {
@@ -252,6 +269,10 @@ Deno.serve(async (req) => {
       : {
         CustomerRef: { value: payload.customer.id },
         TxnDate: payload.transaction_date,
+        // Only sent when we hold an address. Left off, QuickBooks keeps whatever
+        // is already on the customer rather than being handed a blank.
+        ...(billTo ? { BillEmail: { Address: billTo.slice(0, 100) } } : {}),
+        ...(billCc ? { BillEmailCc: { Address: billCc.slice(0, 200) } } : {}),
         PrivateNote: payload.memo,
         ...(docNumber ? { DocNumber: docNumber } : {}),
         // A PO number is what the customer's own accounts department matches
@@ -345,6 +366,8 @@ Deno.serve(async (req) => {
       job: payload.job_name,
       emailed: inv.EmailStatus ?? "NotSet",
       intuit_tid: tid,
+      emailTo: billTo || null,
+      emailCc: billCc || null,
       note: "Created in QuickBooks and not sent. Review it there before sending.",
     });
   } catch (err) {
