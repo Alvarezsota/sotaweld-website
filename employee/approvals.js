@@ -66,10 +66,18 @@ function personLine(o) {
   const isFlat = Array.isArray(o.parts);
   const partsSum = isFlat ? o.parts.reduce((s, p) => s + Number(p.quantity) * Number(p.rate), 0) : 0;
   const effectiveBillRate = (o.isStainless && !isFlat) ? o.stainlessRate : o.billRate;
+
+  // Hours invoiced and hours paid are not always the same number: a class the
+  // customer is charged eight hours for that the man got through quicker, a
+  // day where he is paid a flat total across three jobs. Revenue comes off what
+  // is billed, cost off what he is paid. Blank means they are the same, which
+  // is the ordinary case. Matches pay_hours in v_work_lines -- change one,
+  // change the other.
+  const payHours = (o.payHours == null || o.payHours === '') ? o.hours : Number(o.payHours);
   const revenue = (isFlat ? partsSum : o.hours * effectiveBillRate) + pd;
-  const cost = o.hours * o.payRate + pd;
+  const cost = payHours * o.payRate + pd;
   return {
-    role: o.role, name: o.name, hours: o.hours,
+    role: o.role, name: o.name, hours: o.hours, payHours,
     payRate: o.payRate, billRate: effectiveBillRate,
     pd: o.perDiem ? pd : null, revenue, cost, margin: revenue - cost,
     entryId: o.entryId, helperRowId: o.helperRowId || null, description: o.description || '',
@@ -149,6 +157,7 @@ function buildJobGroups(entries, jobs) {
       role: 'welder',
       name: prof.full_name || '—',
       hours: Number(e.hours),
+      payHours: e.pay_hours_override,
       payRate: rateOr(e.pay_rate_override, prof.pay_rate),
       billRate: rateOr(e.bill_rate_override, jobBillRate, prof.bill_rate),
       // A bill rate typed on a stainless line still counts, so entering one
@@ -187,6 +196,7 @@ function buildJobGroups(entries, jobs) {
         role: 'helper',
         name: hp.name || '—',
         hours: Number(dh.hours),
+        payHours: dh.pay_hours_override,
         payRate: rateOr(dh.pay_rate_override, hp.pay_rate),
         // internal first: a helper otherwise falls straight through to his own
         // rate, which is exactly the case a zero job rate cannot reach.
