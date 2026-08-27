@@ -8,6 +8,7 @@ let editingReportId = null;
 let editState = null;
 let hoursByWelderDate = {};
 let helperNameById = {};
+let helpersByWelderDate = {};
 
 const PI = 3.14;
 const PIPE = [[1.5,1.63],[2,2.38],[3,3.5],[4,4.5],[5,5.56],[6,6.63],[8,8.63],[10,10.75],[12,12.75],
@@ -591,11 +592,23 @@ function renderBody(dayGroups) {
             ? `<span class="wl-job-hours">&middot; ${hrsWorked} hrs logged</span>`
             : `<span class="wl-job-hours wl-job-hours-missing">&middot; no hours logged</span>`;
           const multi = w.rows.length > 1;
-          // The welder answers this once for the day, so every row carries the
-          // same id - take the first one that has it rather than listing it per job.
-          const helperId = (w.rows.find((r) => r.helper_id) || {}).helper_id;
-          const helperHtml = helperId
-            ? `<span class="wl-helper">with ${esc(helperNameById[helperId] || 'a helper')}</span>`
+          // The helper is recorded twice: on the time ticket, because that is how
+          // he gets paid, and on the weld report, because the welder is asked
+          // again. The ticket is the reliable one - it has to be filled in for
+          // payroll - so read from it first and treat the weld report's answer as
+          // an addition, not the source. A welder who forgot to pick anyone on
+          // the report still shows the man who was with him.
+          //
+          // The ticket also holds as many helpers as the day had, so helpers who
+          // switched partway through all appear instead of only the first.
+          const dayKey = `${w.welderId}_${day.dateStr}`;
+          const helperIds = [...(helpersByWelderDate[dayKey] || [])];
+          w.rows.forEach(r => {
+            if (r.helper_id && !helperIds.includes(r.helper_id)) helperIds.push(r.helper_id);
+          });
+          const helperNames = helperIds.map(id => helperNameById[id] || 'a helper');
+          const helperHtml = helperNames.length
+            ? `<span class="wl-helper">with ${esc(helperNames.join(', '))}</span>`
             : '';
 
           return `
@@ -768,7 +781,7 @@ async function loadWeek() {
     sb.from('jobs').select('*'),
     sb.from('profiles').select('id, full_name').order('full_name'),
     sb.from('daily_entries')
-      .select('welder_id, entry_date, hours')
+      .select('welder_id, entry_date, hours, daily_entry_helpers(helper_id)')
       .gte('entry_date', start).lte('entry_date', end),
     sb.from('helpers_public').select('id, name')
   ]);
@@ -783,6 +796,16 @@ async function loadWeek() {
 
   helperNameById = {};
   (helpers || []).forEach((h) => { helperNameById[h.id] = h.name; });
+
+  helpersByWelderDate = {};
+  (entries || []).forEach(e => {
+    const key = `${e.welder_id}_${e.entry_date}`;
+    (e.daily_entry_helpers || []).forEach(h => {
+      if (!h.helper_id) return;
+      if (!helpersByWelderDate[key]) helpersByWelderDate[key] = [];
+      if (!helpersByWelderDate[key].includes(h.helper_id)) helpersByWelderDate[key].push(h.helper_id);
+    });
+  });
 
   hoursByWelderDate = {};
   (entries || []).forEach(e => {
