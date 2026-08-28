@@ -65,16 +65,16 @@ const dayLabel = (iso: string) => {
 const spanLabel = (start: string, end: string) => {
   const [, sm, sd] = start.split('-').map(Number);
   const [, em, ed] = end.split('-').map(Number);
-  return `${MON[sm - 1]} ${sd} – ${MON[em - 1]} ${ed}`;
+  return `${MON[sm - 1]} ${sd} \u2013 ${MON[em - 1]} ${ed}`;
 };
 
 // pdf-lib throws on a character the standard fonts cannot encode rather than
 // skipping it, and job descriptions are typed on a phone. Lifted whole from the
 // pay statement for the same reason it exists there: one stray glyph would
 // otherwise take out the entire sheet.
-const WINANSI_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹Œ'
-                    + 'Ž‘’“”•–—˜™š'
-                    + '›œžŸ';
+const WINANSI_EXTRA = '\u20AC\u201A\u0192\u201E\u2026\u2020\u2021\u02C6\u2030\u0160\u2039\u0152'
+                    + '\u017D\u2018\u2019\u201C\u201D\u2022\u2013\u2014\u02DC\u2122\u0161'
+                    + '\u203A\u0153\u017E\u0178';
 const wa = (v: unknown) => {
   const folded = String(v ?? '')
     // A description typed on a phone carries newlines -- one real ticket reads
@@ -82,10 +82,10 @@ const wa = (v: unknown) => {
     // lines. Dropped as control characters they ran the words together, and handed
     // to drawText they would have spilled the row down the page. They become spaces.
     .replace(/[\r\n\t\v\f]+/g, ' ')
-    .replace(/[     ]/g, ' ')
-    .replace(/[−‒―]/g, '-')
-    .replace(/[′]/g, "'").replace(/[″]/g, '"')
-    .replace(/[​‌‍﻿]/g, '');
+    .replace(/[\u00A0\u2007\u202F\u2009\u200A]/g, ' ')
+    .replace(/[\u2212\u2012\u2015]/g, '-')
+    .replace(/[\u2032]/g, "'").replace(/[\u2033]/g, '"')
+    .replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
   let out = '';
   for (const ch of folded) {
     const c = ch.codePointAt(0)!;
@@ -149,8 +149,8 @@ export async function buildInvoiceBackup(
     const s = wa(raw);
     if (font.widthOfTextAtSize(s, size) <= width) return s;
     let out = s;
-    while (out.length > 1 && font.widthOfTextAtSize(out + '…', size) > width) out = out.slice(0, -1);
-    return out + '…';
+    while (out.length > 1 && font.widthOfTextAtSize(out + '\u2026', size) > width) out = out.slice(0, -1);
+    return out + '\u2026';
   };
   const rule = (yy: number, thickness = 1, color = LINE) =>
     page.drawLine({ start: { x: MARGIN, y: yy }, end: { x: MARGIN + CONTENT, y: yy }, thickness, color });
@@ -169,7 +169,7 @@ export async function buildInvoiceBackup(
   }
   text((company.company_name || 'State of the Arc Welding & Services').toUpperCase(),
        headTextX, y - 14, 13, bold);
-  const addr = [company.company_address, company.company_phone].filter(Boolean).join('  ·  ');
+  const addr = [company.company_address, company.company_phone].filter(Boolean).join('  \u00B7  ');
   if (addr) text(addr, headTextX, y - 28, 9, reg, GREY);
   y -= 46;
   rule(y, 2.5, INK);
@@ -184,8 +184,8 @@ export async function buildInvoiceBackup(
   right(spanLabel(p.week_start, p.week_end), MARGIN + CONTENT, y + 2, 11, reg, GREY);
   y -= 15;
   const route = [p.customer_name || p.bill_to, p.operator ? `on ${p.operator}` : null]
-    .filter(Boolean).join('  ·  ');
-  text(route + (p.bid_number ? `  ·  Bid #${p.bid_number}` : ''), MARGIN, y, 9.5, reg, GREY);
+    .filter(Boolean).join('  \u00B7  ');
+  text(route + (p.bid_number ? `  \u00B7  Bid #${p.bid_number}` : ''), MARGIN, y, 9.5, reg, GREY);
   y -= 12;
   text(`Week of ${usDate(p.week_start)} through ${usDate(p.week_end)}`, MARGIN, y, 9.5, reg, GREY);
   y -= 24;
@@ -252,7 +252,7 @@ export async function buildInvoiceBackup(
     right(num(c.days), crewEnd(2) - 4, y, 9);
     right(num(c.hours), crewEnd(3) - 4, y, 9, bold);
     if (showMoney) {
-      right(c.per_diem_days ? `${num(c.per_diem_days)} × ${money(c.per_diem_amount / c.per_diem_days)}` : '—',
+      right(c.per_diem_days ? `${num(c.per_diem_days)} \u00D7 ${money(c.per_diem_amount / c.per_diem_days)}` : '\u2014',
             crewEnd(4) - 4, y, 8, reg, GREY);
       right(money(c.amount), crewEnd(5) - 4, y, 9, bold);
     }
@@ -267,7 +267,7 @@ export async function buildInvoiceBackup(
   text('Total', CX[0], y, 9, bold);
   right(num(Number(p.welder_hours) + Number(p.helper_hours)), crewEnd(3) - 4, y, 9, bold);
   if (showMoney) {
-    right(p.per_diem_amount ? money(p.per_diem_amount) : '—', crewEnd(4) - 4, y, 8.5, bold, GREY);
+    right(p.per_diem_amount ? money(p.per_diem_amount) : '\u2014', crewEnd(4) - 4, y, 8.5, bold, GREY);
     right(money(p.labor_amount + p.per_diem_amount), crewEnd(5) - 4, y, 9.5, bold, ACCENT);
   }
   y -= 30;
@@ -325,7 +325,7 @@ export async function buildInvoiceBackup(
     room(70, dayHeader);
     y -= 12;
     dayBar(dayLabel(d.date));
-    const desc = d.descriptions.filter(Boolean).join(' · ');
+    const desc = d.descriptions.filter(Boolean).join(' \u00B7 ');
     if (desc) text(fit(desc, MARGIN + CONTENT - DESC_X, 8.5, ital), DESC_X, y, 8.5, ital, GREY);
     y -= 24;
     openDay = d.date;
@@ -333,7 +333,7 @@ export async function buildInvoiceBackup(
     for (const l of d.lines) {
       const note = [l.description, l.stainless ? 'Stainless' : null,
                     l.worked_at && l.worked_at !== p.job_name ? `worked at ${l.worked_at}` : null]
-        .filter(Boolean).join(' · ');
+        .filter(Boolean).join(' \u00B7 ');
       const rowH = note ? 25 : 16;
       room(rowH, dayHeader);
 
@@ -341,11 +341,11 @@ export async function buildInvoiceBackup(
       text(l.kind === 'welder' ? 'Welder' : 'Helper', DX[1], y, 8.5, reg, GREY);
       right(num(l.hours), dayEnd(2) - 4, y, 9);
       if (showMoney) {
-        right(l.bill_rate ? money(l.bill_rate) : '—', dayEnd(3) - 4, y, 9, reg, GREY);
-        right(l.per_diem ? money(l.per_diem_rate) : '—', dayEnd(4) - 4, y, 9, reg, GREY);
+        right(l.bill_rate ? money(l.bill_rate) : '\u2014', dayEnd(3) - 4, y, 9, reg, GREY);
+        right(l.per_diem ? money(l.per_diem_rate) : '\u2014', dayEnd(4) - 4, y, 9, reg, GREY);
         right(money(Number(l.billed) + (l.per_diem ? Number(l.per_diem_rate) : 0)), dayEnd(5) - 4, y, 9, bold);
       } else {
-        right(l.per_diem ? money(l.per_diem_rate) : '—', dayEnd(3) - 4, y, 9, reg, GREY);
+        right(l.per_diem ? money(l.per_diem_rate) : '\u2014', dayEnd(3) - 4, y, 9, reg, GREY);
       }
       if (note) text(fit(note, CONTENT - 90, 7.5, ital), DX[0], y - 10, 7.5, ital, GREY);
       y -= rowH;
@@ -399,7 +399,7 @@ export async function buildInvoiceBackup(
     // Per diem is billed on a bid job the same as on an hourly one, so it is a
     // real line on the invoice and belongs on the sheet that explains it.
     if (Number(p.per_diem_amount) > 0) {
-      text(`Per diem on the invoice — ${num(p.per_diem_person_days)} man-days`, MARGIN, y, 9.5, reg, GREY);
+      text(`Per diem on the invoice \u2014 ${num(p.per_diem_person_days)} man-days`, MARGIN, y, 9.5, reg, GREY);
       right(money(p.per_diem_amount), MARGIN + CONTENT, y, 9.5);
       y -= 16;
     }
@@ -415,8 +415,8 @@ export async function buildInvoiceBackup(
   // ---- footer, on every page ----
   // Attached to an invoice, this sheet gets printed, split and passed around, so
   // each page has to say on its own what it belongs to.
-  const stamp = `${p.job_name} · week of ${usDate(p.week_start)} to ${usDate(p.week_end)}`
-    + (p.invoice_no ? ` · invoice #${p.invoice_no}` : '');
+  const stamp = `${p.job_name} \u00B7 week of ${usDate(p.week_start)} to ${usDate(p.week_end)}`
+    + (p.invoice_no ? ` \u00B7 invoice #${p.invoice_no}` : '');
   pages.forEach((pg, i) => {
     pg.drawLine({ start: { x: MARGIN, y: FOOT - 8 }, end: { x: MARGIN + CONTENT, y: FOOT - 8 },
                   thickness: 1, color: LINE });
