@@ -39,6 +39,19 @@ const InvoicePreview = (function () {
       { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  /* Month, day, year -- the way it is read out loud in the office and the way
+     the crew sheet and the pay statements already print it.
+
+     Only what is shown turns round. transaction_date goes to QuickBooks as
+     TxnDate and their API takes YYYY-MM-DD, so the payload stays ISO; formatting
+     it at the source would have put a date QuickBooks cannot read on every
+     invoice. Anything that is not a plain ISO date is passed through untouched
+     rather than mangled into something that looks like a date and is not. */
+  function usDate(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso == null ? '' : iso).trim());
+    return m ? `${m[2]}-${m[3]}-${m[1]}` : (iso == null ? '' : String(iso));
+  }
+
   /** One call for both the look and the send. dryRun decides which. */
   async function call(ids, dryRun) {
     const { data: { session } } = await sb.auth.getSession();
@@ -118,7 +131,7 @@ const InvoicePreview = (function () {
       <div class="inv-head">
         <div>
           <h3 id="invName">Invoice ${number ? '#' + esc(number) : 'draft'}</h3>
-          <div class="inv-sub">${esc(p.customer_name || '')} · dated ${esc(p.transaction_date || '')}${
+          <div class="inv-sub">${esc(p.customer_name || '')} · dated ${esc(usDate(p.transaction_date))}${
             p.po_number ? ' · PO ' + esc(p.po_number) : ''}</div>
         </div>
         <div class="inv-total-big">${money(p.lines_total)}</div>
