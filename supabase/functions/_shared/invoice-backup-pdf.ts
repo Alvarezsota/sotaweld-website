@@ -276,12 +276,20 @@ export async function buildInvoiceBackup(
   DAY_COLS.reduce((acc, w, i) => { DX[i] = acc; return acc + w; }, MARGIN);
   const dayEnd = (i: number) => DX[i] + DAY_COLS[i];
 
-  // The date bar. Handed back the x the description starts at, because the
-  // continuation bar on a following page wants the bar and not the description.
-  const DESC_X = MARGIN + 132;
+  // The date bar.
+  //
+  // It has to outrank the names under it at a glance. A day heading set at the
+  // same weight as a man's name is a heading nobody sees, and then a sheet whose
+  // whole purpose is saying which day a man worked reads as one long list. So it
+  // is bigger than anything else in the table, it carries the accent stripe, and
+  // it sits in a band deep enough to break the rows apart.
+  const DESC_X = MARGIN + 152;
   const dayBar = (label: string) => {
-    page.drawRectangle({ x: MARGIN, y: y - 5, width: CONTENT, height: 17, color: SOFT });
-    text(label, MARGIN + 6, y, 9, bold);
+    page.drawRectangle({ x: MARGIN, y: y - 8, width: CONTENT, height: 25, color: SOFT });
+    page.drawRectangle({ x: MARGIN, y: y - 8, width: 4, height: 25, color: ACCENT });
+    page.drawLine({ start: { x: MARGIN, y: y + 17 }, end: { x: MARGIN + CONTENT, y: y + 17 },
+                    thickness: 0.8, color: LINE });
+    text(label, MARGIN + 14, y, 12.5, bold);
   };
 
   // Set while the rows of one date are being drawn, so a page break in the
@@ -300,21 +308,21 @@ export async function buildInvoiceBackup(
     y -= 6;
     rule(y, 1.2, INK);
     y -= 16;
-    if (openDay) { dayBar(`${dayLabel(openDay)} (continued)`); y -= 20; }
+    if (openDay) { y -= 12; dayBar(`${dayLabel(openDay)} (continued)`); y -= 24; }
   };
-  room(96, dayHeader);
+  room(110, dayHeader);
   dayHeader();
 
   for (const d of p.days) {
     // A day heading with no rows under it on the page it lands on is worse than
     // a slightly short page, so the heading and its first line move together.
     openDay = null;
-    room(52, dayHeader);
-    y -= 4;
+    room(70, dayHeader);
+    y -= 12;
     dayBar(dayLabel(d.date));
     const desc = d.descriptions.filter(Boolean).join(' · ');
-    if (desc) text(fit(desc, MARGIN + CONTENT - DESC_X, 8, ital), DESC_X, y, 8, ital, GREY);
-    y -= 20;
+    if (desc) text(fit(desc, MARGIN + CONTENT - DESC_X, 8.5, ital), DESC_X, y, 8.5, ital, GREY);
+    y -= 24;
     openDay = d.date;
 
     for (const l of d.lines) {
