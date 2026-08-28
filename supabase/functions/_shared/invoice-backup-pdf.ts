@@ -357,7 +357,24 @@ export async function buildInvoiceBackup(
   if (!p.days.length) { text('No days logged on this job this week.', DX[0], y - 12, 9, reg, GREY); y -= 28; }
 
   // ---- what this ties to ----
-  room(76, dayHeader);
+  //
+  // Asking for room the block does not need pushed it onto a page of its own,
+  // and breaking on dayHeader printed a DAY BY DAY heading up there with no day
+  // under it. It is not part of that table, so it breaks on nothing, and it asks
+  // for what it actually occupies -- which is the difference between this
+  // landing under the last man and landing on an otherwise blank sheet.
+  const other = showMoney
+    ? Number(p.invoice_total) - (Number(p.labor_amount) + Number(p.per_diem_amount))
+    : 0;
+  //
+  // The numbers are what the block actually occupies, measured down from the y
+  // it starts at to the bottom of the total box: 58pt plain, 74 with the parts
+  // line, 87 and 103 on the bid wording. Guessing high broke a three-day sheet
+  // onto a second page it had three inches of room to avoid.
+  const closingNeed = showMoney
+    ? (Math.abs(other) > 0.005 ? 70 : 54)
+    : (Number(p.per_diem_amount) > 0 ? 95 : 79);
+  room(closingNeed, () => {});
   y -= 10;
   rule(y, 1.6, INK);
   y -= 18;
@@ -365,7 +382,6 @@ export async function buildInvoiceBackup(
     text('Labor and per diem on this sheet', MARGIN, y, 9.5, reg, GREY);
     right(money(p.labor_amount + p.per_diem_amount), MARGIN + CONTENT, y, 9.5);
     y -= 16;
-    const other = Number(p.invoice_total) - (Number(p.labor_amount) + Number(p.per_diem_amount));
     if (Math.abs(other) > 0.005) {
       // Parts, an adjustment, a bid item on an hourly job. It is on the invoice
       // and it is not anybody's hours, so it is named rather than left as the
