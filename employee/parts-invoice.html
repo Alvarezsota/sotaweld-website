@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sota-build" content="20260828a">
+<meta name="sota-build" content="20260828b">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>Parts Invoice | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="dark-theme.css?v=20260827c">
 <link rel="stylesheet" href="approvals.css?v=20260827c">
-<link rel="stylesheet" href="parts-invoice.css?v=20260827c">
+<link rel="stylesheet" href="parts-invoice.css?v=20260828b">
 </head>
 <body>
 
@@ -63,6 +63,18 @@
       </ul>
     </div>
 
+    <!-- Who can be invoiced. Filled by CustomerBook. -->
+    <div id="customerBook"></div>
+
+    <!-- Adding or correcting one. Hidden until asked for. -->
+    <div class="inv-sheet" id="cbSheet" hidden>
+      <div class="inv-sheet-back" data-cb-close></div>
+      <div class="inv-card" role="dialog" aria-modal="true" aria-labelledby="cbSheetBody">
+        <button type="button" class="inv-x" data-cb-close aria-label="Close">&times;</button>
+        <div id="cbSheetBody"></div>
+      </div>
+    </div>
+
     <!-- The invoice exactly as QuickBooks would receive it. Hidden until asked for. -->
     <div class="inv-sheet" id="invSheet" hidden>
       <div class="inv-sheet-back" data-inv-close></div>
@@ -78,7 +90,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-client.js?v=20260827c"></script>
 <script src="invoice-preview.js?v=20260827c"></script>
-<script src="parts-invoice.js?v=20260828a"></script>
+<script src="customer-book.js?v=20260828b"></script>
+<script src="parts-invoice.js?v=20260828b"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

@@ -84,3 +84,65 @@
                  justify-content: space-between; align-items: center; }
   .pi-line-amt { margin-left: 0; }
 }
+
+/* --- the customer book ----------------------------------------------------
+   The list of who can be invoiced, and the sheet for fixing one. Rows are wide
+   and quiet: a name, where its invoices go, and nothing else competing. A
+   customer with no address is the only thing that shouts, because an invoice
+   to one of those has nowhere to land.
+-------------------------------------------------------------------------- */
+
+.cb-actions { display: flex; gap: 8px; margin-left: auto; }
+@media (max-width: 620px) {
+  .card-h:has(.cb-actions) { display: block; }
+  .cb-actions { margin: 10px 0 0; }
+  .cb-actions .btn2 { flex: 1; }
+}
+.cb-intro { margin: 0 0 14px; color: var(--dim); font-size: .92rem; line-height: 1.5; }
+.cb-warn { color: var(--molten); }
+
+.cb-status { min-height: 0; font-size: .88rem; }
+.cb-status.cb-ok, .cb-status.cb-err { min-height: 20px; margin-bottom: 10px; }
+.cb-ok { color: var(--dim); }
+.cb-err { color: #ff6b5e; }
+
+.cb-list { margin: 0; }
+.cb-row {
+  display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.2fr) 16px;
+  gap: 14px; align-items: center; cursor: pointer;
+}
+.cb-row:hover, .cb-row:focus-visible { background: rgba(255,255,255,.04); outline: none; }
+.cb-row:focus-visible { box-shadow: inset 0 0 0 2px var(--molten); }
+.cb-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.cb-mail { color: var(--dim); font-size: .9rem; min-width: 0; overflow-wrap: anywhere; }
+.cb-cc { opacity: .72; }
+.cb-none { color: var(--molten); font-weight: 600; }
+.cb-go { color: var(--dim); font-size: 1.3rem; line-height: 1; }
+
+@media (max-width: 620px) {
+  .cb-row { grid-template-columns: minmax(0,1fr) 16px; }
+  .cb-mail { grid-column: 1 / 2; }
+}
+
+.cb-h { font-family: 'Oswald', sans-serif; font-size: 1.25rem; margin: 0 0 6px; }
+.cb-sub { color: var(--dim); font-size: .88rem; line-height: 1.5; margin: 0 0 18px; }
+.cb-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.cb-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cb-field-wide { grid-column: 1 / -1; }
+.cb-hint { color: var(--dim); font-size: .78rem; line-height: 1.45; }
+@media (max-width: 560px) { .cb-fields { grid-template-columns: 1fr; } }
+
+.cb-sheet-status { min-height: 20px; margin: 14px 0 0; font-size: .88rem; }
+.cb-sheet-btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+/* A quiet way to add a customer from the picker itself, for when the person to
+   be billed is not on the list yet and going to find the book would lose the
+   invoice being written. */
+.pi-inline-btn {
+  background: none; border: none; padding: 0 0 0 8px; cursor: pointer;
+  color: var(--molten); font: inherit; font-size: .8rem; text-transform: none;
+  letter-spacing: 0;
+}
+.pi-inline-btn:hover { text-decoration: underline; }
+.pi-label-row { display: flex; align-items: baseline; }
+.pi-label-row .field-label { margin: 0; }

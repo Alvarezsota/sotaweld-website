@@ -13,13 +13,15 @@
 // into QuickBooks, make the customer there, and come back -- assuming you knew
 // that was what the empty dropdown was telling you.
 //
-// Two actions, both of which end with the local table matching QuickBooks:
+// Three actions, each of which ends with the local table matching QuickBooks:
 //
 //   sync    - pull every customer down. Cheap, and the answer to "I made them in
 //             QuickBooks and they are not in the list".
 //   create  - make one in QuickBooks and keep the id it hands back. The id is
 //             the whole point: an invoice references a customer by id, so a name
 //             typed into the portal that does not exist over there is worthless.
+//   update  - correct one that is already there. Sparse, so the boxes this
+//             screen does not show are never wiped by leaving them empty.
 //
 // QuickBooks decides whether a name is allowed. DisplayName has to be unique on
 // their side, so a duplicate comes back as their error and is passed through in
@@ -111,14 +113,30 @@ async function liveToken(db: ReturnType<typeof createClient>): Promise<Tokens> {
 
 /** The shape the portal keeps for one QuickBooks customer. */
 function localRow(c: Record<string, any>, environment: string) {
+  const parent = c.ParentRef?.value ? String(c.ParentRef.value) : null;
   return {
     id: String(c.Id),
     environment,
     display_name: String(c.DisplayName ?? "").trim(),
     company_name: c.CompanyName ? String(c.CompanyName).trim() : null,
+    // A customer can hang under another one -- a job site or a project, billed
+    // with its parent. Flattening that is what made RedHills Pipeline look like
+    // a company of its own in the picker.
+    parent_id: parent,
+    is_sub_customer: Boolean(parent),
+    fully_qualified_name: String(c.FullyQualifiedName ?? c.DisplayName ?? "").trim() || null,
     active: c.Active !== false,
     synced_at: new Date().toISOString(),
   };
+}
+
+/** Reads one customer, for its SyncToken -- QuickBooks' own concurrency check,
+ *  which has to be echoed back on any write or the write is refused. */
+async function readCustomer(base: string, headers: HeadersInit, id: string) {
+  const res = await fetchWithRetry(
+    `${base}/customer/${encodeURIComponent(id)}?minorversion=75`, { headers });
+  const out = await res.json().catch(() => ({}));
+  return { ok: res.ok && Boolean(out?.Customer?.Id), out, tid: res.headers.get("intuit_tid") };
 }
 
 /** Intuit's own words when they refuse, rather than a guess at what went wrong. */
@@ -243,52 +261,83 @@ Deno.serve(async (req) => {
       return json({ ok: true, action, customer: row, intuit_tid: tid });
     }
 
-    /* --------------------------------------------------------------- email */
-    // Changing where a customer's invoices go. The address itself belongs to
-    // QuickBooks, so it is written there as well as here; the carbon copies
-    // have nowhere to go over there and stay local.
-    if (action === "set_email") {
+    /* -------------------------------------------------------------- update */
+    // Correcting a customer already on the books. Name, company and email
+    // belong to QuickBooks and are written there; carbon copies have nowhere to
+    // live over there and stay local.
+    //
+    // Renaming reaches further than it looks: QuickBooks shows the current name
+    // on every invoice ever raised against that customer, including ones long
+    // since sent. That is their behaviour, not something to work around here,
+    // but it is why the screen says so before the button is pressed.
+    if (action === "update") {
       const id = String(body.id ?? "").trim();
       if (!id) return json({ ok: false, error: "which customer?" }, 400);
+
+      const name = String(body.display_name ?? "").trim();
+      const company = String(body.company_name ?? "").trim();
       const email = String(body.email ?? "").trim();
       const emailCc = String(body.email_cc ?? "").trim();
+      const phone = String(body.phone ?? "").trim();
 
-      if (email) {
-        const read = await fetchWithRetry(`${base}/customer/${encodeURIComponent(id)}?minorversion=75`, { headers });
-        const cur = await read.json().catch(() => ({}));
-        if (!read.ok || !cur?.Customer?.Id) {
+      // Anything QuickBooks holds. Carbon copies alone need no round trip.
+      const wantsRemote = Boolean(name || company || email || phone);
+      let saved: Record<string, any> | null = null;
+
+      if (wantsRemote) {
+        const cur = await readCustomer(base, headers, id);
+        if (!cur.ok) {
           return json({
             ok: false, error: "QuickBooks does not have that customer",
-            quickbooks: faultOf(cur), intuit_tid: read.headers.get("intuit_tid"),
+            quickbooks: faultOf(cur.out), intuit_tid: cur.tid,
           }, 502);
         }
-        // Sparse update, so nothing else on their record is disturbed. SyncToken
-        // is QuickBooks' own concurrency check and has to be echoed back.
+
+        // Sparse, so a blank box here never wipes something over there that this
+        // screen does not even show -- terms, addresses, tax code.
+        const patch: Record<string, unknown> = {
+          Id: cur.out.Customer.Id, SyncToken: cur.out.Customer.SyncToken, sparse: true,
+          ...(name ? { DisplayName: name.slice(0, 100) } : {}),
+          ...(company ? { CompanyName: company.slice(0, 100) } : {}),
+          ...(email ? { PrimaryEmailAddr: { Address: email.slice(0, 100) } } : {}),
+          ...(phone ? { PrimaryPhone: { FreeFormNumber: phone.slice(0, 30) } } : {}),
+        };
+
         const res = await fetchWithRetry(`${base}/customer?minorversion=75`, {
-          method: "POST", headers,
-          body: JSON.stringify({
-            Id: cur.Customer.Id, SyncToken: cur.Customer.SyncToken, sparse: true,
-            PrimaryEmailAddr: { Address: email.slice(0, 100) },
-          }),
+          method: "POST", headers, body: JSON.stringify(patch),
         });
+        const tid = res.headers.get("intuit_tid");
         const out = await res.json().catch(() => ({}));
         if (!res.ok || !out?.Customer?.Id) {
+          const fault = faultOf(out);
+          const duplicate = String(fault?.code ?? "") === "6240";
           return json({
-            ok: false, error: "QuickBooks would not take that address",
-            quickbooks: faultOf(out), intuit_tid: res.headers.get("intuit_tid"),
-          }, 502);
+            ok: false,
+            error: duplicate
+              ? `QuickBooks already has a customer called "${name}". Pick a different name.`
+              : "QuickBooks would not take that change",
+            duplicate_name: duplicate ? name : null,
+            quickbooks: fault, intuit_tid: tid,
+            note: "Nothing was changed.",
+          }, duplicate ? 409 : 502);
         }
+        saved = out.Customer;
       }
 
+      // An empty box clears the stored address rather than being ignored, so
+      // there is a way to take one back off. QuickBooks keeps its own.
+      const row: Record<string, unknown> = {
+        bill_email: email ? email.slice(0, 100) : null,
+        bill_email_cc: emailCc ? emailCc.slice(0, 200) : null,
+        ...(saved ? localRow(saved, t.environment) : {}),
+      };
       const { error } = await db.from("qb_customers")
-        .update({
-          bill_email: email ? email.slice(0, 100) : null,
-          bill_email_cc: emailCc ? emailCc.slice(0, 200) : null,
-        })
-        .eq("id", id).eq("environment", t.environment);
-      if (error) throw new Error(`could not save the addresses: ${error.message}`);
+        .update(row).eq("id", id).eq("environment", t.environment);
+      if (error) throw new Error(`saved in QuickBooks but not here: ${error.message}`);
 
-      return json({ ok: true, action, id, email: email || null, email_cc: emailCc || null });
+      const { data: after } = await db.from("qb_customers")
+        .select("*").eq("id", id).eq("environment", t.environment).maybeSingle();
+      return json({ ok: true, action, customer: after });
     }
 
     return json({ ok: false, error: `unknown action "${action}"` }, 400);

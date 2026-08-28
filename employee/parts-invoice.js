@@ -28,18 +28,9 @@ function esc(str) {
 function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
 function uid() { return Math.random().toString(36).slice(2); }
 
-/* QuickBooks lets a customer hang under another one -- a job site or a project,
-   billed with its parent. RedHills Pipeline is one of those: it is Rocking
-   Double S's pipeline job, not a company. Reading the list down here, one of
-   those looks exactly like a customer in its own right, so it is shown under
-   the name it is filed under rather than its own. */
-function customerLabel(c) {
-  if (c.is_sub_customer && c.fully_qualified_name) {
-    return c.fully_qualified_name.split(':').join(' › ') + '  (job site)';
-  }
-  return c.display_name +
-    (c.company_name && c.company_name !== c.display_name ? ' — ' + c.company_name : '');
-}
+/* A job site reads under the customer it is filed under, so it cannot be taken
+   for a company. CustomerBook owns the wording; this is the same list. */
+const customerLabel = (c) => CustomerBook.label(c);
 function money(n) {
   return '$' + Number(n || 0).toLocaleString('en-US',
     { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -214,7 +205,10 @@ function renderEditor() {
 
       <div class="pi-fields">
         <div class="pi-field pi-field-wide">
-          <label class="field-label" for="piCustomer">Customer</label>
+          <div class="pi-label-row">
+            <label class="field-label" for="piCustomer">Customer</label>
+            <button type="button" class="pi-inline-btn" data-cb="new">+ new</button>
+          </div>
           <select class="input" id="piCustomer">
             <option value="">Pick a customer…</option>
             ${customers.map(c => `
@@ -472,7 +466,10 @@ document.addEventListener('click', async (e) => {
   document.getElementById('newInvoiceBtn').addEventListener('click', startNew);
 
   InvoicePreview.wire();
-  await loadAll();
+  // Adding a customer has to redraw the picker, or the one just created is not
+  // in the list he created it to use.
+  CustomerBook.wire({ onChanged: loadAll });
+  await Promise.all([loadAll(), CustomerBook.reload()]);
 
   await liveData({
     reload: loadAll,
