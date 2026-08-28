@@ -18,6 +18,7 @@ let invoices = [];
 let customers = [];
 let items = [];
 let editing = null;          // the invoice being written, or null
+let newCustomer = null;      // the customer being added, while that form is open
 let nextInvoiceNumber = '';
 
 function esc(str) {
@@ -140,6 +141,7 @@ function blankLine() {
 }
 
 function startNew() {
+  newCustomer = null;
   editing = {
     id: null,
     qb_customer_id: '',
@@ -157,6 +159,7 @@ function startEdit(id) {
   const inv = invoices.find(i => i.id === id);
   if (!inv) return;
   if (inv.status === 'synced') return;
+  newCustomer = null;
   editing = {
     id: inv.id,
     qb_customer_id: inv.qb_customer_id,
@@ -182,6 +185,7 @@ function startEdit(id) {
 
 function closeEditor() {
   editing = null;
+  newCustomer = null;
   document.getElementById('editorWrap').innerHTML = '';
 }
 
@@ -202,13 +206,18 @@ function renderEditor() {
       <div class="pi-fields">
         <div class="pi-field pi-field-wide">
           <label class="field-label" for="piCustomer">Customer</label>
-          <select class="input" id="piCustomer">
-            <option value="">Pick a customer…</option>
-            ${customers.map(c => `
-              <option value="${escAttr(c.id)}" ${c.id === editing.qb_customer_id ? 'selected' : ''}>
-                ${esc(c.display_name)}${c.company_name && c.company_name !== c.display_name ? ' — ' + esc(c.company_name) : ''}
-              </option>`).join('')}
-          </select>
+          <div class="pi-cust-row">
+            <select class="input" id="piCustomer">
+              <option value="">Pick a customer…</option>
+              ${customers.map(c => `
+                <option value="${escAttr(c.id)}" ${c.id === editing.qb_customer_id ? 'selected' : ''}>
+                  ${esc(c.display_name)}${c.company_name && c.company_name !== c.display_name ? ' — ' + esc(c.company_name) : ''}
+                </option>`).join('')}
+            </select>
+            <button type="button" class="btn2 btn2-ghost small" data-action="new-customer"
+                    ${newCustomer ? 'disabled' : ''}>+ New customer</button>
+          </div>
+          ${newCustomer ? newCustomerHtml() : ''}
         </div>
         <div class="pi-field">
           <label class="field-label" for="piDate">Date</label>
@@ -272,6 +281,99 @@ function lineHtml(l, i) {
         </div>
       </div>
     </div>`;
+}
+
+
+/* --- adding a customer ----------------------------------------------------
+   The list is a copy of what QuickBooks knows. Adding to the copy alone would
+   put a name on an invoice that QuickBooks has never heard of, and it would be
+   rejected on the way out -- after the invoice number had been spent. So the
+   new customer is created over there first, and the list follows.            */
+
+function newCustomerHtml() {
+  return `
+    <div class="pi-newcust">
+      <div class="pi-newcust-fields">
+        <label class="pi-mini pi-mini-wide"><span>Name on the invoice</span>
+          <input class="input" type="text" data-nc="display_name" id="piNcName"
+                 maxlength="100" placeholder="Permian Tank &amp; Manufacturing"
+                 value="${escAttr(newCustomer.display_name)}"></label>
+        <label class="pi-mini pi-mini-wide"><span>Company <span class="pi-opt">(if different)</span></span>
+          <input class="input" type="text" data-nc="company_name"
+                 value="${escAttr(newCustomer.company_name)}"></label>
+        <label class="pi-mini pi-mini-wide"><span>Email <span class="pi-opt">(optional)</span></span>
+          <input class="input" type="email" data-nc="email" placeholder="ap@theircompany.com"
+                 value="${escAttr(newCustomer.email)}"></label>
+      </div>
+      <div class="pi-newcust-actions">
+        <button type="button" class="btn2 btn2-line small" data-action="save-customer">Add customer</button>
+        <button type="button" class="btn2 btn2-ghost small" data-action="cancel-customer">Cancel</button>
+      </div>
+      <p class="pi-newcust-note" id="piNcNote">
+        This adds them to QuickBooks too, so the invoice can go out under the name.
+        If QuickBooks already has them, they are picked up rather than added twice.
+      </p>
+    </div>`;
+}
+
+function ncNote(msg, bad) {
+  const el = document.getElementById('piNcNote');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'pi-newcust-note' + (bad ? ' pi-err' : ' pi-ok');
+}
+
+async function saveCustomer(btn) {
+  const name = (newCustomer.display_name || '').trim();
+  if (!name) { ncNote('Give the customer a name first.', true); return; }
+
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { ncNote('Your session expired. Log in again.', true); return; }
+
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Adding…';
+  ncNote('Asking QuickBooks…', false);
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/qb-push-invoice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({
+        action: 'create_customer',
+        display_name: name,
+        company_name: (newCustomer.company_name || '').trim(),
+        email: (newCustomer.email || '').trim(),
+      }),
+    });
+    const out = await res.json().catch(() => ({}));
+
+    if (!res.ok || !out.ok) {
+      ncNote(out.error || 'QuickBooks would not add that customer.', true);
+      return;
+    }
+
+    // Straight into the list rather than a reload: the invoice on screen is
+    // half-written, and reloading would take it away to save a round trip.
+    const c = out.customer;
+    const already = customers.findIndex(x => x.id === c.id);
+    if (already >= 0) customers[already] = c; else customers.push(c);
+    customers.sort((a, b) => a.display_name.localeCompare(b.display_name));
+
+    readEditorFields();
+    editing.qb_customer_id = c.id;
+    editing.qb_customer_name = c.display_name;
+    newCustomer = null;
+    renderEditor();
+    say(out.created
+      ? `Added ${c.display_name} to QuickBooks and picked them for this invoice.`
+      : `QuickBooks already had ${c.display_name} — picked them for this invoice.`, false);
+  } catch (err) {
+    ncNote('Could not reach QuickBooks: ' + (err && err.message ? err.message : err), true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
 }
 
 /* --- saving --------------------------------------------------------------- */
@@ -364,6 +466,11 @@ async function deleteInvoice() {
 /* --- wiring --------------------------------------------------------------- */
 
 document.addEventListener('input', (e) => {
+  if (e.target.dataset && e.target.dataset.nc && newCustomer) {
+    newCustomer[e.target.dataset.nc] = e.target.value;
+    return;
+  }
+
   const lineEl = e.target.closest('[data-line-uid]');
   if (!lineEl || !editing) return;
   const l = editing.lines.find(x => x.uid === lineEl.dataset.lineUid);
@@ -398,6 +505,22 @@ document.addEventListener('click', async (e) => {
 
   const action = btn.dataset.action;
   if (action === 'close-editor') { closeEditor(); return; }
+
+  if (action === 'new-customer') {
+    readEditorFields();
+    newCustomer = { display_name: '', company_name: '', email: '' };
+    renderEditor();
+    const el = document.getElementById('piNcName');
+    if (el) el.focus();
+    return;
+  }
+  if (action === 'cancel-customer') {
+    readEditorFields();
+    newCustomer = null;
+    renderEditor();
+    return;
+  }
+  if (action === 'save-customer') { await saveCustomer(btn); return; }
 
   if (action === 'add-line') {
     readEditorFields();

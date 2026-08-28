@@ -52,8 +52,9 @@ create table if not exists public.desk_invoices (
   po_number       text,
   memo            text,
   status          text not null default 'open',
-  qb_invoice_id   text,                      -- set once QuickBooks has it
-  pushed_at       timestamptz,
+  qb_invoice_id    text,                     -- set once QuickBooks has it
+  qb_invoice_total numeric(14,2),
+  qb_pushed_at     timestamptz,
   created_at      timestamptz not null default now(),
   created_by      uuid references auth.users(id)
 );
@@ -72,6 +73,13 @@ create table if not exists public.desk_invoice_lines (
   sort_order  integer not null default 0,
   created_at  timestamptz not null default now()
 );
+
+-- The push writes the same three columns back on every kind of invoice. Named
+-- here exactly as they are on job_weeks and parts_invoices, so the write-back
+-- needs no idea which kind it just sent. Spelled out again for a desk that was
+-- created by an earlier draft of this file.
+alter table public.desk_invoices add column if not exists qb_invoice_total numeric(14,2);
+alter table public.desk_invoices add column if not exists qb_pushed_at     timestamptz;
 
 create index if not exists desk_invoice_lines_invoice_idx
   on public.desk_invoice_lines (invoice_id, sort_order);
@@ -226,7 +234,11 @@ begin
     'lines',           lines,
     -- Both sides of the equality the push checks come from the same lines, so a
     -- desk invoice cannot be stopped by a totals disagreement it cannot have.
+    -- Both of them, though: the push reads lines_total and expected_total, and
+    -- an absent lines_total reads as zero and blocks every invoice.
     'expected_total',  (select coalesce(sum((l2->>'amount')::numeric),0)
+                        from jsonb_array_elements(lines) l2),
+    'lines_total',     (select coalesce(sum((l2->>'amount')::numeric),0)
                         from jsonb_array_elements(lines) l2)
   );
 end;
