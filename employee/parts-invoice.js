@@ -27,6 +27,19 @@ function esc(str) {
 }
 function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
 function uid() { return Math.random().toString(36).slice(2); }
+
+/* QuickBooks lets a customer hang under another one -- a job site or a project,
+   billed with its parent. RedHills Pipeline is one of those: it is Rocking
+   Double S's pipeline job, not a company. Reading the list down here, one of
+   those looks exactly like a customer in its own right, so it is shown under
+   the name it is filed under rather than its own. */
+function customerLabel(c) {
+  if (c.is_sub_customer && c.fully_qualified_name) {
+    return c.fully_qualified_name.split(':').join(' › ') + '  (job site)';
+  }
+  return c.display_name +
+    (c.company_name && c.company_name !== c.display_name ? ' — ' + c.company_name : '');
+}
 function money(n) {
   return '$' + Number(n || 0).toLocaleString('en-US',
     { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -206,7 +219,7 @@ function renderEditor() {
             <option value="">Pick a customer…</option>
             ${customers.map(c => `
               <option value="${escAttr(c.id)}" ${c.id === editing.qb_customer_id ? 'selected' : ''}>
-                ${esc(c.display_name)}${c.company_name && c.company_name !== c.display_name ? ' — ' + esc(c.company_name) : ''}
+                ${esc(customerLabel(c))}
               </option>`).join('')}
           </select>
         </div>
@@ -280,7 +293,7 @@ function readEditorFields() {
   const custSel = document.getElementById('piCustomer');
   editing.qb_customer_id = custSel.value;
   const c = customers.find(x => x.id === custSel.value);
-  editing.qb_customer_name = c ? c.display_name : '';
+  editing.qb_customer_name = c ? (c.fully_qualified_name || c.display_name) : '';
   editing.invoice_date = document.getElementById('piDate').value || todayIso();
   editing.po_number = document.getElementById('piPo').value.trim();
   editing.notes = document.getElementById('piNotes').value.trim();
