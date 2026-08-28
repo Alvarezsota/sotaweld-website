@@ -77,6 +77,11 @@ const WINANSI_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹Œ'
                     + '›œžŸ';
 const wa = (v: unknown) => {
   const folded = String(v ?? '')
+    // A description typed on a phone carries newlines -- one real ticket reads
+    // "2-16 brother in law con Elias / 23-1 1/2 socket weld / Glycol" across three
+    // lines. Dropped as control characters they ran the words together, and handed
+    // to drawText they would have spilled the row down the page. They become spaces.
+    .replace(/[\r\n\t\v\f]+/g, ' ')
     .replace(/[     ]/g, ' ')
     .replace(/[−‒―]/g, '-')
     .replace(/[′]/g, "'").replace(/[″]/g, '"')

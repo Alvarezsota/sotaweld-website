@@ -36,6 +36,24 @@
 // which arrived.
 //
 // ---------------------------------------------------------------------------
+// THE CREW SHEET GOES WITH IT
+// ---------------------------------------------------------------------------
+//
+// A labour line reads "Welder labor - 96.00 hrs". Straight after the invoice is
+// created, the week's crew sheet -- every name, every day, the hours against
+// each -- is attached to it in QuickBooks, marked to travel with the invoice
+// when it is sent. The bill and the answer to "who were those hours?" stop being
+// two documents that somebody has to remember to put in the same envelope.
+//
+// It is attached after the invoice exists, and it cannot un-create it. So a
+// failure here is reported and logged and never turned into a failed push: the
+// invoice is real either way, and telling him it failed would have him push a
+// second one. The sheet can be pulled any time from qb-invoice-backup.
+//
+// A parts invoice has no week and nobody's hours behind it, so there is nothing
+// to attach and none is attempted.
+//
+// ---------------------------------------------------------------------------
 // THE INVOICE NUMBER
 // ---------------------------------------------------------------------------
 //
@@ -45,6 +63,7 @@
 // two numbers for one week is worse than either number.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { attachToInvoice, buildBackupForJobWeek } from "../_shared/invoice-backup-data.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -334,10 +353,36 @@ Deno.serve(async (req) => {
       detail: `${isParts ? "Parts cut" : payload.job_name} -> ${payload.customer_name} as invoice ${assigned ?? "(unnumbered)"} by ${me?.full_name ?? who.user.email}`,
     });
 
+    // ---- the crew sheet -----------------------------------------------------
+    // Everything below is best effort. The invoice is already on their books.
+    let backup: Record<string, unknown> = { attached: false };
+    if (!isParts && jobWeekId) {
+      const sheet = await buildBackupForJobWeek(db as never, jobWeekId);
+      if (!sheet.ok) {
+        backup = { attached: false, error: sheet.error };
+      } else {
+        const att = await attachToInvoice({
+          apiBase: API_BASE(t.environment), realmId: t.realm_id, accessToken: t.access_token,
+          invoiceId: String(inv.Id), pdf: sheet.pdf, filename: sheet.filename,
+        });
+        backup = att.ok
+          ? { attached: true, filename: sheet.filename, attachable_id: att.attachable_id }
+          : { attached: false, filename: sheet.filename, error: att.error };
+      }
+      if (!backup.attached) {
+        await db.from("qb_push_log").insert({
+          job_week_id: jobWeekId, action: "attach_backup", status: "error",
+          qb_invoice_id: String(inv.Id), intuit_tid: null,
+          detail: String(backup.error ?? "unknown").slice(0, 780),
+        });
+      }
+    }
+
     return json({
       ok: true,
       qb_invoice_id: String(inv.Id),
       doc_number: assigned,
+      backup,
       proposed_number: payload.invoice_no ?? null,
       number_changed_by_quickbooks: Boolean(assigned && assigned !== payload.invoice_no),
       total: Number(inv.TotalAmt),
@@ -345,7 +390,10 @@ Deno.serve(async (req) => {
       job: payload.job_name,
       emailed: inv.EmailStatus ?? "NotSet",
       intuit_tid: tid,
-      note: "Created in QuickBooks and not sent. Review it there before sending.",
+      note: "Created in QuickBooks and not sent. Review it there before sending."
+        + (isParts ? "" : (backup.attached
+            ? " The crew sheet is attached to it and will go out with it."
+            : " The crew sheet could not be attached -- the invoice is fine; open the sheet from Approvals.")),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
