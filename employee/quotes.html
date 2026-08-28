@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="sota-build" content="20260827e">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
-<title>Parts Invoice | State of the Arc Welding</title>
+<title>Quotes | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- The desk brings its own faces. They are loaded here rather than by the
+     module, so nothing outside the portal's own <head> is fetched at runtime. -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="dark-theme.css?v=20260827e">
-<link rel="stylesheet" href="approvals.css?v=20260827e">
-<link rel="stylesheet" href="parts-invoice.css?v=20260827e">
+<link rel="stylesheet" href="quotes-desk.css?v=20260827e">
 </head>
 <body>
 
@@ -26,8 +28,8 @@
     <a class="et-link" href="dashboard.html">Office</a>
     <a class="et-link" href="admin-setup.html">Setup</a>
     <a class="et-link" href="approvals.html">Approvals</a>
-    <a class="et-link" href="quotes.html">Quotes</a>
-    <a class="et-link on" href="parts-invoice.html">Parts Invoice</a>
+    <a class="et-link on" href="quotes.html">Quotes</a>
+    <a class="et-link" href="parts-invoice.html">Parts Invoice</a>
     <a class="et-link" href="summary.html">Summary</a>
     <a class="et-link" href="weld-log.html">Weld Log</a>
     <a class="et-link" href="security.html">Security</a>
@@ -44,42 +46,26 @@
   <div class="card">This page is for admins only.</div>
 </div>
 
-<div id="adminContent" style="display:none;">
-  <div class="wrap-wide pi-body">
-
-    <div class="d-hdr">
-      <div>
-        <div class="hdr-sub">Parts cut</div>
-        <p class="pi-intro">An invoice for plate that went on the laser and came off as parts — no job week, no hours, just what was cut and what it costs. It takes its number from the same run as the weekly invoices, so the two can never land on the same one.</p>
-      </div>
-      <button type="button" class="btn2 btn2-solid" id="newInvoiceBtn">+ New parts invoice</button>
-    </div>
-
-    <div id="editorWrap"></div>
-
-    <div class="card">
-      <h2 class="card-h">Parts invoices</h2>
-      <ul class="entry-list2 pi-list" id="invoiceList">
-        <li class="empty-state2">Loading…</li>
-      </ul>
-    </div>
-
-    <!-- The invoice exactly as QuickBooks would receive it. Hidden until asked for. -->
-    <div class="inv-sheet" id="invSheet" hidden>
-      <div class="inv-sheet-back" data-inv-close></div>
-      <div class="inv-card" role="dialog" aria-modal="true" aria-labelledby="invName">
-        <button type="button" class="inv-x" data-inv-close aria-label="Close">&times;</button>
-        <div id="invSheetBody"></div>
-      </div>
-    </div>
-
-  </div>
+<div id="loadingMsg" class="wrap-wide" style="padding-top:40px;">
+  <div class="card">Loading the quote desk&hellip;</div>
 </div>
+
+<!-- Stays empty until the desk is allowed to boot, so a signed-out browser is
+     never handed a working quote form. -->
+<div id="adminContent" style="display:none;">
+  <div id="sota-quote-desk"></div>
+</div>
+
+<!-- The printable document the desk builds. Lives outside adminContent because
+     the print stylesheet hides everything except this. -->
+<div id="sota-qd-print"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-client.js?v=20260827e"></script>
-<script src="invoice-preview.js?v=20260827e"></script>
-<script src="parts-invoice.js?v=20260827e"></script>
+<!-- quotes.js must run first: it installs the storage adapter and the number
+     providers that quotes-desk.js reads as it boots. -->
+<script src="quotes.js?v=20260827e"></script>
+<script src="quotes-desk.js?v=20260827e"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

@@ -1,0 +1,292 @@
+/* Quote Desk — scoped to #sota-quote-desk so it cannot reach the rest of
+   the portal. Lifted from the drop-in build unchanged; the host-page block
+   that shipped with it is dropped, because the portal already sets the page
+   background and typeface. */
+
+#sota-quote-desk {
+  --ink:      #0E1012;
+  --panel:    #16191D;
+  --raised:   #1D2126;
+  --sunken:   #121417;
+  --line:     #2B3037;
+  --line-soft:#22262B;
+  --text:     #E7E9EB;
+  --muted:    #949AA1;
+  --dim:      #6E747B;
+  --steel:    #C8CFD6;
+  --ok:       #7FA083;
+  --hold:     #B5A46E;
+  --alert:    #A87C74;
+
+  --u: 4px;
+  --r: 3px;
+
+  --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--f-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  container-type: inline-size;
+}
+
+#sota-quote-desk *, #sota-quote-desk *::before, #sota-quote-desk *::after { box-sizing: border-box; }
+#sota-quote-desk h1, #sota-quote-desk h2, #sota-quote-desk h3, #sota-quote-desk p { margin: 0; }
+#sota-quote-desk button, #sota-quote-desk input, #sota-quote-desk select, #sota-quote-desk textarea {
+  font: inherit; color: inherit;
+}
+#sota-quote-desk :focus-visible { outline: 2px solid var(--steel); outline-offset: 2px; }
+
+/* ---------- toolbar ---------- */
+#sota-quote-desk .qd-bar {
+  display: flex; align-items: center; gap: calc(var(--u) * 4);
+  padding: calc(var(--u) * 3) calc(var(--u) * 5);
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+#sota-quote-desk .qd-mark { display: flex; align-items: baseline; gap: calc(var(--u) * 2); }
+#sota-quote-desk .qd-mark b {
+  font-family: var(--f-display); font-size: 22px; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; line-height: 1;
+}
+#sota-quote-desk .qd-mark span {
+  font-family: var(--f-display); font-size: 13px; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--dim);
+}
+#sota-quote-desk .qd-bar-right { margin-left: auto; display: flex; gap: calc(var(--u) * 2); flex-wrap: wrap; }
+
+#sota-quote-desk .qd-btn {
+  background: var(--raised); border: 1px solid var(--line); color: var(--text);
+  padding: calc(var(--u) * 2) calc(var(--u) * 3.5); border-radius: var(--r);
+  cursor: pointer; font-size: 13px; font-weight: 500;
+  transition: background .12s ease, border-color .12s ease;
+}
+#sota-quote-desk .qd-btn:hover { background: #252A31; border-color: #3A4048; }
+#sota-quote-desk .qd-btn[disabled] { opacity: .4; cursor: not-allowed; }
+#sota-quote-desk .qd-btn--primary { background: var(--steel); color: #101317; border-color: var(--steel); font-weight: 600; }
+#sota-quote-desk .qd-btn--primary:hover { background: #DDE3E9; border-color: #DDE3E9; }
+#sota-quote-desk .qd-btn--ghost { background: transparent; }
+#sota-quote-desk .qd-btn--mini { padding: calc(var(--u)) calc(var(--u) * 2); font-size: 12px; }
+
+/* ---------- tabs ---------- */
+#sota-quote-desk .qd-tabs {
+  display: flex; gap: 0; background: var(--panel);
+  border-bottom: 1px solid var(--line); padding: 0 calc(var(--u) * 5);
+  overflow-x: auto;
+}
+#sota-quote-desk .qd-tab {
+  background: none; border: 0; border-bottom: 2px solid transparent;
+  padding: calc(var(--u) * 2.5) calc(var(--u) * 4); cursor: pointer;
+  font-family: var(--f-display); font-size: 15px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dim); white-space: nowrap;
+}
+#sota-quote-desk .qd-tab:hover { color: var(--text); }
+#sota-quote-desk .qd-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--steel); }
+
+/* ---------- layout ---------- */
+#sota-quote-desk .qd-body { padding: calc(var(--u) * 5); }
+#sota-quote-desk .qd-work { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: calc(var(--u) * 5); align-items: start; }
+@container (max-width: 900px) { #sota-quote-desk .qd-work { grid-template-columns: minmax(0,1fr); } }
+
+#sota-quote-desk .qd-panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+}
+#sota-quote-desk .qd-panel + .qd-panel { margin-top: calc(var(--u) * 4); }
+#sota-quote-desk .qd-panel-hd {
+  display: flex; align-items: center; gap: calc(var(--u) * 3);
+  padding: calc(var(--u) * 3) calc(var(--u) * 4);
+  border-bottom: 1px solid var(--line-soft);
+}
+#sota-quote-desk .qd-panel-hd h2 {
+  font-family: var(--f-display); font-size: 16px; font-weight: 600;
+  letter-spacing: .12em; text-transform: uppercase;
+}
+#sota-quote-desk .qd-panel-hd .qd-spacer { margin-left: auto; }
+#sota-quote-desk .qd-panel-bd { padding: calc(var(--u) * 4); }
+
+#sota-quote-desk .qd-rail { position: sticky; top: calc(var(--u) * 4); }
+
+/* ---------- fields ---------- */
+#sota-quote-desk .qd-grid { display: grid; gap: calc(var(--u) * 3.5); }
+#sota-quote-desk .qd-grid--2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+#sota-quote-desk .qd-grid--3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+@container (max-width: 700px) {
+  #sota-quote-desk .qd-grid--2, #sota-quote-desk .qd-grid--3 { grid-template-columns: minmax(0,1fr); }
+}
+#sota-quote-desk .qd-field { display: flex; flex-direction: column; gap: calc(var(--u) * 1.5); min-width: 0; }
+#sota-quote-desk .qd-label {
+  font-family: var(--f-display); font-size: 12px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--muted);
+}
+#sota-quote-desk .qd-input, #sota-quote-desk .qd-select, #sota-quote-desk .qd-area {
+  background: var(--sunken); border: 1px solid var(--line); border-radius: var(--r);
+  padding: calc(var(--u) * 2) calc(var(--u) * 2.5); width: 100%;
+  transition: border-color .12s ease;
+}
+#sota-quote-desk .qd-input:hover, #sota-quote-desk .qd-select:hover { border-color: #3A4048; }
+#sota-quote-desk .qd-area { min-height: 76px; resize: vertical; }
+#sota-quote-desk .qd-num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; }
+#sota-quote-desk .qd-hint { font-size: 12px; color: var(--dim); }
+
+/* ---------- line item ledger ---------- */
+#sota-quote-desk .qd-section + .qd-section { margin-top: calc(var(--u) * 5); }
+#sota-quote-desk .qd-section-hd {
+  display: flex; align-items: center; gap: calc(var(--u) * 3);
+  padding-bottom: calc(var(--u) * 2); margin-bottom: calc(var(--u) * 2.5);
+  border-bottom: 1px solid var(--line);
+}
+#sota-quote-desk .qd-section-hd h3 {
+  font-family: var(--f-display); font-size: 15px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--steel);
+}
+#sota-quote-desk .qd-section-hd .qd-spacer { margin-left: auto; }
+
+#sota-quote-desk .qd-lump {
+  display: inline-flex; align-items: center; gap: calc(var(--u) * 1.5);
+  font-size: 12px; color: var(--muted); cursor: pointer; user-select: none;
+}
+#sota-quote-desk .qd-lump input { accent-color: var(--steel); }
+
+#sota-quote-desk .qd-rows { display: flex; flex-direction: column; gap: calc(var(--u) * 2); }
+#sota-quote-desk .qd-row {
+  display: grid;
+  grid-template-columns: 172px minmax(0,1fr) 74px 60px 92px 104px 28px;
+  gap: calc(var(--u) * 2); align-items: center;
+}
+#sota-quote-desk .qd-row-hd {
+  font-family: var(--f-display); font-size: 11px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim); padding-bottom: calc(var(--u));
+}
+#sota-quote-desk .qd-row-hd > span:nth-child(n+3) { text-align: right; }
+@container (max-width: 780px) {
+  #sota-quote-desk .qd-row { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  #sota-quote-desk .qd-row-hd { display: none; }
+  #sota-quote-desk .qd-row > *:nth-child(2) { grid-column: 1 / -1; }
+}
+#sota-quote-desk .qd-unit { font-size: 12px; color: var(--dim); text-align: center; }
+#sota-quote-desk .qd-amt {
+  font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+  text-align: right; font-size: 14px; padding-right: calc(var(--u));
+}
+#sota-quote-desk .qd-del {
+  background: none; border: 0; color: var(--dim); cursor: pointer;
+  font-size: 16px; line-height: 1; padding: calc(var(--u));
+}
+#sota-quote-desk .qd-del:hover { color: var(--alert); }
+#sota-quote-desk .qd-empty { color: var(--dim); font-size: 13px; padding: calc(var(--u) * 2) 0; }
+
+/* ---------- summary rail ---------- */
+#sota-quote-desk .qd-sum { display: flex; flex-direction: column; gap: calc(var(--u) * 2); }
+#sota-quote-desk .qd-sum-row { display: flex; justify-content: space-between; gap: calc(var(--u) * 3); font-size: 13px; }
+#sota-quote-desk .qd-sum-row span:first-child { color: var(--muted); }
+#sota-quote-desk .qd-sum-row span:last-child { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+#sota-quote-desk .qd-total {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: calc(var(--u) * 3); padding-top: calc(var(--u) * 3);
+  border-top: 1px solid var(--line);
+}
+#sota-quote-desk .qd-total .qd-label { font-size: 13px; }
+#sota-quote-desk .qd-total b {
+  font-family: var(--f-mono); font-size: 24px; font-weight: 600;
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+
+/* ---------- pills / tables ---------- */
+#sota-quote-desk .qd-pill {
+  display: inline-flex; align-items: center; gap: calc(var(--u));
+  font-family: var(--f-display); font-size: 12px; letter-spacing: .1em;
+  text-transform: uppercase; padding: 2px calc(var(--u) * 2);
+  border: 1px solid currentColor; border-radius: 999px;
+}
+#sota-quote-desk .qd-pill--draft    { color: var(--dim); }
+#sota-quote-desk .qd-pill--sent     { color: var(--hold); }
+#sota-quote-desk .qd-pill--accepted { color: var(--ok); }
+#sota-quote-desk .qd-pill--invoiced { color: var(--steel); }
+#sota-quote-desk .qd-pill--paid     { color: var(--ok); }
+#sota-quote-desk .qd-pill--void     { color: var(--alert); }
+
+#sota-quote-desk .qd-status {
+  width: auto; padding: 2px calc(var(--u) * 2); font-family: var(--f-display);
+  font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+}
+#sota-quote-desk .qd-scroll { overflow-x: auto; }
+#sota-quote-desk table { width: 100%; border-collapse: collapse; font-size: 13px; }
+#sota-quote-desk thead th {
+  font-family: var(--f-display); font-size: 11px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim); text-align: left; font-weight: 500;
+  padding: calc(var(--u) * 2) calc(var(--u) * 2.5); border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+#sota-quote-desk tbody td {
+  padding: calc(var(--u) * 2.5); border-bottom: 1px solid var(--line-soft); vertical-align: middle;
+}
+#sota-quote-desk tbody tr:hover { background: var(--raised); }
+#sota-quote-desk .qd-r { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+#sota-quote-desk .qd-doc-no { font-family: var(--f-mono); font-weight: 500; }
+
+/* ---------- customer book ---------- */
+#sota-quote-desk .qd-book { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: calc(var(--u) * 5); align-items: start; }
+@container (max-width: 820px) { #sota-quote-desk .qd-book { grid-template-columns: minmax(0,1fr); } }
+#sota-quote-desk .qd-list { display: flex; flex-direction: column; gap: calc(var(--u)); }
+#sota-quote-desk .qd-list-item {
+  text-align: left; background: none; border: 1px solid transparent; border-radius: var(--r);
+  padding: calc(var(--u) * 2) calc(var(--u) * 2.5); cursor: pointer; color: var(--muted);
+}
+#sota-quote-desk .qd-list-item:hover { background: var(--raised); color: var(--text); }
+#sota-quote-desk .qd-list-item[aria-current="true"] { background: var(--raised); border-color: var(--line); color: var(--text); }
+#sota-quote-desk .qd-list-item small { display: block; color: var(--dim); font-size: 11px; }
+
+#sota-quote-desk .qd-contact {
+  display: grid; grid-template-columns: repeat(3, minmax(0,1fr)) 28px;
+  gap: calc(var(--u) * 2); align-items: center;
+}
+@container (max-width: 700px) { #sota-quote-desk .qd-contact { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+
+#sota-quote-desk .qd-note {
+  background: var(--sunken); border-left: 2px solid var(--line);
+  padding: calc(var(--u) * 2.5) calc(var(--u) * 3); font-size: 12px; color: var(--muted);
+  border-radius: 0 var(--r) var(--r) 0;
+}
+#sota-quote-desk .qd-toast {
+  position: fixed; bottom: calc(var(--u) * 6); left: 50%; transform: translateX(-50%);
+  background: var(--steel); color: #101317; font-weight: 600; font-size: 13px;
+  padding: calc(var(--u) * 2.5) calc(var(--u) * 5); border-radius: var(--r);
+  z-index: 9999; box-shadow: 0 8px 24px rgba(0,0,0,.5);
+}
+@media (prefers-reduced-motion: no-preference) {
+  #sota-quote-desk .qd-toast { animation: qd-rise .18s ease-out; }
+  @keyframes qd-rise { from { opacity: 0; transform: translate(-50%, 8px); } }
+}
+
+/* ---------- print document ---------- */
+#sota-qd-print { display: none; }
+@media print {
+  #sota-quote-desk { display: none !important; }
+  body > *:not(#sota-qd-print) { display: none !important; }
+  #sota-qd-print {
+    display: block !important; background: #fff; color: #111;
+    font-family: "IBM Plex Sans", Arial, sans-serif; font-size: 11pt; padding: 0;
+  }
+  #sota-qd-print .p-hd { display: flex; justify-content: space-between; gap: 24pt; border-bottom: 2pt solid #111; padding-bottom: 10pt; }
+  #sota-qd-print .p-co b { font-family: "Barlow Condensed", Arial Narrow, sans-serif; font-size: 22pt; letter-spacing: .04em; text-transform: uppercase; display: block; }
+  #sota-qd-print .p-co span { font-size: 9pt; color: #444; display: block; }
+  #sota-qd-print .p-doc { text-align: right; }
+  #sota-qd-print .p-doc b { font-family: "Barlow Condensed", Arial Narrow, sans-serif; font-size: 20pt; letter-spacing: .12em; text-transform: uppercase; display: block; }
+  #sota-qd-print .p-doc span { font-family: "IBM Plex Mono", monospace; font-size: 10pt; display: block; }
+  #sota-qd-print .p-meta { display: flex; gap: 32pt; margin: 14pt 0; }
+  #sota-qd-print .p-meta div { font-size: 10pt; }
+  #sota-qd-print .p-meta strong { display: block; font-size: 8pt; letter-spacing: .12em; text-transform: uppercase; color: #555; }
+  #sota-qd-print table { width: 100%; border-collapse: collapse; margin-top: 10pt; }
+  #sota-qd-print th { text-align: left; font-size: 8pt; letter-spacing: .12em; text-transform: uppercase; border-bottom: 1pt solid #111; padding: 5pt 4pt; }
+  #sota-qd-print td { padding: 5pt 4pt; border-bottom: .5pt solid #ccc; font-size: 10pt; }
+  #sota-qd-print .p-r { text-align: right; font-family: "IBM Plex Mono", monospace; }
+  #sota-qd-print .p-grp td { font-weight: 600; border-bottom: 1pt solid #888; padding-top: 10pt; }
+  #sota-qd-print .p-tot { margin-top: 12pt; text-align: right; font-size: 14pt; font-weight: 600; }
+  #sota-qd-print .p-ft { margin-top: 20pt; border-top: .5pt solid #999; padding-top: 8pt; font-size: 9pt; color: #444; }
+  @page { margin: 14mm; }
+}
