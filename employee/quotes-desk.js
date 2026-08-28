@@ -226,6 +226,9 @@
           '<button class="qd-btn qd-btn--ghost" data-act="new">New quote</button>' +
           '<button class="qd-btn" data-act="print">Print / PDF</button>' +
           '<button class="qd-btn" data-act="invoice">Convert to invoice</button>' +
+          (d.kind === "invoice"
+            ? '<button class="qd-btn" data-act="quickbooks">Send to QuickBooks</button>'
+            : '') +
           '<button class="qd-btn qd-btn--primary" data-act="save">Save quote</button>' +
         '</div>' +
       '</div>';
@@ -790,6 +793,22 @@
     }
 
     if (name === "print") { buildPrint(d); window.print(); return; }
+
+    if (name === "quickbooks") {
+      var qb = window.SOTA_QD_QUICKBOOKS;
+      if (!qb || typeof qb.send !== "function") {
+        toast("QuickBooks is not wired up on this page"); return;
+      }
+      if (!d.number) { toast("Save the invoice first"); return; }
+      busy(btn, "Preparing...");
+      Promise.resolve(qb.send(d, S)).then(function () {
+        busy(btn, false);
+      }, function (err) {
+        busy(btn, false);
+        toast(err && err.message ? err.message : "Could not open the invoice");
+      });
+      return;
+    }
 
     if (name === "addcust") {
       var c = { id: uid("c"), company: "New company", email: "", phone: "", address: "", terms: 30, contacts: [] };
