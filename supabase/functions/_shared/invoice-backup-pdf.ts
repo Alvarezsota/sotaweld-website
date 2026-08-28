@@ -56,17 +56,20 @@ const num = (n: unknown) => String(Math.round(Number(n || 0) * 100) / 100);
 const usDate = (iso: string) => { const [y, m, d] = iso.split('-'); return `${m}-${d}-${y}`; };
 
 const DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+// Month, day, year, everywhere a date is printed -- the same order as the pay
+// statements and the invoice lines now use. The day of the week stays in front:
+// a man remembers he was on the job Tuesday, and the number is what he checks
+// that against.
+//
+// The year is on the heading and not only in the header because this sheet gets
+// printed and its pages get separated. A page headed "Tuesday, Aug 18" that has
+// come away from its cover belongs to no particular year.
 const dayLabel = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
-  return `${DOW[dt.getUTCDay()]}, ${MON[m - 1]} ${d}`;
+  return `${DOW[dt.getUTCDay()]}, ${usDate(iso)}`;
 };
-const spanLabel = (start: string, end: string) => {
-  const [, sm, sd] = start.split('-').map(Number);
-  const [, em, ed] = end.split('-').map(Number);
-  return `${MON[sm - 1]} ${sd} \u2013 ${MON[em - 1]} ${ed}`;
-};
+const spanLabel = (start: string, end: string) => `${usDate(start)} to ${usDate(end)}`;
 
 // pdf-lib throws on a character the standard fonts cannot encode rather than
 // skipping it, and job descriptions are typed on a phone. Lifted whole from the
@@ -181,13 +184,13 @@ export async function buildInvoiceBackup(
         MARGIN + CONTENT, y, 10, bold, GREY);
   y -= 26;
   text(fit(p.job_name || 'Job', CONTENT - 150, 19, bold), MARGIN, y, 19, bold);
-  right(spanLabel(p.week_start, p.week_end), MARGIN + CONTENT, y + 2, 11, reg, GREY);
+  // Written out in full, the span says exactly what the line under the customer
+  // used to say. One of the two had to go.
+  right(`Week of ${spanLabel(p.week_start, p.week_end)}`, MARGIN + CONTENT, y + 2, 10, reg, GREY);
   y -= 15;
   const route = [p.customer_name || p.bill_to, p.operator ? `on ${p.operator}` : null]
     .filter(Boolean).join('  \u00B7  ');
   text(route + (p.bid_number ? `  \u00B7  Bid #${p.bid_number}` : ''), MARGIN, y, 9.5, reg, GREY);
-  y -= 12;
-  text(`Week of ${usDate(p.week_start)} through ${usDate(p.week_end)}`, MARGIN, y, 9.5, reg, GREY);
   y -= 24;
 
   // ---- the four numbers, before any of the detail ----
@@ -288,13 +291,18 @@ export async function buildInvoiceBackup(
   // whole purpose is saying which day a man worked reads as one long list. So it
   // is bigger than anything else in the table, it carries the accent stripe, and
   // it sits in a band deep enough to break the rows apart.
-  const DESC_X = MARGIN + 152;
+  //
+  // Hands back the x the description may start at. It has to be measured rather
+  // than fixed: the heading's width depends on the day name and the date in it,
+  // and "Wednesday, 08-19-2026" is wider than the fixed column that used to sit
+  // here -- the description ran straight into the date with no gap at all.
   const dayBar = (label: string) => {
     page.drawRectangle({ x: MARGIN, y: y - 8, width: CONTENT, height: 25, color: SOFT });
     page.drawRectangle({ x: MARGIN, y: y - 8, width: 4, height: 25, color: ACCENT });
     page.drawLine({ start: { x: MARGIN, y: y + 17 }, end: { x: MARGIN + CONTENT, y: y + 17 },
                     thickness: 0.8, color: LINE });
     text(label, MARGIN + 14, y, 12.5, bold);
+    return MARGIN + 14 + bold.widthOfTextAtSize(wa(label), 12.5) + 18;
   };
 
   // Set while the rows of one date are being drawn, so a page break in the
@@ -324,9 +332,9 @@ export async function buildInvoiceBackup(
     openDay = null;
     room(70, dayHeader);
     y -= 12;
-    dayBar(dayLabel(d.date));
+    const descX = dayBar(dayLabel(d.date));
     const desc = d.descriptions.filter(Boolean).join(' \u00B7 ');
-    if (desc) text(fit(desc, MARGIN + CONTENT - DESC_X, 8.5, ital), DESC_X, y, 8.5, ital, GREY);
+    if (desc) text(fit(desc, MARGIN + CONTENT - descX, 8.5, ital), descX, y, 8.5, ital, GREY);
     y -= 24;
     openDay = d.date;
 
