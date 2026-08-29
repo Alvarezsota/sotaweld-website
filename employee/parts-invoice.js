@@ -88,6 +88,23 @@ async function loadAll() {
   if (!nextRes.error && nextRes.data) nextInvoiceNumber = String(nextRes.data);
 
   renderList();
+
+  // Our counter first so the page draws straight away, then QuickBooks. An
+  // invoice entered over there without us leaves our counter behind, and the
+  // number on the button would be one a customer already has. Not awaited:
+  // the list is worth showing while QuickBooks is being asked.
+  refreshNextInvoiceNo();
+}
+
+/* Re-asks what the next number is and redraws whatever is showing it. Quiet on
+   failure -- syncNextInvoiceNo falls back to our own counter, which is what was
+   on screen already. */
+async function refreshNextInvoiceNo() {
+  const fresh = await syncNextInvoiceNo();
+  if (!fresh || fresh === nextInvoiceNumber) return;
+  nextInvoiceNumber = fresh;
+  renderList();
+  if (editing) renderEditor();
 }
 
 /* --- the list ------------------------------------------------------------- */
@@ -545,6 +562,12 @@ document.addEventListener('click', async (e) => {
   }
   if (action === 'finish') {
     btn.disabled = true;
+    // Finishing is what spends the number: a Postgres trigger reads the counter
+    // as the row goes from draft to ready. So the counter has to be past
+    // anything QuickBooks has issued BEFORE the save, not after -- once the
+    // trigger has taken a number, that number is spent whether or not it
+    // collides. This is the one call worth waiting on.
+    if (editing && editing.status === 'draft') await refreshNextInvoiceNo();
     const id = await saveEditor(true);
     btn.disabled = false;
     if (!id) return;

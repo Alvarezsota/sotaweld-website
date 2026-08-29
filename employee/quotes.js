@@ -125,9 +125,13 @@ window.SOTA_QD_NUMBERS = {
 /* What the next numbers would be, for the desk to show without spending them. */
 async function numberingHints() {
   try {
-    const [{ data: q }, { data: inv }] = await Promise.all([
+    // The invoice number goes via syncNextInvoiceNo rather than peek_invoice_no:
+    // it asks QuickBooks whether anything has been numbered over there without
+    // us and shoves the shared counter past it. Quote numbers are ours alone --
+    // QuickBooks has never heard of them -- so peek is the whole story there.
+    const [{ data: q }, inv] = await Promise.all([
       sb.rpc('peek_quote_no'),
-      sb.rpc('peek_invoice_no')
+      syncNextInvoiceNo()
     ]);
     return { nextQuoteNo: q || '', nextInvoiceNo: inv || '' };
   } catch (err) {

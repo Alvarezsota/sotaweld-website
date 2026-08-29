@@ -1062,8 +1062,12 @@ async function deleteLine(line, groupId) {
    the database -- because that is the only place that can promise it is not
    handing the same one out twice. */
 async function refreshNextInvoiceNumber() {
-  const { data, error } = await sb.rpc('peek_invoice_no');
-  if (!error && data) nextInvoiceNumber = String(data);
+  // Asks QuickBooks first, our own counter second. An invoice entered straight
+  // into QuickBooks never moves our counter, so on its own our counter will
+  // happily offer a number a customer already has. syncNextInvoiceNo (in
+  // supabase-client.js) handles the falling back and never throws.
+  const fresh = await syncNextInvoiceNo();
+  if (fresh) nextInvoiceNumber = fresh;
 }
 
 /** Fills in an approved week that somehow has no number -- the ones approved
@@ -1071,6 +1075,10 @@ async function refreshNextInvoiceNumber() {
 async function assignInvoiceNo(groupId) {
   const jw = currentJobWeeks[groupId];
   if (!jw) { alert('Approve this week first, and it will take a number by itself.'); return; }
+  // Past anything QuickBooks has issued BEFORE the number is taken, not after.
+  // assign_invoice_no reads the counter; once it has read it the number is
+  // spent, collision or not.
+  await refreshNextInvoiceNumber();
   const { data, error } = await sb.rpc('assign_invoice_no', { p_job_week_id: jw.id });
   if (error) { alert('Could not take the next invoice number: ' + error.message); return; }
   jw.invoice_no = data;
@@ -1109,6 +1117,10 @@ async function upsertJobWeek(groupId, patch) {
 async function setJobWeekStatus(groupId, status) {
   const patch = { status };
   if (status === 'approved') patch.approved_at = new Date().toISOString();
+  // Approving is a spend: a trigger puts the next number on the week as it
+  // goes. Same rule as everywhere else -- get the counter past QuickBooks
+  // before the number is taken, because afterwards is too late.
+  if (status === 'approved') await refreshNextInvoiceNumber();
   // Reopening clears the approval time too. Leaving it behind would have the week
   // reading "approved 2am Tuesday" while sitting open, which is the sort of thing
   // that gets believed months later when nobody remembers.

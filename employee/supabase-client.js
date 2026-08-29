@@ -3,6 +3,43 @@ const SUPABASE_KEY = 'sb_publishable_HGtY9w_Oays9WK4xkOnyYA_tk0RMQzO';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+/* ---------------------------------------------------------------------------
+   THE NEXT INVOICE NUMBER
+   ---------------------------------------------------------------------------
+   invoice_counter is ours. It knows every number the portal has issued and
+   nothing about a number QuickBooks issued without us -- an invoice typed
+   straight into QuickBooks, which is a perfectly ordinary thing to do. Two
+   were, on 08-28, and the parts tab went on offering "Finish and take 2993"
+   for a number already sitting in a customer's inbox.
+
+   So before a page shows a number, it asks. Only qb-push-invoice holds the
+   QuickBooks token, so the asking goes through there; all this does is call it
+   and hand back the answer.
+
+   It never throws and never returns nothing. QuickBooks unreachable falls back
+   to our own counter, because a number that might collide beats no number at
+   all -- and the push still refuses a duplicate rather than issuing one. */
+async function syncNextInvoiceNo() {
+  const local = async () => {
+    const { data, error } = await sb.rpc('peek_invoice_no');
+    return (!error && data) ? String(data) : '';
+  };
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return await local();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/qb-push-invoice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ action: 'sync_invoice_no' }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.ok || !json.next_invoice_no) return await local();
+    return String(json.next_invoice_no);
+  } catch (_) {
+    return await local();
+  }
+}
+
 // Keeps a page's numbers current instead of frozen at whatever it loaded with.
 //
 // Three things trigger a re-fetch:
