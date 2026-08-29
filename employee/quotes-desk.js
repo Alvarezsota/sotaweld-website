@@ -369,8 +369,19 @@
 
   /* ---------------- documents tab ---------------- */
   function viewDocuments() {
+    // The next invoice number belongs on this tab whether or not there is a
+    // list under it. Deleting the last document is exactly the moment somebody
+    // wants to know whether its number came back, and the old empty state
+    // dropped the one line that would have told him.
     if (!S.docs.length) {
-      return '<div class="qd-panel"><div class="qd-panel-bd"><p class="qd-empty">Nothing saved yet. Build a quote and hit <strong>Save quote</strong>.</p></div></div>';
+      return '<div class="qd-panel">' +
+        '<div class="qd-panel-hd"><h2>Quotes &amp; invoices</h2><span class="qd-spacer"></span>' +
+          (S.settings.nextInvoiceNo
+            ? '<span class="qd-hint">Next invoice number: <strong>' + esc(S.settings.nextInvoiceNo) + '</strong></span>'
+            : '') +
+        '</div>' +
+        '<div class="qd-panel-bd"><p class="qd-empty">Nothing saved yet. Build a quote and hit <strong>Save quote</strong>.</p></div>' +
+      '</div>';
     }
     var rows = S.docs.slice().reverse().map(function (doc) {
       var c = customerById(doc.customerId);
@@ -394,7 +405,7 @@
     '<div class="qd-panel">' +
       '<div class="qd-panel-hd"><h2>Quotes &amp; invoices</h2><span class="qd-spacer"></span>' +
         '<span class="qd-hint">Quotes are dated SOTA numbers; invoices carry on the field-ticket run' +
-          (S.settings.nextInvoiceNo ? ' — next invoice would be ' + esc(S.settings.nextInvoiceNo) : '') + '</span></div>' +
+          (S.settings.nextInvoiceNo ? '. Next invoice number: <strong>' + esc(S.settings.nextInvoiceNo) + '</strong>' : '') + '</span></div>' +
       '<div class="qd-panel-bd qd-scroll">' +
         '<table><thead><tr><th>Number</th><th>Status</th><th>Company</th><th>Job</th><th>Date</th><th>Due</th><th class="qd-r">Total</th><th></th></tr></thead>' +
         '<tbody>' + rows + '</tbody></table>' +
