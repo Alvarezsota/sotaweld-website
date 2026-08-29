@@ -140,6 +140,18 @@ function buildJobGroups(entries, jobs) {
     const prof = e.profiles || {};
     const isFlatJob = effectiveJob && effectiveJob.billing_type === 'flat';
 
+    // A login that bills as a helper. He files his own tickets, so he arrives on
+    // the welder leg of the ticket and would be called a welder by every line
+    // below it -- which is what put 136.5 of Jayson Alvarez's hours on the
+    // "Welder labor" line of an invoice at a helper's rate.
+    //
+    // He is a helper from here down: his own name off the helpers row, his own
+    // rates, and none of the job's welding rates, which is the same rule that
+    // keeps any other helper off them. Matches v_work_lines --
+    // supabase/migrations/20260828_bills_as_helper.sql. Change one, change the
+    // other.
+    const asHelper = prof.bills_as_helper || null;
+
     // Overhead. Shop time is paid and never billed, and that has to hold for a
     // helper as well as a welder -- a helper ignores the job rate on purpose, so
     // zeroing the job rate alone would have looked right and corrected almost
@@ -149,20 +161,33 @@ function buildJobGroups(entries, jobs) {
     const jobPerDiem = internal ? 0 : (effectiveJob ? effectiveJob.per_diem : null);
     const jobBillRate = internal ? 0 : (effectiveJob ? effectiveJob.bill_rate : null);
     const jobStainlessRate = internal ? 0 : (effectiveJob ? effectiveJob.stainless_bill_rate : null);
+    // The one job rate that reaches a helper and never a welder. MasTec pay $35
+    // for a helper; before this it had to be typed on every line, and the day it
+    // was missed the invoice went out at his standing rate.
+    const jobHelperRate = internal ? 0 : (effectiveJob ? effectiveJob.helper_bill_rate : null);
 
     // A helper-only ticket has no welder line at all. v_work_lines does the same
     // thing by inner-joining profiles, so the job log and the invoice agree on
     // what a ticket with no welder contains: just its helpers.
     if (e.welder_id) d.lines.push(personLine({
-      role: 'welder',
-      name: prof.full_name || '—',
+      role: asHelper ? 'helper' : 'welder',
+      name: (asHelper ? asHelper.name : prof.full_name) || '—',
       hours: Number(e.hours),
       payHours: e.pay_hours_override,
-      payRate: rateOr(e.pay_rate_override, prof.pay_rate),
-      billRate: rateOr(e.bill_rate_override, jobBillRate, prof.bill_rate),
+      payRate: rateOr(e.pay_rate_override, asHelper && asHelper.pay_rate, prof.pay_rate),
+      // internal first, so an override typed on a shop ticket cannot bill it.
+      // The SQL has always read that way round; this read the override first and
+      // would have billed overhead the day somebody set one.
+      billRate: internal ? 0 : (asHelper
+        ? rateOr(e.bill_rate_override, jobHelperRate, asHelper.bill_rate, prof.bill_rate)
+        : rateOr(e.bill_rate_override, jobBillRate, prof.bill_rate)),
       // A bill rate typed on a stainless line still counts, so entering one
       // does something rather than being quietly ignored for the job rate.
-      stainlessRate: rateOr(e.stainless_rate_override, e.bill_rate_override, jobStainlessRate, prof.bill_rate),
+      // For a man billing as a helper that is the only thing that can move him:
+      // the job's stainless rate is a welding rate and never reaches him.
+      stainlessRate: internal ? 0 : (asHelper
+        ? rateOr(e.bill_rate_override, jobHelperRate, asHelper.bill_rate, prof.bill_rate)
+        : rateOr(e.stainless_rate_override, e.bill_rate_override, jobStainlessRate, prof.bill_rate)),
       perDiemRate: rateOr(e.per_diem_override, jobPerDiem),
       perDiem: e.per_diem,
       isStainless: e.is_stainless,
@@ -179,9 +204,13 @@ function buildJobGroups(entries, jobs) {
         stainless: e.stainless_rate_override, perDiem: e.per_diem_override
       },
       fallbacks: {
-        pay: rateOr(prof.pay_rate),
-        bill: rateOr(jobBillRate, prof.bill_rate),
-        stainless: rateOr(jobStainlessRate, prof.bill_rate),
+        pay: rateOr(asHelper && asHelper.pay_rate, prof.pay_rate),
+        bill: internal ? 0 : (asHelper
+          ? rateOr(jobHelperRate, asHelper.bill_rate, prof.bill_rate)
+          : rateOr(jobBillRate, prof.bill_rate)),
+        stainless: internal ? 0 : (asHelper
+          ? rateOr(jobHelperRate, asHelper.bill_rate, prof.bill_rate)
+          : rateOr(jobStainlessRate, prof.bill_rate)),
         perDiem: rateOr(jobPerDiem)
       }
     }));
@@ -200,7 +229,7 @@ function buildJobGroups(entries, jobs) {
         payRate: rateOr(dh.pay_rate_override, hp.pay_rate),
         // internal first: a helper otherwise falls straight through to his own
         // rate, which is exactly the case a zero job rate cannot reach.
-        billRate: internal ? 0 : rateOr(dh.bill_rate_override, hp.bill_rate),
+        billRate: internal ? 0 : rateOr(dh.bill_rate_override, jobHelperRate, hp.bill_rate),
         perDiemRate: internal ? 0 : rateOr(dh.per_diem_override, jobPerDiem),
         perDiem: dh.per_diem,
         entryId: e.id,
@@ -217,7 +246,7 @@ function buildJobGroups(entries, jobs) {
         },
         fallbacks: {
           pay: rateOr(hp.pay_rate),
-          bill: internal ? 0 : rateOr(hp.bill_rate),
+          bill: internal ? 0 : rateOr(jobHelperRate, hp.bill_rate),
           perDiem: internal ? 0 : rateOr(jobPerDiem)
         }
       }));
@@ -255,7 +284,7 @@ async function loadWeek() {
   // not care how many other columns ever point at a person.
   const [entriesRes, jobsRes, jwRes, hlprsRes, weldersRes] = await Promise.all([
     sb.from('daily_entries')
-      .select('*, profiles!daily_entries_welder_id_fkey(full_name, pay_rate, bill_rate), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate)), daily_entry_parts(*)')
+      .select('*, profiles!daily_entries_welder_id_fkey(full_name, pay_rate, bill_rate, bills_as_helper_id, bills_as_helper:helpers!profiles_bills_as_helper_id_fkey(name, pay_rate, bill_rate)), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate)), daily_entry_parts(*)')
       .gte('entry_date', start).lte('entry_date', end),
     sb.from('jobs').select('*'),
     sb.from('job_weeks').select('*').eq('week_start', start),

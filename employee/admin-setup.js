@@ -34,6 +34,7 @@ function renderJobs() {
       <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num job-pd" value="${escAttr(j.per_diem)}"></div>
       <div class="c pd-cell billrate-cell"><span class="pd-dollar">$</span><input class="cell-in num job-billrate" value="${escAttr(j.bill_rate)}" placeholder="Default" title="Override the welder's normal bill rate for this job. Leave blank to use their default rate."></div>
       <div class="c pd-cell stainless-cell"><span class="pd-dollar">$</span><input class="cell-in num job-stainless" value="${escAttr(j.stainless_bill_rate)}" title="Bill rate per hour when a welder flags stainless work on this job"></div>
+      <div class="c pd-cell helperrate-cell"><span class="pd-dollar">$</span><input class="cell-in num job-helperrate" value="${escAttr(j.helper_bill_rate)}" placeholder="Default" title="What a helper bills at per hour on this job. Leave blank and each helper bills at his own standing rate. The bill rate and stainless rate beside this are welding rates and never reach a helper."></div>
       <div class="c"><button type="button" class="toggle2${j.billing_type === 'flat' ? ' ton' : ''}" data-action="toggle-flat" title="Lump sum job — bid as a price instead of billed by the hour. Bill it off bid line items on the Summary page."><span class="tk2"></span></button></div>
       <div class="c"><button type="button" class="toggle2${j.track_hours ? ' ton' : ''}" data-action="toggle-hours" title="Track hours on this job's daily log"><span class="tk2"></span></button></div>
       <div class="c"><button type="button" class="toggle2${j.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>
@@ -124,6 +125,7 @@ document.getElementById('jobsTable').addEventListener('blur', async (e) => {
   else if (e.target.classList.contains('job-pd')) patch = { per_diem: num(e.target.value) };
   else if (e.target.classList.contains('job-billrate')) patch = { bill_rate: e.target.value.trim() === '' ? null : num(e.target.value) };
   else if (e.target.classList.contains('job-stainless')) patch = { stainless_bill_rate: num(e.target.value) };
+  else if (e.target.classList.contains('job-helperrate')) patch = { helper_bill_rate: num(e.target.value) };
   else if (e.target.classList.contains('job-bidnum')) patch = { bid_number: e.target.value.trim() || null };
   if (!patch) return;
 

@@ -214,6 +214,9 @@ body.inv-open { overflow: hidden; }
 .inv-status { font-size: 13px; line-height: 1.6; margin: 12px 0 0; }
 .inv-ok { color: var(--ok); }
 .inv-err { color: var(--danger); }
+/* The invoice went, the sheet did not. Neither green nor red: nothing is
+   broken over there, but he needs to know the sheet is not on it. */
+.inv-warn { color: var(--molten); }
 
 /* On a phone the Amount column is the one that matters, so Qty and Rate fold
    into a note under the description rather than pushing Amount off the edge. */

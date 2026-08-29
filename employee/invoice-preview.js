@@ -24,6 +24,7 @@
 
 const InvoicePreview = (function () {
   const PUSH_URL = `${SUPABASE_URL}/functions/v1/qb-push-invoice`;
+  const BACKUP_URL = `${SUPABASE_URL}/functions/v1/qb-invoice-backup`;
 
   let current = null;   // what is open: the ids, the payload, the callback
 
@@ -36,6 +37,19 @@ const InvoicePreview = (function () {
   function money(n) {
     return '$' + Number(n || 0).toLocaleString('en-US',
       { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  /* Month, day, year -- the way it is read out loud in the office and the way
+     the crew sheet and the pay statements already print it.
+
+     Only what is shown turns round. transaction_date goes to QuickBooks as
+     TxnDate and their API takes YYYY-MM-DD, so the payload stays ISO; formatting
+     it at the source would have put a date QuickBooks cannot read on every
+     invoice. Anything that is not a plain ISO date is passed through untouched
+     rather than mangled into something that looks like a date and is not. */
+  function usDate(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso == null ? '' : iso).trim());
+    return m ? `${m[2]}-${m[3]}-${m[1]}` : (iso == null ? '' : String(iso));
   }
 
   /** One call for both the look and the send. dryRun decides which. */
@@ -118,7 +132,7 @@ const InvoicePreview = (function () {
       <div class="inv-head">
         <div>
           <h3 id="invName">Invoice ${number ? '#' + esc(number) : 'draft'}</h3>
-          <div class="inv-sub">${esc(p.customer_name || '')} · dated ${esc(p.transaction_date || '')}${
+          <div class="inv-sub">${esc(p.customer_name || '')} · dated ${esc(usDate(p.transaction_date))}${
             p.po_number ? ' · PO ' + esc(p.po_number) : ''}</div>
         </div>
         <div class="inv-total-big">${money(p.lines_total)}</div>
@@ -165,13 +179,19 @@ const InvoicePreview = (function () {
              <span class="inv-caveat">${canPush
                ? 'Creates it in QuickBooks unsent, and locks it here.'
                : 'Fix what is listed above and this will work.'}</span>`}
+        ${current.jobWeekId ? `<button class="btn2 btn2-line" id="invBackupBtn">Crew time sheet</button>` : ''}
         <button class="btn2 btn2-ghost" data-inv-close>Close</button>
       </div>
+      ${current.jobWeekId ? `<p class="inv-hint">The crew time sheet — every name, day and hour behind
+        these lines — is attached to the invoice in QuickBooks when it is pushed, and goes out with it.
+        This is a copy to read first.</p>` : ''}
       <p class="inv-status" id="invStatus"></p>
     `;
 
     const pushBtn = document.getElementById('invPushBtn');
     if (pushBtn) pushBtn.addEventListener('click', push);
+    const backupBtn = document.getElementById('invBackupBtn');
+    if (backupBtn) backupBtn.addEventListener('click', downloadBackup);
   }
 
   async function push() {
@@ -205,10 +225,18 @@ const InvoicePreview = (function () {
         const renumbered = json.number_changed_by_quickbooks
           ? ` QuickBooks numbered it ${json.doc_number} rather than ${json.proposed_number}, so that is the number now.`
           : '';
+        // The attach cannot un-create the invoice, so a failed one is a note
+        // rather than an error. Saying nothing would leave him believing the
+        // sheet went with it.
+        const b = json.backup || {};
+        const sheetNote = json.backup === undefined ? ''
+          : b.attached ? ' The crew time sheet is attached to it and will go out with it.'
+          : ` The crew time sheet did not attach (${b.error || 'reason unknown'}) — the invoice is fine.`;
         if (statusEl) {
           statusEl.textContent = `Created invoice ${json.doc_number || json.qb_invoice_id} for ${money(json.total)}. `
-            + `It is in QuickBooks unsent — look it over there before it goes out.${renumbered}`;
-          statusEl.className = 'inv-status inv-ok';
+            + `It is in QuickBooks unsent — look it over there before it goes out.${renumbered}${sheetNote}`;
+          statusEl.className = b.attached === false && json.backup !== undefined
+            ? 'inv-status inv-warn' : 'inv-status inv-ok';
         }
       }
       if (btn) btn.remove();
@@ -219,6 +247,55 @@ const InvoicePreview = (function () {
         statusEl.className = 'inv-status inv-err';
       }
       if (btn) { btn.disabled = false; btn.textContent = 'Push to QuickBooks'; }
+    }
+  }
+
+  /* The crew sheet behind the labour lines.
+     
+     It is attached to the QuickBooks invoice by the push without anybody asking,
+     so this button is not how it gets there -- it is how it gets read first, and
+     how a copy is pulled for a customer who has mislaid theirs. Works on a week
+     already sent as well as one that has not been. */
+  async function downloadBackup() {
+    const btn = document.getElementById('invBackupBtn');
+    const statusEl = document.getElementById('invStatus');
+    if (!current || !current.jobWeekId) return;
+    const label = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Building…'; }
+    if (statusEl) { statusEl.textContent = ''; statusEl.className = 'inv-status'; }
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error('Your session expired. Log in again.');
+      const res = await fetch(BACKUP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ job_week_id: current.jobWeekId }),
+      });
+      // A refusal comes back as JSON, a sheet comes back as a PDF. Reading the
+      // error rather than saving it means he is told why instead of opening a
+      // download that turns out to be the word "forbidden".
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `Could not build the sheet (${res.status})`);
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get('content-disposition') || '';
+      const m = cd.match(/filename="([^"]+)"/);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = m ? m[1] : 'crew-time-backup.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (err) {
+      if (statusEl) {
+        statusEl.textContent = 'The crew sheet could not be built: ' + err.message;
+        statusEl.className = 'inv-status inv-err';
+      }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = label || 'Crew time sheet'; }
     }
   }
 
