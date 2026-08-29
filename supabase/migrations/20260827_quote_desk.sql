@@ -42,6 +42,53 @@
 -- STATE
 -- ---------------------------------------------------------------------------
 
+-- ---------------------------------------------------------------------------
+-- A QUOTE DESK TABLE THAT IS THE WRONG SHAPE
+-- ---------------------------------------------------------------------------
+--
+-- One was found in the live database keyed on a text id with the JSON in a
+-- column called data. The portal reads id = 1 and a column called state, so the
+-- table was there and the page still could not use it -- which is worse than
+-- not having it, because "create table if not exists" then quietly does
+-- nothing and the error only changes shape.
+--
+-- So a table that is not the right shape is replaced, unless it is holding
+-- something, in which case this stops and says so rather than throwing away
+-- quotes to make a migration run.
+
+do $shape$
+declare
+  v_rows bigint;
+begin
+  if to_regclass('public.quote_desk_state') is null then
+    return;                                     -- nothing there yet; carry on
+  end if;
+
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'quote_desk_state'
+                and column_name = 'state') then
+    return;                                     -- already the right shape
+  end if;
+
+  -- Counted without naming a column, because the shape is the thing in
+  -- question. Any jsonb column with something in it counts as a desk with
+  -- work in it.
+  select count(*) into v_rows
+    from public.quote_desk_state t,
+         lateral jsonb_each(to_jsonb(t)) kv
+   where jsonb_typeof(kv.value) = 'object'
+     and kv.value <> '{}'::jsonb;
+
+  if v_rows > 0 then
+    raise exception
+      'STOP: public.quote_desk_state is the wrong shape for the portal but has % row(s) with something in them. Send this message back rather than running further -- the quotes in it would be thrown away.', v_rows;
+  end if;
+
+  raise notice 'replacing an empty quote_desk_state that was the wrong shape';
+  drop table public.quote_desk_state cascade;
+end
+$shape$;
+
 create table if not exists public.quote_desk_state (
   id         integer primary key default 1 check (id = 1),
   state      jsonb not null default '{}'::jsonb,
