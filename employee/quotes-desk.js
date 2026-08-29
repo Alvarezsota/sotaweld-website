@@ -382,7 +382,11 @@
         '<td>' + esc(prettyDate(doc.date)) + '</td>' +
         '<td>' + esc(doc.dueDate ? prettyDate(doc.dueDate) : "—") + '</td>' +
         '<td class="qd-r">' + money(docTotal(doc)) + '</td>' +
-        '<td class="qd-r"><button class="qd-btn qd-btn--mini" data-open="' + esc(doc.id) + '">Open</button></td>' +
+        '<td class="qd-r">' +
+          '<button class="qd-btn qd-btn--mini" data-open="' + esc(doc.id) + '">Open</button> ' +
+          '<button class="qd-btn qd-btn--mini qd-btn--danger" data-deldoc="' + esc(doc.id) + '" ' +
+            'title="Removes it for good. An invoice number comes back if nothing else has taken one since.">Delete</button>' +
+        '</td>' +
       '</tr>';
     }).join("");
 
@@ -675,7 +679,7 @@
   }
 
   MOUNT.addEventListener("click", function (e) {
-    var t = e.target.closest ? e.target.closest("[data-tab],[data-add],[data-del],[data-cust],[data-open],[data-act],[data-addcontact],[data-delcontact]") : null;
+    var t = e.target.closest ? e.target.closest("[data-tab],[data-add],[data-del],[data-cust],[data-open],[data-deldoc],[data-act],[data-addcontact],[data-delcontact]") : null;
     if (!t) return;
 
     var v;
@@ -695,6 +699,8 @@
     }
 
     if ((v = t.getAttribute("data-cust"))) { activeCustomer = v; render(); return; }
+
+    if ((v = t.getAttribute("data-deldoc"))) { deleteDoc(v, t); return; }
 
     if ((v = t.getAttribute("data-open"))) {
       for (var j = 0; j < S.docs.length; j++) {
@@ -731,6 +737,44 @@
       btn.disabled = false;
       if (btn.hasAttribute("data-idle")) { btn.textContent = btn.getAttribute("data-idle"); btn.removeAttribute("data-idle"); }
     }
+  }
+
+  /* Deleting a saved document.
+     Asked plainly and once, because it cannot be undone -- the desk keeps no
+     history and there is nothing to restore from. The database half refuses
+     anything QuickBooks already has and decides for itself whether the number
+     can be handed back; this only reports what it decided. */
+  function deleteDoc(id, btn) {
+    var doc = null;
+    for (var i = 0; i < S.docs.length; i++) if (S.docs[i].id === id) { doc = S.docs[i]; break; }
+    if (!doc) return;
+
+    var what = docLabel(doc);
+    if (!window.confirm("Delete " + what + " for good?\n\nThis cannot be undone.")) return;
+
+    var remover = window.SOTA_QD_DELETE;
+    if (!remover) { toast("Cannot delete right now \u2014 reload the page."); return; }
+
+    busy(btn, "Deleting\u2026");
+    remover.remove(doc).then(function (freed) {
+      S.docs = S.docs.filter(function (d) { return d.id !== id; });
+      // The open draft is a copy of the document, so leaving it on screen would
+      // let him save it straight back in under the number just handed back.
+      if (S.draft && S.draft.id === id) S.draft = blankDraft();
+      persist(); render();
+      if (freed && freed.freed) {
+        S.settings.nextInvoiceNo = String(freed.next_no);
+        render();
+        toast("Deleted " + what + ". Invoice number " + freed.next_no + " is free again.");
+      } else if (freed && freed.reason) {
+        toast("Deleted " + what + ", but the number stays spent: " + freed.reason);
+      } else {
+        toast("Deleted " + what);
+      }
+    }, function (err) {
+      busy(btn, false);
+      toast(err && err.message ? err.message : "Could not delete that.");
+    });
   }
 
   function upsert(doc) {

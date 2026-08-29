@@ -72,6 +72,11 @@
 #sota-quote-desk .qd-btn--primary:hover { background: #DDE3E9; border-color: #DDE3E9; }
 #sota-quote-desk .qd-btn--ghost { background: transparent; }
 #sota-quote-desk .qd-btn--mini { padding: calc(var(--u)) calc(var(--u) * 2); font-size: 12px; }
+/* Delete cannot be undone, so it does not look like Open sitting next to it.
+   Muted until pointed at, rather than red all the time: a row of red buttons
+   down the list reads as a list of problems. */
+#sota-quote-desk .qd-btn--danger { color: #E08A7A; border-color: #4A3A38; }
+#sota-quote-desk .qd-btn--danger:hover { background: #4A2620; border-color: #7A4038; color: #FFD9D0; }
 
 /* ---------- tabs ---------- */
 #sota-quote-desk .qd-tabs {

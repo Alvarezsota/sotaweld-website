@@ -232,6 +232,48 @@ async function upsertDeskInvoice(doc, state) {
   return invoiceId;
 }
 
+/* ---------------- deleting a document ----------------
+   Voiding leaves it in the list with its number spent forever. That is right
+   for an invoice a customer has already seen and wrong for one raised by
+   mistake, so the desk can now delete outright -- and the number goes back on
+   the shelf when it is safe for it to.
+
+   The one thing it will not do is delete something QuickBooks already has.
+   Removing our copy would not remove theirs; it would only lose the last
+   record of which document their invoice came from. QuickBooks first, here
+   second -- the same order as everything else that touches their books. */
+window.SOTA_QD_DELETE = {
+  remove: async function (doc) {
+    const profile = await adminReady;
+    if (!profile) throw new Error('Admins only.');
+
+    const { data: mirror, error: lookErr } = await sb.from('desk_invoices')
+      .select('id, qb_invoice_id').eq('doc_id', doc.id).maybeSingle();
+    if (lookErr) throw new Error(lookErr.message);
+
+    if (mirror && mirror.qb_invoice_id) {
+      throw new Error('This is on QuickBooks invoice ' + mirror.qb_invoice_id
+        + '. Delete it in QuickBooks first, then delete it here.');
+    }
+
+    if (mirror) {
+      await sb.from('desk_invoice_lines').delete().eq('invoice_id', mirror.id);
+      const { error } = await sb.from('desk_invoices').delete().eq('id', mirror.id);
+      if (error) throw new Error(error.message);
+    }
+
+    // Quote numbers are dated and counted within their day; handing one back
+    // would renumber a day that may already have others on it. Only the
+    // invoice run is a single line that can be wound back.
+    let freed = null;
+    if (doc.kind === 'invoice' && /^\d+$/.test(String(doc.number || ''))) {
+      const { data } = await sb.rpc('release_invoice_no', { p_no: Number(doc.number) });
+      freed = data || null;
+    }
+    return freed;
+  }
+};
+
 /* The desk asks for this when its Send to QuickBooks button is pressed. The
    preview and the push itself are InvoicePreview's -- the same ones Approvals
    and Parts Invoice use, so there is one QuickBooks path, not three. */
