@@ -290,3 +290,21 @@
   #sota-qd-print .p-ft { margin-top: 20pt; border-top: .5pt solid #999; padding-top: 8pt; font-size: 9pt; color: #444; }
   @page { margin: 14mm; }
 }
+
+/* --- pulling the customer list across -------------------------------------
+   Sits above the desk rather than inside it, so the module keeps ownership of
+   everything in its own box.                                               */
+.qd-pull-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  margin: 0 auto 14px; padding: 12px 16px; max-width: 1180px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: rgba(255,255,255,.02);
+}
+.qd-pull-note { flex: 1 1 260px; margin: 0; font-size: 12px; line-height: 1.5; color: var(--dim2); }
+.qd-pull-ok  { color: var(--ok); }
+.qd-pull-bad { color: var(--danger); }
+
+@media (max-width: 560px) {
+  .qd-pull-bar { margin-left: 12px; margin-right: 12px; }
+  .qd-pull-bar .btn2 { width: 100%; }
+}

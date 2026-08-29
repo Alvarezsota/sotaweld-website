@@ -250,6 +250,122 @@ window.SOTA_QD_QUICKBOOKS = {
   }
 };
 
+/* ---------------- the customer list ----------------
+   Every company we invoice is already in QuickBooks -- that is where the money
+   goes -- and qb_customers is the portal's copy of it. So the desk's list is
+   filled from there rather than typed twice. Typing it twice is how a quote
+   goes out under a name QuickBooks does not have, which is found out at the
+   moment the invoice is refused.
+
+   Pulling brings the QuickBooks id across with the name, and that id is the
+   thing an invoice cannot be sent without.
+
+   What he has typed is his. A company already on the desk keeps its contacts,
+   terms, phone and address; only the QuickBooks link is filled in. Nothing is
+   ever removed -- a customer switched off in QuickBooks stays on the desk, for
+   the quotes already written against it. */
+
+function deskCustomerShape(row) {
+  return {
+    id: 'c_qb_' + row.id,
+    company: row.display_name,
+    email: '',
+    phone: '',
+    address: '',
+    terms: 30,
+    contacts: [],
+    qbCustomerId: String(row.id)
+  };
+}
+
+/** Matches on the QuickBooks id first, then on the name, so a company added by
+ *  hand before the pull is linked rather than duplicated beside itself. */
+function sameCompany(deskCustomer, row) {
+  if (deskCustomer.qbCustomerId && String(deskCustomer.qbCustomerId) === String(row.id)) return true;
+  const a = (deskCustomer.company || '').trim().toLowerCase();
+  const b = (row.display_name || '').trim().toLowerCase();
+  return Boolean(a) && a === b;
+}
+
+async function pullCustomers(btn) {
+  const profile = await adminReady;
+  if (!profile) return;
+
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Pulling…';
+
+  try {
+    const { data, error } = await sb.from('qb_customers')
+      .select('id, display_name, company_name, active')
+      .eq('active', true)
+      .order('display_name');
+
+    if (error) throw new Error(error.message);
+
+    const rows = (data || []).filter(r => (r.display_name || '').trim());
+    if (!rows.length) {
+      deskNote('QuickBooks has no customers in the portal\'s copy of the list yet.', true);
+      return;
+    }
+
+    const state = window.SOTAQuoteDesk.getState();
+    const customers = state.customers || [];
+    let added = 0, linked = 0;
+
+    rows.forEach(row => {
+      const existing = customers.find(c => sameCompany(c, row));
+      if (!existing) { customers.push(deskCustomerShape(row)); added++; return; }
+      if (!existing.qbCustomerId) { existing.qbCustomerId = String(row.id); linked++; }
+      // The name follows QuickBooks, because that is what prints on the invoice.
+      existing.company = row.display_name;
+    });
+
+    state.customers = customers;
+    window.SOTAQuoteDesk.setState(state);
+
+    const ready = customers.filter(c => c.qbCustomerId).length;
+    const parts = [];
+    if (added)  parts.push(added + (added === 1 ? ' company added' : ' companies added'));
+    if (linked) parts.push(linked + ' linked to QuickBooks');
+    if (!parts.length) parts.push('nothing new — the desk already had them all');
+    deskNote(parts.join(', ') + '. ' + ready + ' of ' + customers.length + ' can be invoiced.', false);
+  } catch (err) {
+    deskNote('Could not pull the customers: ' + (err && err.message ? err.message : err), true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+/* The desk owns everything inside its own box, so this sits above it rather
+   than inside, and says what it did where he is looking. */
+function mountCustomerPull() {
+  const host = document.getElementById('adminContent');
+  if (!host || document.getElementById('qdPullBar')) return;
+
+  const bar = document.createElement('div');
+  bar.id = 'qdPullBar';
+  bar.className = 'qd-pull-bar';
+  bar.innerHTML =
+    '<button type="button" class="btn2 btn2-line small" id="qdPullBtn">Pull customers from QuickBooks</button>' +
+    '<p class="qd-pull-note" id="qdPullNote">Brings every company across with its QuickBooks link, ' +
+    'which is what an invoice cannot be sent without. Safe to press any time — it adds and links, never removes.</p>';
+  host.insertBefore(bar, host.firstChild);
+
+  document.getElementById('qdPullBtn')
+    .addEventListener('click', (e) => pullCustomers(e.currentTarget));
+}
+
+function deskNote(msg, bad) {
+  const el = document.getElementById('qdPullNote');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'qd-pull-note' + (bad ? ' qd-pull-bad' : ' qd-pull-ok');
+}
+
+adminReady.then(profile => { if (profile) mountCustomerPull(); });
+
 InvoicePreview.wire();
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
