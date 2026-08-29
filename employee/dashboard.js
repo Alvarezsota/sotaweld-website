@@ -235,6 +235,62 @@ async function loadQuoteRequests() {
   }).join('');
 }
 
+/* Quotes written on the Quote Desk.
+   A separate list from the enquiries above and deliberately so: an enquiry is
+   somebody waiting to hear back, a quote is a price already sent. Mixed into
+   one list the first kind gets lost among the second.
+
+   Read-only here. The desk owns the document -- this is the copy it writes on
+   every save -- so there is nothing to edit and nothing to open. */
+const DQ_STATUS_LABEL = {
+  draft: 'Draft', sent: 'Sent', accepted: 'Accepted',
+  invoiced: 'Invoiced', paid: 'Paid', void: 'Void',
+};
+
+async function loadDeskQuotes() {
+  const list = document.getElementById('deskQuotesList');
+  if (!list) return;
+
+  const { data, error } = await sb
+    .from('desk_quotes')
+    .select('*')
+    .order('quote_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error) {
+    list.innerHTML = '<li class="empty-state2">Quotes could not be loaded. Reload the page.</li>';
+    console.error(error);
+    return;
+  }
+  if (!data || !data.length) {
+    list.innerHTML = '<li class="empty-state2">No quotes written yet. They appear here as you save them on the Quote Desk.</li>';
+    return;
+  }
+
+  list.innerHTML = data.map(q => {
+    const st = String(q.status || 'draft');
+    const money = '$' + Number(q.total || 0).toLocaleString('en-US',
+      { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const who = q.customer_name || 'No company';
+    const job = q.job_name ? ' \u00b7 ' + escapeHtml(q.job_name) : '';
+    return `
+    <li>
+      <div class="dq-row">
+        <span class="dq-row-main">
+          <span class="dq-row-name">${escapeHtml(who)}${job}</span>
+          <span class="dq-row-meta">${escapeHtml(q.quote_no || 'unnumbered')}${q.quote_date ? ' \u00b7 ' + escapeHtml(q.quote_date) : ''}${q.invoiced_no ? ' \u00b7 invoice ' + escapeHtml(q.invoiced_no) : ''}</span>
+          ${q.scope ? `<span class="dq-row-msg">${escapeHtml(q.scope)}</span>` : ''}
+        </span>
+        <span class="dq-row-side">
+          <span class="dq-pill dq-${escapeHtml(st)}">${escapeHtml(DQ_STATUS_LABEL[st] || st)}</span>
+          <span class="dq-row-total">${money}</span>
+        </span>
+      </div>
+    </li>`;
+  }).join('');
+}
+
 function fieldRow(label, value) {
   if (!value) return '';
   return `<div class="qr-f"><div class="qr-f-k">${escapeHtml(label)}</div><div class="qr-f-v">${value}</div></div>`;
@@ -323,6 +379,7 @@ function escapeHtml(str) {
     document.getElementById('adminNavLinks').style.display = 'inline';
     document.getElementById('postAnnouncementWrap').style.display = 'inline-block';
     document.getElementById('quoteRequestsCard').style.display = 'block';
+    document.getElementById('deskQuotesCard').style.display = 'block';
   }
 
   document.getElementById('quoteRequestsList').addEventListener('click', (e) => {
@@ -349,15 +406,15 @@ function escapeHtml(str) {
   });
 
   await loadAnnouncements();
-  if (isAdmin) await loadQuoteRequests();
+  if (isAdmin) await Promise.all([loadQuoteRequests(), loadDeskQuotes()]);
 
   await liveData({
     reload: async () => {
       await loadAnnouncements();
-      if (isAdmin) await loadQuoteRequests();
+      if (isAdmin) await Promise.all([loadQuoteRequests(), loadDeskQuotes()]);
     },
     isBusy: () => document.getElementById('announcementForm').style.display === 'block',
-    tables: isAdmin ? ['announcements', 'quote_requests'] : ['announcements'],
+    tables: isAdmin ? ['announcements', 'quote_requests', 'desk_quotes'] : ['announcements'],
     channel: 'dashboard'
   });
 })();
