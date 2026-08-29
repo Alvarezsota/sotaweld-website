@@ -189,8 +189,6 @@ grant execute on function public.desk_invoice_payload(uuid) to authenticated;
 
 notify pgrst, 'reload schema';
 
-notify pgrst, 'reload schema';
-
 select 'desk_invoices table'      as piece, case when to_regclass('public.desk_invoices')      is not null then 'yes' else 'NO' end as built
 union all select 'desk_invoice_lines table', case when to_regclass('public.desk_invoice_lines') is not null then 'yes' else 'NO' end
 union all select 'desk_invoice_payload()',   case when exists (select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='desk_invoice_payload') then 'yes' else 'NO' end
