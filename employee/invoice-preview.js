@@ -228,15 +228,27 @@ const InvoicePreview = (function () {
         // The attach cannot un-create the invoice, so a failed one is a note
         // rather than an error. Saying nothing would leave him believing the
         // sheet went with it.
+        // A failed attach used to be a clause at the end of a long sentence, and
+        // it read as part of the good news. It is the one thing on this screen
+        // that needs doing something about, so it gets its own block and says
+        // what to do rather than only what happened.
         const b = json.backup || {};
-        const sheetNote = json.backup === undefined ? ''
-          : b.attached ? ' The crew time sheet is attached to it and will go out with it.'
-          : ` The crew time sheet did not attach (${b.error || 'reason unknown'}) — the invoice is fine.`;
+        const attachFailed = json.backup !== undefined && b.attached === false;
         if (statusEl) {
-          statusEl.textContent = `Created invoice ${json.doc_number || json.qb_invoice_id} for ${money(json.total)}. `
-            + `It is in QuickBooks unsent — look it over there before it goes out.${renumbered}${sheetNote}`;
-          statusEl.className = b.attached === false && json.backup !== undefined
-            ? 'inv-status inv-warn' : 'inv-status inv-ok';
+          const created = `Created invoice ${esc(json.doc_number || json.qb_invoice_id)} for ${money(json.total)}. `
+            + `It is in QuickBooks unsent — look it over there before it goes out.${esc(renumbered)}`;
+          statusEl.innerHTML = attachFailed
+            ? `<span class="inv-ok">${created}</span>
+               <span class="inv-attach-warn">
+                 <b>The crew time sheet did not attach.</b>
+                 The invoice is fine and nothing needs pushing again. Use
+                 <b>Replace their crew sheets</b> on Approvals to put it on, and
+                 do not send this invoice until you have.
+                 <span class="inv-attach-why">${esc(b.error || 'reason unknown')}</span>
+               </span>`
+            : `<span class="inv-ok">${created}${json.backup === undefined ? ''
+                 : ' The crew time sheet is attached to it and will go out with it.'}</span>`;
+          statusEl.className = 'inv-status';
         }
       }
       if (btn) btn.remove();

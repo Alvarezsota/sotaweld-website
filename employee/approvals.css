@@ -227,3 +227,20 @@ body.inv-open { overflow: hidden; }
   .inv-qty-note { display: block; }
   .inv-total-big { font-size: 20px; }
 }
+
+/* What QuickBooks says about the invoices this week has already sent, and the
+   control that puts a fresh crew sheet on them. Empty and invisible until a
+   week on this page has actually been pushed. */
+.qb-note { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  font-size: 12.5px; line-height: 1.6; color: var(--dim2); margin: 0 0 14px; }
+.qb-note:empty { display: none; }
+.qb-note-txt { color: var(--dim2); }
+.qb-note-ok { color: var(--ok); }
+.qb-note-err { color: var(--danger); }
+
+/* A push that made the invoice but could not attach the sheet. Neither green
+   nor red: nothing is broken in QuickBooks, and there is one thing left to do. */
+.inv-attach-warn { display: block; margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--molten); background: var(--gold-soft); color: var(--molten);
+  font-size: 12.5px; line-height: 1.6; }
+.inv-attach-why { display: block; margin-top: 6px; font-size: 11.5px; color: var(--dim2); }
