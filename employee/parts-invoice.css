@@ -78,6 +78,26 @@
 .pi-ok  { color: var(--ok); }
 .pi-err { color: var(--danger); }
 
+/* --- adding a customer ---------------------------------------------------
+   The button sits with the picker rather than under it, so the answer to "he
+   isn't in the list" is next to where he was looked for.                    */
+.pi-cust-row { display: flex; align-items: center; gap: 8px; }
+.pi-cust-row .input { flex: 1 1 auto; min-width: 0; }
+.pi-cust-row .btn2 { flex: 0 0 auto; white-space: nowrap; }
+
+.pi-newcust {
+  margin-top: 10px; padding: 12px; border-radius: 8px;
+  border: 1px solid var(--line); background: rgba(255,255,255,.02);
+}
+.pi-newcust-fields { display: flex; flex-wrap: wrap; gap: 10px; }
+.pi-newcust-actions { display: flex; gap: 8px; margin-top: 12px; }
+.pi-newcust-note { color: var(--dim2); font-size: 12px; line-height: 1.5; margin: 10px 0 0; }
+
+@media (max-width: 560px) {
+  .pi-cust-row { flex-wrap: wrap; }
+  .pi-cust-row .btn2 { width: 100%; }
+}
+
 @media (max-width: 560px) {
   .pi-row { flex-direction: column; }
   .pi-row-side { align-items: flex-start; flex-direction: row; width: 100%;

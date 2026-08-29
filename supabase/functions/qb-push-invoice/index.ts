@@ -24,16 +24,26 @@
 // invoice and name the problem underneath it.
 //
 // ---------------------------------------------------------------------------
-// TWO KINDS OF INVOICE, ONE PUSH
+// THREE KINDS OF INVOICE, ONE PUSH
 // ---------------------------------------------------------------------------
 //
 // A job week is a week of labour that has been approved. A parts invoice is
 // plate that went on the laser and came off as parts, with no week and nobody's
-// hours behind it. They are different things and they are billed the same way,
-// so both build a payload of the same shape in Postgres and everything from
-// there down -- the refusals, the token, the number, the write-back -- is one
-// piece of code. Pass job_week_id or parts_invoice_id; the rest does not care
-// which arrived.
+// hours behind it. A desk invoice is a quote the office turned into a bill.
+// They are different things and they are billed the same way, so all three
+// build a payload of the same shape in Postgres and everything from there down
+// -- the refusals, the token, the number, the write-back -- is one piece of
+// code. Pass one of job_week_id, parts_invoice_id or desk_invoice_id; the rest
+// does not care which arrived.
+//
+// ---------------------------------------------------------------------------
+// AND ONE CUSTOMER LOOKUP
+// ---------------------------------------------------------------------------
+//
+// action:"create_customer" lives here rather than in a function of its own for
+// one reason: Intuit rotates the refresh token on every use, so two places
+// refreshing it independently is two ways to lose the connection. One function
+// holds the token, so one function does the talking.
 //
 // ---------------------------------------------------------------------------
 // THE CREW SHEET GOES WITH IT
@@ -151,6 +161,139 @@ async function liveToken(db: ReturnType<typeof createClient>): Promise<Tokens> {
   return { ...t, ...next };
 }
 
+/* ---------------------------------------------------------------------------
+   ADDING A CUSTOMER
+   ---------------------------------------------------------------------------
+   qb_customers is a copy of what QuickBooks knows, kept here so a parts invoice
+   can be written on a phone in the shop with no QuickBooks session near it. A
+   customer added to the copy alone would be a customer QuickBooks has never
+   heard of, and the invoice naming it would be rejected on the way out -- after
+   the number had been spent. So adding one goes to QuickBooks first and the
+   copy follows.
+
+   QuickBooks is asked whether it already has the name before anything is
+   created. That is the whole anti-duplication story: a customer set up over
+   there last week gets picked up and mirrored rather than raised a second time,
+   and the same name typed twice in a row lands on the same customer both times.
+*/
+async function createCustomer(
+  db: ReturnType<typeof createClient>,
+  body: Record<string, unknown>,
+  json: (b: Record<string, unknown>, status?: number) => Response,
+): Promise<Response> {
+  const name = String(body.display_name ?? "").trim();
+  const company = String(body.company_name ?? "").trim();
+  const email = String(body.email ?? "").trim();
+
+  if (!name) return json({ ok: false, error: "give the customer a name" }, 400);
+  // QuickBooks' own limit. Saying so here beats letting Intuit answer with a
+  // validation fault he has to decode.
+  if (name.length > 100) {
+    return json({ ok: false, error: "that name is too long for QuickBooks (100 characters)" }, 400);
+  }
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return json({ ok: false, error: "that email address does not look right" }, 400);
+  }
+
+  const t = await liveToken(db);
+  const base = `${API_BASE(t.environment)}/v3/company/${t.realm_id}`;
+  const headers = {
+    Authorization: `Bearer ${t.access_token}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+
+  const mirror = async (c: Record<string, unknown>, created: boolean) => {
+    const row = {
+      id: String(c.Id),
+      environment: t.environment,
+      display_name: String(c.DisplayName ?? name),
+      company_name: (c.CompanyName as string) ?? null,
+      active: c.Active === false ? false : true,
+      synced_at: new Date().toISOString(),
+    };
+    const { error } = await db.from("qb_customers")
+      .upsert(row, { onConflict: "environment,id" });
+    if (error) throw new Error(`added in QuickBooks but not to the portal list: ${error.message}`);
+    return json({ ok: true, created, customer: row });
+  };
+
+  // Does QuickBooks already have it? Doubling the quote is how a name like
+  // O'Brien Fabrication gets through the query intact.
+  const q = `select * from Customer where DisplayName = '${name.replace(/'/g, "''")}'`;
+  const lookup = await fetchWithRetry(
+    `${base}/query?query=${encodeURIComponent(q)}&minorversion=75`, { method: "GET", headers });
+  const found = await lookup.json().catch(() => ({}));
+  if (lookup.ok) {
+    const hit = found?.QueryResponse?.Customer?.[0];
+    if (hit) return await mirror(hit, false);
+  }
+
+  const res = await fetchWithRetry(`${base}/customer?minorversion=75`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      DisplayName: name,
+      ...(company ? { CompanyName: company } : {}),
+      ...(email ? { PrimaryEmailAddr: { Address: email } } : {}),
+    }),
+  });
+  const tid = res.headers.get("intuit_tid");
+  const out = await res.json().catch(() => ({}));
+
+  if (!res.ok || !out?.Customer?.Id) {
+    const fault = out?.Fault?.Error?.[0];
+    // 6240 is QuickBooks saying the name is taken -- by a customer the lookup
+    // above could not see, which means it is there but switched off.
+    const duplicate = String(fault?.code ?? "") === "6240";
+    return json({
+      ok: false,
+      error: duplicate
+        ? `QuickBooks already has a customer called "${name}", but it is switched off over there. Turn it back on in QuickBooks and it will show up here.`
+        : "QuickBooks would not add that customer",
+      quickbooks_message: fault?.Message ?? null,
+      quickbooks_detail: fault?.Detail ?? null,
+      quickbooks_code: fault?.code ?? null,
+      intuit_tid: tid,
+      http_status: res.status,
+      note: "Nothing was created.",
+    }, duplicate ? 409 : 502);
+  }
+
+  // Best effort only. The customer exists in QuickBooks by now, and a log row
+  // that will not go in is not a reason to tell him it failed.
+  try {
+    await db.from("qb_push_log").insert({
+      action: "create_customer", status: "sent", intuit_tid: tid, http_status: res.status,
+      detail: `added customer ${out.Customer.DisplayName} (${out.Customer.Id})`.slice(0, 780),
+    });
+  } catch { /* ignore */ }
+
+  return await mirror(out.Customer, true);
+}
+
+/** What each kind of invoice is made of. Everything below this reads the
+ *  descriptor rather than asking which kind it is holding. */
+const SOURCES = {
+  week: {
+    table: "job_weeks", rpc: "qb_invoice_payload", arg: "p_job_week_id",
+    ready: "approved", noun: "job week",
+    notReady: (status: string) => `This week is "${status}". Approve it before it can be invoiced.`,
+  },
+  parts: {
+    table: "parts_invoices", rpc: "parts_invoice_payload", arg: "p_invoice_id",
+    ready: "ready", noun: "invoice",
+    notReady: () => "This invoice is still a draft. Mark it finished before it can be sent.",
+  },
+  // A desk invoice has no approval step of its own: converting the quote is the
+  // decision to bill it, and that already spent an invoice number.
+  desk: {
+    table: "desk_invoices", rpc: "desk_invoice_payload", arg: "p_invoice_id",
+    ready: null as string | null, noun: "invoice",
+    notReady: () => "",
+  },
+} as const;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
@@ -170,17 +313,29 @@ Deno.serve(async (req) => {
     if (me?.role !== "admin") return json({ ok: false, error: "admins only" }, 403);
 
     const body = await req.json().catch(() => ({}));
+    // Adding a customer is the one thing here that is not an invoice. It is
+    // answered before any of the invoice machinery starts.
+    if (body.action === "create_customer") return await createCustomer(db, body, json);
+
     jobWeekId = body.job_week_id ?? null;
     const partsInvoiceId: string | null = body.parts_invoice_id ?? null;
+    const deskInvoiceId: string | null = body.desk_invoice_id ?? null;
     const dryRun = Boolean(body.dryRun);
     const forceBad = Boolean(body.__testBadRequest);
-    if (!jobWeekId && !partsInvoiceId) {
-      return json({ ok: false, error: "job_week_id or parts_invoice_id is required" }, 400);
+
+    const given = [
+      ["week", jobWeekId], ["parts", partsInvoiceId], ["desk", deskInvoiceId],
+    ].filter(([, v]) => Boolean(v)) as [keyof typeof SOURCES, string][];
+
+    if (given.length === 0) {
+      return json({ ok: false, error: "job_week_id, parts_invoice_id or desk_invoice_id is required" }, 400);
     }
-    if (jobWeekId && partsInvoiceId) {
-      return json({ ok: false, error: "pass one of job_week_id or parts_invoice_id, not both" }, 400);
+    if (given.length > 1) {
+      return json({ ok: false, error: "pass one of job_week_id, parts_invoice_id or desk_invoice_id, not several" }, 400);
     }
-    const isParts = Boolean(partsInvoiceId);
+    const [kind, rowId] = given[0];
+    const src = SOURCES[kind];
+    const isParts = kind === "parts";
 
     // Everything that would stop a push, gathered rather than thrown, so the
     // preview can show all of it at once instead of one problem per attempt.
@@ -195,33 +350,25 @@ Deno.serve(async (req) => {
       });
     }
 
-    const table = isParts ? "parts_invoices" : "job_weeks";
-    const rowId = isParts ? partsInvoiceId : jobWeekId;
+    const table = src.table;
     const { data: row } = await db.from(table)
       .select("id, status, qb_invoice_id, invoice_no").eq("id", rowId).maybeSingle();
-    if (!row) return json({ ok: false, error: `${isParts ? "invoice" : "job week"} not found` }, 404);
+    if (!row) return json({ ok: false, error: `${src.noun} not found` }, 404);
 
     if (row.qb_invoice_id) {
       blockers.push({
         code: "already_pushed",
-        message: `${isParts ? "This invoice is" : "This week is"} already on QuickBooks invoice ${row.qb_invoice_id}. Nothing would be created.`,
+        message: `${kind === "week" ? "This week is" : "This invoice is"} already on QuickBooks invoice ${row.qb_invoice_id}. Nothing would be created.`,
       });
     }
     // A week is ready when it has been approved; a parts invoice when it has
-    // been marked finished. Same idea, different word on each screen.
-    const readyStatus = isParts ? "ready" : "approved";
-    if (row.status !== readyStatus && row.status !== "synced") {
-      blockers.push({
-        code: "not_approved",
-        message: isParts
-          ? `This invoice is still a draft. Mark it finished before it can be sent.`
-          : `This week is "${row.status}". Approve it before it can be invoiced.`,
-      });
+    // been marked finished. Same idea, different word on each screen. A desk
+    // invoice has no such step, so it has no such refusal.
+    if (src.ready && row.status !== src.ready && row.status !== "synced") {
+      blockers.push({ code: "not_approved", message: src.notReady(String(row.status)) });
     }
 
-    const { data: payload, error: pErr } = isParts
-      ? await db.rpc("parts_invoice_payload", { p_invoice_id: partsInvoiceId })
-      : await db.rpc("qb_invoice_payload", { p_job_week_id: jobWeekId });
+    const { data: payload, error: pErr } = await db.rpc(src.rpc, { [src.arg]: rowId });
     if (pErr) throw new Error(`payload build failed: ${pErr.message}`);
     if (payload?.error) {
       blockers.push({ code: "payload", message: payload.error });
@@ -254,7 +401,7 @@ Deno.serve(async (req) => {
       await db.from("qb_push_log").insert({
         job_week_id: jobWeekId, action: "push_invoice", status: "blocked",
         amount: linesTotal || null,
-        detail: (isParts ? `parts invoice ${partsInvoiceId}: ` : "") +
+        detail: (kind === "week" ? "" : `${kind} invoice ${rowId}: `) +
           blockers.map((b) => `${b.code}: ${b.message}`).join(" | ").slice(0, 780),
       });
       return json({ ok: false, error: first.message, blockers }, 409);
@@ -350,7 +497,7 @@ Deno.serve(async (req) => {
       job_week_id: jobWeekId, action: "push_invoice", status: "sent",
       qb_invoice_id: String(inv.Id), amount: Number(inv.TotalAmt),
       intuit_tid: tid, http_status: res.status,
-      detail: `${isParts ? "Parts cut" : payload.job_name} -> ${payload.customer_name} as invoice ${assigned ?? "(unnumbered)"} by ${me?.full_name ?? who.user.email}`,
+      detail: `${isParts ? "Parts cut" : payload.job_name} -> ${payload.customer_name} as invoice ${assigned ?? "(unnumbered)"} by ${me?.full_name ?? who.user.email}`.slice(0, 780),
     });
 
     // ---- the crew sheet -----------------------------------------------------

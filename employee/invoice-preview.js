@@ -59,6 +59,7 @@ const InvoicePreview = (function () {
     const body = { dryRun };
     if (ids.jobWeekId) body.job_week_id = ids.jobWeekId;
     if (ids.partsInvoiceId) body.parts_invoice_id = ids.partsInvoiceId;
+    if (ids.deskInvoiceId) body.desk_invoice_id = ids.deskInvoiceId;
     const res = await fetch(PUSH_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
@@ -73,7 +74,7 @@ const InvoicePreview = (function () {
 
   /**
    * opts:
-   *   jobWeekId | partsInvoiceId   which one to draw. Exactly one.
+   *   jobWeekId | partsInvoiceId | deskInvoiceId   which one to draw. Exactly one.
    *   name          what to call it before the payload arrives
    *   qbInvoiceId   the QuickBooks invoice it is already on, if it is
    *   onPushed      run after a successful push, so the page can reload
@@ -87,7 +88,7 @@ const InvoicePreview = (function () {
     el.hidden = false;
     document.body.classList.add('inv-open');
 
-    if (!opts.jobWeekId && !opts.partsInvoiceId) {
+    if (!opts.jobWeekId && !opts.partsInvoiceId && !opts.deskInvoiceId) {
       bodyEl().innerHTML = `
         <div class="inv-head"><h3 id="invName">${esc(opts.name || 'This invoice')}</h3></div>
         <p class="inv-none">Nothing has been saved for this yet, so there is no invoice to build.</p>`;
