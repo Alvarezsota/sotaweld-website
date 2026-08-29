@@ -402,6 +402,112 @@ async function syncInvoiceNo(
                 moved: now !== was, highest_in_quickbooks: String(high) });
 }
 
+/* KEEPING THE COPIES OF QUICKBOOKS' OWN LISTS CURRENT
+   ---------------------------------------------------------------------------
+   qb_items and qb_customers are copies, so a parts invoice can be written on a
+   phone in the shop with no QuickBooks session near it. Nothing refreshed them.
+   They were filled once and left.
+
+   That went wrong exactly as you would expect. The item list was copied on
+   26 August at 15:07. "Gas & consumables", "Material", "Truck & rig",
+   "Mileage", the two laser items and three more were created in QuickBooks at
+   15:51 -- forty-five minutes later. For three days the parts invoice screen
+   could not offer any of them, and there was no way to tell from the screen
+   that anything was missing: the dropdown looked complete, it was just short.
+
+   A copy nobody refreshes is a copy that is wrong and does not say so. So the
+   parts invoice page asks on load, and this answers.
+
+   THROTTLED HERE RATHER THAN IN THE PAGE. Ten minutes, so opening the screen
+   five times in a row costs QuickBooks one round trip rather than five, and so
+   there is one rule about it instead of one per caller. force:true skips it,
+   for the button that says "I have just added something over there". */
+const LIST_FRESH_MS = 10 * 60 * 1000;
+
+async function qbFetchAll(t: Tokens, entity: "Item" | "Customer"): Promise<Record<string, unknown>[]> {
+  const out: Record<string, unknown>[] = [];
+  const base = `${API_BASE(t.environment)}/v3/company/${t.realm_id}`;
+  const headers = { Authorization: `Bearer ${t.access_token}`, Accept: "application/json" };
+
+  // Active and inactive both. Without the inactive half a thing switched off in
+  // QuickBooks stays on the dropdown here for ever, and billing against it is
+  // an invoice QuickBooks will refuse after the number has been spent.
+  for (const activeClause of ["Active = true", "Active = false"]) {
+    let start = 1;
+    for (let page = 0; page < 20; page++) {          // 20,000 of anything is not this shop
+      const q = `select * from ${entity} where ${activeClause} startposition ${start} maxresults 1000`;
+      const res = await fetchWithRetry(
+        `${base}/query?query=${encodeURIComponent(q)}&minorversion=75`, { method: "GET", headers });
+      if (!res.ok) throw new Error(`could not read the ${entity.toLowerCase()} list (${res.status})`);
+      const body = await res.json().catch(() => ({}));
+      const rows = body?.QueryResponse?.[entity] ?? [];
+      out.push(...rows);
+      if (rows.length < 1000) break;
+      start += rows.length;
+    }
+  }
+  return out;
+}
+
+/** action:"sync_lists" -- refreshes the copies of QuickBooks' item and customer
+ *  lists. Reads QuickBooks; writes only our own copies. */
+async function syncLists(
+  db: ReturnType<typeof createClient>,
+  body: Record<string, unknown>,
+  json: (b: Record<string, unknown>, status?: number) => Response,
+): Promise<Response> {
+  const force = Boolean(body.force);
+
+  if (!force) {
+    const { data: newest } = await db.from("qb_items")
+      .select("synced_at").order("synced_at", { ascending: false }).limit(1).maybeSingle();
+    const at = newest?.synced_at ? new Date(String(newest.synced_at)).getTime() : 0;
+    if (at && Date.now() - at < LIST_FRESH_MS) {
+      return json({ ok: true, skipped: true, reason: "the lists were refreshed a moment ago" });
+    }
+  }
+
+  const t = await liveToken(db);
+  const now = new Date().toISOString();
+
+  const items = await qbFetchAll(t, "Item");
+  const itemRows = items.map((i) => ({
+    id: String(i.Id),
+    environment: t.environment,
+    name: String(i.Name ?? ""),
+    item_type: (i.Type as string) ?? null,
+    active: i.Active !== false,
+    synced_at: now,
+  }));
+  if (itemRows.length) {
+    const { error } = await db.from("qb_items").upsert(itemRows, { onConflict: "environment,id" });
+    if (error) throw new Error(`the item list would not save: ${error.message}`);
+  }
+
+  const customers = await qbFetchAll(t, "Customer");
+  const custRows = customers.map((c) => ({
+    id: String(c.Id),
+    environment: t.environment,
+    display_name: String(c.DisplayName ?? ""),
+    company_name: (c.CompanyName as string) ?? null,
+    active: c.Active !== false,
+    synced_at: now,
+  }));
+  if (custRows.length) {
+    const { error } = await db.from("qb_customers").upsert(custRows, { onConflict: "environment,id" });
+    if (error) throw new Error(`the customer list would not save: ${error.message}`);
+  }
+
+  return json({
+    ok: true,
+    skipped: false,
+    items: itemRows.length,
+    items_active: itemRows.filter((r) => r.active).length,
+    customers: custRows.length,
+    customers_active: custRows.filter((r) => r.active).length,
+  });
+}
+
 /** Takes the old crew sheet off an invoice and puts the current one on.
  *
  *  The delete comes first and its failure stops the upload. Two sheets on one
@@ -580,6 +686,9 @@ Deno.serve(async (req) => {
     // Asking what number to offer next. Reads QuickBooks, writes only our
     // own counter.
     if (body.action === "sync_invoice_no") return await syncInvoiceNo(db, json);
+
+    // Refreshing our copies of QuickBooks' item and customer lists.
+    if (body.action === "sync_lists") return await syncLists(db, body, json);
 
     jobWeekId = body.job_week_id ?? null;
     const partsInvoiceId: string | null = body.parts_invoice_id ?? null;

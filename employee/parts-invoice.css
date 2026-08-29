@@ -47,6 +47,10 @@
   font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
   color: var(--dim2); padding-bottom: 8px; border-bottom: 1px solid var(--line);
 }
+/* Sits between the heading and the total, so the row still reads
+   left-to-right as label, action, money. Pushed off the heading rather than
+   centred, and it carries none of the row's uppercase letter-spacing. */
+.pi-refresh { margin-right: auto; margin-left: 14px; letter-spacing: 0; text-transform: none; font-weight: 600; }
 .pi-lines-total { color: var(--ok); font-size: 13px; letter-spacing: 0; text-transform: none; }
 .pi-lines { display: flex; flex-direction: column; gap: 12px; margin: 14px 0; }
 

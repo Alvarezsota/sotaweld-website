@@ -3,6 +3,11 @@ const SUPABASE_KEY = 'sb_publishable_HGtY9w_Oays9WK4xkOnyYA_tk0RMQzO';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// The one function that holds the QuickBooks token, so the one URL. Four files
+// had spelled it out separately, and a fifth reached for a name only one of
+// them defined.
+const PUSH_FN_URL = `${SUPABASE_URL}/functions/v1/qb-push-invoice`;
+
 /* ---------------------------------------------------------------------------
    THE NEXT INVOICE NUMBER
    ---------------------------------------------------------------------------
@@ -27,7 +32,7 @@ async function syncNextInvoiceNo() {
   try {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return await local();
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/qb-push-invoice`, {
+    const res = await fetch(PUSH_FN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
       body: JSON.stringify({ action: 'sync_invoice_no' }),

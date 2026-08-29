@@ -364,7 +364,6 @@ async function loadWeek(skipReconcile) {
    That one is a button, because it rewrites a document on their books and
    should be something somebody decided to do.
 */
-const PUSH_FN_URL = `${SUPABASE_URL}/functions/v1/qb-push-invoice`;
 
 async function reconcileWithQuickBooks({ refreshSheets = false } = {}) {
   const ids = Object.values(currentJobWeeks)
