@@ -59,14 +59,23 @@
 -- THERE IS ALREADY A profiles.helper_id, AND IT IS NOT THIS
 -- ---------------------------------------------------------------------------
 --
--- It holds Jayson's helpers row and nothing else in the system reads it -- no
--- migration creates it, no view joins it, no page selects it. It was set by hand
--- and left, and its meaning was never written down anywhere.
+-- It holds Jayson's helpers row and nothing reads it -- no migration in this
+-- repo creates it, no view joins it, no page selects it. It does carry a comment,
+-- and the comment describes half of what this column does:
 --
--- Billing off a column whose contract nobody stated is how a welder becomes a
--- helper by accident one day. This one says what it does in its name, so setting
--- it is a decision somebody made on purpose. helper_id is left exactly where it
--- is: unused, and not mine to delete.
+--   "Optional link to this person's row in helpers, so self-filed tickets and
+--    helper lines merge into one pay statement."
+--
+-- That is the identity merge. It says nothing about the billing side -- which
+-- line of the invoice his hours land on, or which rate chain resolves them --
+-- and those are the parts that were actually wrong. So the two are the same idea
+-- arrived at twice, one of them wired up and one of them inert.
+--
+-- Two columns for one fact is the drift this codebase is written to avoid, and
+-- the right end state is one of them. This one is named for the consequence, so
+-- setting it is a decision somebody made on purpose rather than a link that
+-- quietly reprices a man. helper_id is left where it is for now: unused, and not
+-- mine to delete.
 
 alter table public.profiles
   add column if not exists bills_as_helper_id uuid
