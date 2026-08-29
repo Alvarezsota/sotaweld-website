@@ -232,6 +232,64 @@ async function upsertDeskInvoice(doc, state) {
   return invoiceId;
 }
 
+/* ---------------- quotes on the backend ----------------
+   The desk keeps its documents in one JSON blob, which is fine for the desk
+   and useless to every other screen. A quote saved here is copied into
+   desk_quotes so the dashboard can show what has actually been quoted, beside
+   -- not mixed into -- the enquiries that came off the website.
+
+   Best effort on purpose. The desk's own save already happened by the time
+   this runs, and a dashboard row that did not get written is not a reason to
+   tell him his quote did not save. It gets written on the next save. */
+async function mirrorDeskQuote(doc, state) {
+  const profile = await adminReady;
+  if (!profile) return;
+  if (doc.kind !== 'quote') return;
+  if (!doc.number) return;                 // unnumbered means unsaved
+
+  const customer = (state.customers || []).find(c => c.id === doc.customerId) || {};
+  const total = (doc.lines || []).reduce(
+    (sum, l) => sum + (Number(l.qty) || 0) * (Number(l.rate) || 0), 0);
+
+  const row = {
+    doc_id:        doc.id,
+    quote_no:      doc.number,
+    quote_date:    doc.date || null,
+    customer_name: customer.company || '',
+    job_name:      doc.jobName || '',
+    scope:         doc.scope || '',
+    total:         Math.round(total * 100) / 100,
+    status:        doc.status || 'draft',
+    valid_days:    Number(doc.validDays) || null,
+    created_by:    profile.id,
+  };
+
+  const { error } = await sb.from('desk_quotes').upsert(row, { onConflict: 'doc_id' });
+  if (error) console.warn('Quote not mirrored to the dashboard:', error.message);
+}
+
+window.SOTA_QD_BACKEND = {
+  /* Called after the desk has saved. Never throws: see above. */
+  saveQuote: async function (doc, state) {
+    try { await mirrorDeskQuote(doc, state); } catch (err) { console.warn(err); }
+  },
+
+  /* A quote that became an invoice keeps its row and gains the invoice number,
+     so the dashboard can say which quotes turned into work rather than showing
+     them for ever as though still out. */
+  markInvoiced: async function (quoteDocId, invoiceNo) {
+    try {
+      await sb.from('desk_quotes')
+        .update({ status: 'invoiced', invoiced_no: invoiceNo || null })
+        .eq('doc_id', quoteDocId);
+    } catch (err) { console.warn(err); }
+  },
+
+  removeQuote: async function (docId) {
+    try { await sb.from('desk_quotes').delete().eq('doc_id', docId); } catch (err) { console.warn(err); }
+  },
+};
+
 /* ---------------- deleting a document ----------------
    Voiding leaves it in the list with its number spent forever. That is right
    for an invoice a customer has already seen and wrong for one raised by
@@ -261,6 +319,8 @@ window.SOTA_QD_DELETE = {
       const { error } = await sb.from('desk_invoices').delete().eq('id', mirror.id);
       if (error) throw new Error(error.message);
     }
+
+    await sb.from('desk_quotes').delete().eq('doc_id', doc.id);
 
     // Quote numbers are dated and counted within their day; handing one back
     // would renumber a day that may already have others on it. Only the

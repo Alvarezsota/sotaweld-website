@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sota-build" content="20260829d">
+<meta name="sota-build" content="20260829e">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>Office | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260829d">
-<link rel="stylesheet" href="dashboard.css?v=20260829d">
+<link rel="stylesheet" href="dark-theme.css?v=20260829e">
+<link rel="stylesheet" href="dashboard.css?v=20260829e">
 </head>
 <body>
 
@@ -51,6 +51,16 @@
     </ul>
   </div>
 
+  <!-- Quotes he wrote, kept apart from the enquiries above on purpose: one is
+       somebody waiting on a call back, the other is a price already sent. -->
+  <div class="card" id="deskQuotesCard" style="display:none;">
+    <h2 class="card-h">Quotes Written <span class="admin-pill">Admin</span></h2>
+    <p class="qr-hint">Written on the Quote Desk. Open the desk to change one.</p>
+    <ul class="entry-list2 dq-list" id="deskQuotesList">
+      <li class="empty-state2">Loading...</li>
+    </ul>
+  </div>
+
   <!-- The whole story of one lead. Hidden until a request is opened. -->
   <div class="qr-sheet" id="quoteSheet" hidden>
     <div class="qr-sheet-back" data-close></div>
@@ -77,8 +87,8 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260829d"></script>
-<script src="dashboard.js?v=20260829d"></script>
+<script src="supabase-client.js?v=20260829e"></script>
+<script src="dashboard.js?v=20260829e"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

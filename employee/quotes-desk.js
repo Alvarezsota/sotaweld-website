@@ -672,9 +672,14 @@
     // document status
     var ds = t.getAttribute("data-status");
     if (ds) {
-      S.docs.forEach(function (d2) { if (d2.id === ds) d2.status = t.value; });
+      var changed = null;
+      S.docs.forEach(function (d2) { if (d2.id === ds) { d2.status = t.value; changed = d2; } });
       if (S.draft.id === ds) S.draft.status = t.value;
-      persist(); render(); return;
+      persist(); render();
+      // The dashboard shows the status, so a quote marked sent here has to
+      // read as sent there rather than sitting on the value it was saved with.
+      if (changed) toBackend(changed);
+      return;
     }
   }
 
@@ -777,6 +782,14 @@
     });
   }
 
+  /* Copies a saved quote out to the backend so the dashboard can show it.
+     Fire and forget: the desk has already saved by the time this runs, and the
+     backend copy catches up on the next save if it misses. */
+  function toBackend(doc) {
+    var b = window.SOTA_QD_BACKEND;
+    if (b && b.saveQuote) { try { b.saveQuote(doc, S); } catch (e) { /* desk stands alone */ } }
+  }
+
   function upsert(doc) {
     for (var i = 0; i < S.docs.length; i++) {
       if (S.docs[i].id === doc.id) { S.docs[i] = JSON.parse(JSON.stringify(doc)); return; }
@@ -797,12 +810,12 @@
       if (!d.lines.length) { toast("Add at least one line"); return; }
 
       // Already numbered: re-saving must never spend a second number.
-      if (d.number) { upsert(d); persist(); render(); toast("Saved " + docLabel(d)); return; }
+      if (d.number) { upsert(d); persist(); render(); toBackend(d); toast("Saved " + docLabel(d)); return; }
 
       busy(btn, "Numbering...");
       takeNumber(d.kind === "invoice" ? "invoice" : "quote").then(function (n) {
         d.number = n;
-        upsert(d); persist(); render();
+        upsert(d); persist(); render(); toBackend(d);
         toast("Saved " + docLabel(d));
       }, function (err) {
         // Saving an unnumbered document would leave a quote nobody can refer
@@ -843,7 +856,14 @@
         upsert(inv);
 
         S.draft = inv; tab = "quote"; persist(); render();
-        toast(docLabel(d) + " → " + docLabel(inv) + ", due " + prettyDate(inv.dueDate));
+
+        // The quote is on the dashboard; it now has to read as invoiced there
+        // rather than sitting in the list as though still out for a decision.
+        toBackend(d);
+        var bk = window.SOTA_QD_BACKEND;
+        if (bk && bk.markInvoiced) { try { bk.markInvoiced(d.id, invNo); } catch (e) { /* desk stands alone */ } }
+
+        toast(docLabel(d) + " \u2192 " + docLabel(inv) + ", due " + prettyDate(inv.dueDate));
       }, function (err) {
         busy(btn, false);
         toast("No number issued — nothing invoiced. " + (err && err.message ? err.message : ""));
