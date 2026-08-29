@@ -220,6 +220,15 @@ function renderEditor() {
         <button class="btn2 btn2-ghost small" data-action="close-editor">Close</button>
       </h2>
 
+      <div class="pi-drop" id="piDrop" tabindex="0" role="button"
+           aria-label="Drop a PDF here to fill this invoice in">
+        <span class="pi-drop-main">Drop a PDF here to fill this in</span>
+        <span class="pi-drop-sub">A quote off the desk, a customer's purchase order, a cut list off the laser.
+          Everything it reads lands in the boxes below for you to check \u2014 nothing is saved.</span>
+        <input type="file" id="piPdf" accept="application/pdf,.pdf" hidden>
+      </div>
+      <p class="pi-drop-status" id="piDropStatus"></p>
+
       <div class="pi-fields">
         <div class="pi-field pi-field-wide">
           <label class="field-label" for="piCustomer">Customer</label>
@@ -273,6 +282,158 @@ function renderEditor() {
       </div>
       <p class="pi-status" id="piStatus"></p>
     </div>`;
+
+  wireDropZone();
+}
+
+/* ---------------------------------------------------------------------------
+   FILLING THE FORM FROM A PDF
+   ---------------------------------------------------------------------------
+   The same job arrives written down three ways -- a quote this portal printed,
+   a purchase order on the customer's letterhead, a cut list out of the laser
+   software -- and all three were being retyped by hand into this form.
+
+   Drop one here and it gets read. What comes back lands in the boxes and stops
+   there: nothing is saved, no number is taken, and every figure is sitting in
+   a field that can be changed. A machine reading somebody else's paperwork
+   will be wrong sometimes, and a customer's invoice is the wrong place to find
+   that out.
+*/
+const PARSE_URL = `${SUPABASE_URL}/functions/v1/parse-parts-pdf`;
+
+function wireDropZone() {
+  const zone = document.getElementById('piDrop');
+  const input = document.getElementById('piPdf');
+  if (!zone || !input) return;
+
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+  });
+  input.addEventListener('change', () => {
+    if (input.files && input.files[0]) readPdf(input.files[0]);
+    input.value = '';                       // so the same file can be dropped twice
+  });
+
+  // Without preventDefault on dragover the browser navigates away to the PDF,
+  // which loses whatever is typed in the form.
+  ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, (e) => {
+    e.preventDefault(); zone.classList.add('is-over');
+  }));
+  ['dragleave', 'drop'].forEach(ev => zone.addEventListener(ev, (e) => {
+    e.preventDefault(); zone.classList.remove('is-over');
+  }));
+  zone.addEventListener('drop', (e) => {
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) readPdf(f);
+  });
+}
+
+function dropSay(msg, kind) {
+  const el = document.getElementById('piDropStatus');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.className = 'pi-drop-status' + (kind ? ' pi-drop-' + kind : '');
+}
+
+/* Reads the file as base64 without pulling the whole thing through a string
+   one character at a time -- a 5 MB PDF does that 5 million times. */
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const out = String(r.result || '');
+      const comma = out.indexOf(',');
+      resolve(comma >= 0 ? out.slice(comma + 1) : out);
+    };
+    r.onerror = () => reject(new Error('that file could not be opened'));
+    r.readAsDataURL(file);
+  });
+}
+
+async function readPdf(file) {
+  if (!/pdf$/i.test(file.name) && file.type !== 'application/pdf') {
+    dropSay('That is not a PDF. Only PDFs can be read.', 'err');
+    return;
+  }
+  const zone = document.getElementById('piDrop');
+  if (zone) zone.classList.add('is-busy');
+  dropSay('Reading ' + file.name + '\u2026');
+
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) throw new Error('you are signed out \u2014 sign in and try again');
+
+    const res = await fetch(PARSE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ filename: file.name, pdf_base64: await fileToBase64(file) }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) throw new Error(out.detail || out.error || `that PDF could not be read (${res.status})`);
+
+    applyParsed(out, file.name);
+  } catch (err) {
+    dropSay(err.message || 'That PDF could not be read.', 'err');
+  } finally {
+    if (zone) zone.classList.remove('is-busy');
+  }
+}
+
+/* Everything read goes in. Nothing already typed gets thrown away silently:
+   a field the office has filled in stays as it is, because the person is a
+   better source than the document. */
+function applyParsed(out, filename) {
+  readEditorFields();
+  const notes = [];
+
+  if (out.document_date && /^\d{4}-\d{2}-\d{2}$/.test(out.document_date)) {
+    editing.invoice_date = out.document_date;
+  }
+  if (out.po_number && !editing.po_number) editing.po_number = String(out.po_number);
+  if (out.notes && !editing.notes) editing.notes = String(out.notes);
+
+  // The customer has to match one QuickBooks already knows, because the push
+  // sends an id and not a name. A near miss is reported rather than guessed at.
+  if (out.customer_name && !editing.qb_customer_id) {
+    const want = String(out.customer_name).trim().toLowerCase();
+    const hit = customers.find(c =>
+      String(c.display_name || '').trim().toLowerCase() === want ||
+      String(c.company_name || '').trim().toLowerCase() === want);
+    if (hit) {
+      editing.qb_customer_id = hit.id;
+      editing.qb_customer_name = hit.display_name;
+    } else {
+      notes.push(`it says "${out.customer_name}", which is not on your customer list \u2014 pick one, or add them`);
+    }
+  }
+
+  const lines = Array.isArray(out.lines) ? out.lines : [];
+  if (lines.length) {
+    // A form holding nothing but the one blank line it opens with is empty,
+    // and replacing that is not losing anybody's work.
+    const typed = editing.lines.filter(l => String(l.description || '').trim());
+    const fresh = lines.map(l => ({
+      uid: uid(),
+      description: String(l.description || ''),
+      quantity: Number(l.quantity) || 0,
+      unit_price: Number(l.unit_price) || 0,
+      qb_item_id: '',
+    }));
+    editing.lines = typed.length ? typed.concat(fresh) : fresh;
+    if (typed.length) notes.push(`${fresh.length} line${fresh.length === 1 ? '' : 's'} added under what you already had`);
+  } else {
+    notes.push('no billable lines were found on it');
+  }
+
+  if (lines.length && lines.every(l => !Number(l.unit_price))) {
+    notes.push('it carried no prices, so every line is at zero');
+  }
+
+  renderEditor();
+  const head = `Filled in from ${filename}. Check it before you finish the invoice`;
+  dropSay(notes.length ? `${head} \u2014 ${notes.join('; ')}.` : head + '.',
+          notes.length ? 'warn' : 'ok');
 }
 
 function lineHtml(l, i) {

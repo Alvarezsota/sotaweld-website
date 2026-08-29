@@ -104,3 +104,27 @@
                  justify-content: space-between; align-items: center; }
   .pi-line-amt { margin-left: 0; }
 }
+
+/* ---------- drop a PDF to fill the invoice in ----------
+   Sits above the fields because it is the first thing you do when you have the
+   paperwork in hand. Dashed and quiet until something is dragged over it: it is
+   an offer, not the main way to write an invoice. */
+.pi-drop {
+  display: flex; flex-direction: column; gap: 4px; align-items: center; text-align: center;
+  border: 2px dashed var(--line); border-radius: 12px; background: var(--steel-800);
+  padding: 18px 16px; margin-bottom: 14px; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.pi-drop:hover, .pi-drop:focus-visible { border-color: var(--molten); outline: none; }
+.pi-drop.is-over { border-color: var(--molten); background: rgba(233,162,59,.10); border-style: solid; }
+.pi-drop.is-busy { opacity: .55; pointer-events: none; }
+.pi-drop-main { font-weight: 800; font-size: 15px; }
+.pi-drop-sub { color: var(--dim); font-size: 12.5px; max-width: 52ch; line-height: 1.45; }
+
+.pi-drop-status { margin: -8px 0 14px; font-size: 13px; line-height: 1.45; }
+.pi-drop-status:empty { margin: 0; }
+.pi-drop-ok   { color: var(--ok); }
+/* Warn, not error: the form did get filled in, there is just something on it
+   worth looking at before it goes out. */
+.pi-drop-warn { color: var(--molten); }
+.pi-drop-err  { color: var(--danger); }
