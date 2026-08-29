@@ -310,6 +310,98 @@ async function qbExistingInvoiceIds(t: Tokens, ids: string[]): Promise<Set<strin
   return found;
 }
 
+/* THE HIGHEST INVOICE NUMBER QUICKBOOKS HAS SPENT
+   ---------------------------------------------------------------------------
+   The portal's counter only knows what the portal has issued. An invoice typed
+   straight into QuickBooks never touches it, so the counter drifts behind and
+   starts offering numbers that are already on a customer's invoice.
+
+   Asked as two queries rather than one, because the cheap one answers it
+   almost every time:
+
+     1. How many invoices are numbered at or above what we were about to
+        offer? Almost always none, and then there is nothing to do and we
+        have spent one count query.
+     2. Only if there are, fetch them and take the real highest.
+
+   ON COMPARING NUMBERS AS TEXT: DocNumber is a string over there, so `>=` and
+   ORDERBY are alphabetical. For numbers of the same length that is the same
+   order; it stops being so at a digit-length boundary, where '9999' sorts
+   above '10000'. Step 2 therefore parses what comes back and takes the
+   arithmetic maximum rather than trusting the sort, and the caller can only
+   ever move the counter forward. The failure that survives all that is
+   offering a number lower than it could have been, which costs a gap in the
+   sequence and nothing else. */
+async function qbHighestInvoiceNo(t: Tokens, from: number): Promise<number | null> {
+  const base = `${API_BASE(t.environment)}/v3/company/${t.realm_id}`;
+  const headers = { Authorization: `Bearer ${t.access_token}`, Accept: "application/json" };
+  const ask = async (q: string) => {
+    const res = await fetchWithRetry(
+      `${base}/query?query=${encodeURIComponent(q)}&minorversion=75`, { method: "GET", headers });
+    if (!res.ok) {
+      // Not knowing is not the same as knowing there is nothing. The caller
+      // leaves the counter alone rather than guessing it is fine.
+      throw new Error(`could not ask QuickBooks for its invoice numbers (${res.status})`);
+    }
+    return await res.json().catch(() => ({}));
+  };
+
+  const floor = String(from);
+  const counted = await ask(`select count(*) from Invoice where DocNumber >= '${floor}'`);
+  const n = Number(counted?.QueryResponse?.totalCount ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return null;
+
+  const rows = await ask(
+    `select * from Invoice where DocNumber >= '${floor}' orderby DocNumber desc maxresults 100`);
+  let high: number | null = null;
+  for (const inv of (rows?.QueryResponse?.Invoice ?? [])) {
+    const raw = String(inv?.DocNumber ?? "");
+    if (!/^\d+$/.test(raw)) continue;   // a lettered number is not on our sequence
+    const v = Number(raw);
+    if (Number.isSafeInteger(v) && (high === null || v > high)) high = v;
+  }
+  return high;
+}
+
+/** action:"sync_invoice_no" -- called when a page that shows the next invoice
+ *  number loads, before it shows it.
+ *
+ *  Read-only as far as QuickBooks is concerned: it asks a question and moves
+ *  our own counter. It never renumbers anything over there.
+ *
+ *  QuickBooks being unreachable leaves the counter untouched and says so. The
+ *  page still has peek_invoice_no to fall back on -- a number that might
+ *  collide is better than no number at all, and the push still refuses a
+ *  duplicate with fault 6140. */
+async function syncInvoiceNo(
+  db: ReturnType<typeof createClient>,
+  json: (b: Record<string, unknown>, status?: number) => Response,
+): Promise<Response> {
+  const { data: before, error: readErr } = await db.rpc("bump_invoice_counter", { p_at_least: null });
+  if (readErr) return json({ ok: false, error: readErr.message }, 500);
+  const was = Number(before);
+
+  const t = await liveToken(db);
+  const high = await qbHighestInvoiceNo(t, was);
+  if (high === null) {
+    return json({ ok: true, next_invoice_no: String(was), was: String(was),
+                  moved: false, highest_in_quickbooks: null });
+  }
+
+  const { data: after, error: bumpErr } = await db.rpc("bump_invoice_counter", { p_at_least: high + 1 });
+  if (bumpErr) return json({ ok: false, error: bumpErr.message }, 500);
+
+  const now = Number(after);
+  if (now !== was) {
+    await db.from("qb_push_log").insert({
+      action: "sync_invoice_no", status: "sent",
+      detail: `QuickBooks is up to invoice ${high}; next number moved from ${was} to ${now}`.slice(0, 780),
+    });
+  }
+  return json({ ok: true, next_invoice_no: String(now), was: String(was),
+                moved: now !== was, highest_in_quickbooks: String(high) });
+}
+
 /** Takes the old crew sheet off an invoice and puts the current one on.
  *
  *  The delete comes first and its failure stops the upload. Two sheets on one
@@ -484,6 +576,10 @@ Deno.serve(async (req) => {
     if (body.action === "create_customer") return await createCustomer(db, body, json);
     // Asking QuickBooks what is still there, and swapping a stale crew sheet.
     if (body.action === "reconcile") return await reconcile(db, body, json);
+
+    // Asking what number to offer next. Reads QuickBooks, writes only our
+    // own counter.
+    if (body.action === "sync_invoice_no") return await syncInvoiceNo(db, json);
 
     jobWeekId = body.job_week_id ?? null;
     const partsInvoiceId: string | null = body.parts_invoice_id ?? null;
