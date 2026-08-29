@@ -414,7 +414,8 @@
     var list = S.customers.map(function (x) {
       return '<button class="qd-list-item" data-cust="' + esc(x.id) + '" aria-current="' + (x.id === activeCustomer) + '">' +
         esc(x.company) + '<small>' + x.contacts.length + ' contact' + (x.contacts.length === 1 ? "" : "s") +
-        ' · net ' + esc(x.terms) + '</small></button>';
+        ' · net ' + esc(x.terms) +
+        (x.qbCustomerId ? "" : ' · not in QuickBooks') + '</small></button>';
     }).join("");
 
     var editor = !c ? '<p class="qd-empty">No customers yet.</p>' :
@@ -426,6 +427,20 @@
         field("Phone", '<input class="qd-input" data-cf="phone" value="' + esc(c.phone) + '">') +
         field("Net terms (days)", '<input class="qd-input qd-num" type="number" min="0" step="1" data-cf="terms" value="' + esc(c.terms) + '">') +
         field("Address", '<input class="qd-input" data-cf="address" value="' + esc(c.address) + '">') +
+      '</div>' +
+      // Without this an invoice for this company cannot be sent: the push
+      // names a QuickBooks customer, and there is no guessing one from a name.
+      // It is filled in by pulling the customers across rather than typed, but
+      // it is shown either way so it is obvious which companies are ready.
+      '<div class="qd-grid qd-grid--2" style="margin-top:14px">' +
+        field("QuickBooks customer",
+          '<input class="qd-input" data-cf="qbCustomerId" placeholder="not linked" value="' +
+          esc(c.qbCustomerId || "") + '">') +
+        '<div class="qd-field"><span class="qd-label">&nbsp;</span>' +
+          (c.qbCustomerId
+            ? '<p class="qd-hint" style="margin:0">Invoices for ' + esc(c.company) + ' can go to QuickBooks.</p>'
+            : '<p class="qd-hint" style="margin:0">Not linked to QuickBooks yet, so an invoice for this company cannot be sent. Use <b>Pull customers from QuickBooks</b> at the top of the page.</p>') +
+        '</div>' +
       '</div>' +
       '<div class="qd-section" style="margin-top:22px">' +
         '<div class="qd-section-hd"><h3>Contacts at ' + esc(c.company) + '</h3><span class="qd-spacer"></span>' +
