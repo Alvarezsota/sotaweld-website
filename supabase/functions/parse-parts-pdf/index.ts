@@ -33,6 +33,12 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+// Anthropic's current console issues "identity-linked" keys -- tied to the
+// person rather than to a workspace -- and those refuse any request that does
+// not say which workspace it is acting in. Older workspace keys carry that
+// implicitly and do not need this. Set when the key is the identity-linked
+// kind; left unset otherwise and nothing is sent.
+const ANTHROPIC_WORKSPACE_ID = Deno.env.get("ANTHROPIC_WORKSPACE_ID") ?? "";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -153,7 +159,12 @@ Deno.serve(async (req) => {
       }, 413);
     }
 
-    const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+    const client = new Anthropic({
+      apiKey: ANTHROPIC_API_KEY,
+      ...(ANTHROPIC_WORKSPACE_ID
+        ? { defaultHeaders: { "anthropic-workspace-id": ANTHROPIC_WORKSPACE_ID } }
+        : {}),
+    });
 
     const res = await client.beta.messages.create({
       model: "claude-opus-5",
@@ -218,6 +229,22 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+
+    // The one failure whose fix is a setting rather than a bug. Worth naming,
+    // because Anthropic's own wording ("send the id of the workspace this
+    // request acts in") tells you nothing about where that id lives.
+    if (/anthropic-workspace-id/i.test(msg) && !ANTHROPIC_WORKSPACE_ID) {
+      return json({
+        ok: false,
+        error: "That key needs to be told which workspace to use.",
+        detail:
+          "Anthropic issued an identity-linked key, which will not run without a workspace id. "
+          + "In the Anthropic console open Settings -> Workspaces, click your workspace, and copy its "
+          + "id (it starts with wrkspc_). Add it in Supabase as a second secret named "
+          + "ANTHROPIC_WORKSPACE_ID, then try the PDF again.",
+      }, 503);
+    }
+
     return json({ ok: false, error: "That PDF could not be read: " + msg }, 500);
   }
 });
