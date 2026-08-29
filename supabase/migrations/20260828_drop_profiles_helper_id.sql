@@ -1,0 +1,32 @@
+-- One column for one fact.
+--
+-- profiles.helper_id and profiles.bills_as_helper_id both held Jayson Alvarez's
+-- helpers row, the same uuid twice. helper_id came first and was never wired to
+-- anything; bills_as_helper_id is what v_work_lines actually reads.
+--
+-- Its comment described the identity merge -- "so self-filed tickets and helper
+-- lines merge into one pay statement" -- which is half of what the live column
+-- does. The half it is silent on is the billing side: which line of the invoice
+-- a man's hours land on and which rate chain resolves them. That was the half
+-- that was wrong, and the half that reached a customer.
+--
+-- Two columns holding one fact is a bet that everybody who ever sets one will
+-- remember to set the other. Lose that bet and a man bills one way and is paid
+-- another, and it takes a day to find out why. So: the dead one goes.
+--
+-- ---------------------------------------------------------------------------
+-- CHECKED BEFORE DROPPING
+-- ---------------------------------------------------------------------------
+--
+--   one row carries helper_id, and its value equals bills_as_helper_id
+--   zero rows would lose a value that is not held elsewhere
+--   zero views reference it
+--   zero functions reference it
+--   zero policies reference it
+--   no page or edge function selects it
+--
+-- Nothing is lost. If it were ever wanted back it is one add-column and one
+-- update from bills_as_helper_id. profiles_helper_id_fkey goes with the column,
+-- which is what dropping a column does to its own constraints.
+
+alter table public.profiles drop column if exists helper_id;
