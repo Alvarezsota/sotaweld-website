@@ -272,6 +272,172 @@ async function createCustomer(
   return await mirror(out.Customer, true);
 }
 
+/* ---------------------------------------------------------------------------
+   RECONCILING A PUSHED WEEK WITH QUICKBOOKS
+   ---------------------------------------------------------------------------
+   Two things drift after a push, and both were found the hard way.
+
+   The invoice can be deleted over there. The portal goes on holding its id and
+   refusing to unlock the week -- a pointer to a document that does not exist.
+   Deleting it in QuickBooks is the office saying "start that one again", so the
+   portal should hear it rather than have to be told.
+
+   And the sheet attached to it can be wrong. Seven invoices went out carrying
+   crew sheets with the notes a man typed on his phone, because they were pushed
+   before those came off. Deleting and re-pushing seven invoices to swap seven
+   attachments is not a repair, it is a bigger mess. The attachment is the only
+   part that is wrong, so the attachment is the only part that changes.
+
+   Asking is one query for every id at once rather than one call each, because
+   this runs on a page load and a page load should cost QuickBooks one round
+   trip, not eight.
+*/
+async function qbExistingInvoiceIds(t: Tokens, ids: string[]): Promise<Set<string>> {
+  const found = new Set<string>();
+  if (!ids.length) return found;
+  const inList = ids.map((i) => `'${i.replace(/'/g, "''")}'`).join(",");
+  const q = `select Id from Invoice where Id in (${inList})`;
+  const res = await fetchWithRetry(
+    `${API_BASE(t.environment)}/v3/company/${t.realm_id}/query?query=${encodeURIComponent(q)}&minorversion=75`,
+    { method: "GET", headers: { Authorization: `Bearer ${t.access_token}`, Accept: "application/json" } });
+  if (!res.ok) {
+    // A query that will not run is not evidence that anything was deleted.
+    // Saying nothing is missing is the safe answer: it unlocks nothing.
+    throw new Error(`could not ask QuickBooks which invoices exist (${res.status})`);
+  }
+  const out = await res.json().catch(() => ({}));
+  for (const inv of (out?.QueryResponse?.Invoice ?? [])) found.add(String(inv.Id));
+  return found;
+}
+
+/** Takes the old crew sheet off an invoice and puts the current one on.
+ *
+ *  The delete comes first and its failure stops the upload. Two sheets on one
+ *  invoice, one of them the one we were trying to get rid of, is worse than the
+ *  single stale sheet we started with -- and it is the customer who would open
+ *  both. */
+async function replaceCrewSheet(
+  db: ReturnType<typeof createClient>, t: Tokens, invoiceId: string, jobWeekId: string,
+): Promise<Record<string, unknown>> {
+  const base = `${API_BASE(t.environment)}/v3/company/${t.realm_id}`;
+  const headers = {
+    Authorization: `Bearer ${t.access_token}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+
+  const q = `select * from Attachable where AttachableRef.EntityRef.Value = '${invoiceId}'`;
+  const look = await fetchWithRetry(
+    `${base}/query?query=${encodeURIComponent(q)}&minorversion=75`, { method: "GET", headers });
+  if (!look.ok) {
+    return { ok: false, error: `could not read the invoice's attachments (${look.status})` };
+  }
+  const existing = (await look.json().catch(() => ({})))?.QueryResponse?.Attachable ?? [];
+
+  // Only ours. A drawing or a signed ticket somebody attached by hand stays
+  // exactly where it is.
+  const ours = existing.filter((a: Record<string, unknown>) =>
+    String(a.FileName ?? "").startsWith("Crew time backup"));
+
+  const removed: string[] = [];
+  for (const a of ours) {
+    const del = await fetchWithRetry(`${base}/attachable?operation=delete&minorversion=75`, {
+      method: "POST", headers,
+      body: JSON.stringify({ Id: String(a.Id), SyncToken: String(a.SyncToken ?? "0") }),
+    });
+    if (!del.ok) {
+      return { ok: false, removed,
+        error: `could not remove the old crew sheet (${del.status}). Nothing was uploaded, so the invoice still has one sheet rather than two.` };
+    }
+    removed.push(String(a.Id));
+  }
+
+  const sheet = await buildBackupForJobWeek(db as never, jobWeekId);
+  if (!sheet.ok) return { ok: false, removed, error: sheet.error };
+
+  const att = await attachToInvoice({
+    apiBase: API_BASE(t.environment), realmId: t.realm_id, accessToken: t.access_token,
+    invoiceId, pdf: sheet.pdf, filename: sheet.filename,
+  });
+  if (!att.ok) return { ok: false, removed, error: att.error };
+
+  return { ok: true, removed_count: removed.length,
+           attachable_id: att.attachable_id, filename: sheet.filename };
+}
+
+/** action:"reconcile" -- what the Approvals page calls for its synced weeks.
+ *
+ *  With refresh_sheets off it only asks which invoices are still there, which
+ *  is one query and safe to run on every page load. With it on it also swaps
+ *  the sheet on the ones that remain. */
+async function reconcile(
+  db: ReturnType<typeof createClient>,
+  body: Record<string, unknown>,
+  json: (b: Record<string, unknown>, status?: number) => Response,
+): Promise<Response> {
+  const ids = Array.isArray(body.job_week_ids) ? body.job_week_ids.map(String) : [];
+  const refresh = Boolean(body.refresh_sheets);
+  if (!ids.length) return json({ ok: true, checked: 0, results: [] });
+
+  const { data: rows } = await db.from("job_weeks")
+    .select("id, invoice_no, status, qb_invoice_id").in("id", ids);
+  const synced = (rows ?? []).filter((r: Record<string, unknown>) =>
+    r.status === "synced" && r.qb_invoice_id);
+  if (!synced.length) return json({ ok: true, checked: 0, results: [] });
+
+  const t = await liveToken(db);
+  const alive = await qbExistingInvoiceIds(
+    t, synced.map((r: Record<string, unknown>) => String(r.qb_invoice_id)));
+
+  const results: Record<string, unknown>[] = [];
+  for (const r of synced) {
+    const row = r as Record<string, unknown>;
+    const qbId = String(row.qb_invoice_id);
+
+    if (!alive.has(qbId)) {
+      // Gone over there. The week comes back on its own number.
+      const { data: undone } = await db.rpc("unsync_job_week", {
+        p_job_week_id: row.id,
+        p_reason: `invoice ${qbId} no longer exists in QuickBooks`,
+      });
+      results.push({ job_week_id: row.id, invoice_no: row.invoice_no,
+                     qb_invoice_id: qbId, action: "unsynced", detail: undone });
+      continue;
+    }
+
+    if (!refresh) {
+      results.push({ job_week_id: row.id, invoice_no: row.invoice_no,
+                     qb_invoice_id: qbId, action: "still_there" });
+      continue;
+    }
+
+    const swap = await replaceCrewSheet(db, t, qbId, String(row.id));
+    if (!swap.ok) {
+      await db.from("qb_push_log").insert({
+        job_week_id: row.id, action: "refresh_backup", status: "error",
+        qb_invoice_id: qbId, detail: String(swap.error ?? "unknown").slice(0, 780),
+      });
+    } else {
+      await db.from("qb_push_log").insert({
+        job_week_id: row.id, action: "refresh_backup", status: "sent",
+        qb_invoice_id: qbId,
+        detail: `replaced the crew sheet on invoice ${row.invoice_no} (${swap.removed_count} old removed)`.slice(0, 780),
+      });
+    }
+    results.push({ job_week_id: row.id, invoice_no: row.invoice_no, qb_invoice_id: qbId,
+                   action: swap.ok ? "sheet_replaced" : "sheet_failed", detail: swap });
+  }
+
+  return json({
+    ok: true,
+    checked: synced.length,
+    unsynced: results.filter((r) => r.action === "unsynced").length,
+    replaced: results.filter((r) => r.action === "sheet_replaced").length,
+    failed: results.filter((r) => r.action === "sheet_failed").length,
+    results,
+  });
+}
+
 /** What each kind of invoice is made of. Everything below this reads the
  *  descriptor rather than asking which kind it is holding. */
 const SOURCES = {
@@ -316,6 +482,8 @@ Deno.serve(async (req) => {
     // Adding a customer is the one thing here that is not an invoice. It is
     // answered before any of the invoice machinery starts.
     if (body.action === "create_customer") return await createCustomer(db, body, json);
+    // Asking QuickBooks what is still there, and swapping a stale crew sheet.
+    if (body.action === "reconcile") return await reconcile(db, body, json);
 
     jobWeekId = body.job_week_id ?? null;
     const partsInvoiceId: string | null = body.parts_invoice_id ?? null;

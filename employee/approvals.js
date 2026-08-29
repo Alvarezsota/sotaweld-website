@@ -263,7 +263,7 @@ function buildJobGroups(entries, jobs) {
   }).sort((a, b) => b.revenue - a.revenue);
 }
 
-async function loadWeek() {
+async function loadWeek(skipReconcile) {
   const start = ymd(weekStart);
   const end = ymd(addDays(weekStart, 6));
 
@@ -342,6 +342,102 @@ async function loadWeek() {
   currentGroups = buildJobGroups(entries, jobs);
   renderGrid();
   if (openJobId) renderDetail(openJobId);
+
+  // After the week is on screen, not before it. The page is useful whether or
+  // not QuickBooks answers.
+  if (!skipReconcile) pickUpDeletedInvoices();
+}
+
+/* ---------------------------------------------------------------------------
+   KEEPING UP WITH QUICKBOOKS
+   ---------------------------------------------------------------------------
+   Two things drift after a week is pushed.
+
+   The invoice gets deleted over there, and the portal goes on holding its id
+   and refusing to unlock the week. Deleting it in QuickBooks is the office
+   saying "start that one again", so the page asks on every load rather than
+   waiting to be told. One query covers every synced week on the page.
+
+   And the sheet attached to it can be out of date -- seven invoices went out
+   with crew sheets carrying notes that have since come off. Swapping the
+   attachment leaves the invoice alone: same number, same lines, same total.
+   That one is a button, because it rewrites a document on their books and
+   should be something somebody decided to do.
+*/
+const PUSH_FN_URL = `${SUPABASE_URL}/functions/v1/qb-push-invoice`;
+
+async function reconcileWithQuickBooks({ refreshSheets = false } = {}) {
+  const ids = Object.values(currentJobWeeks)
+    .filter(r => r.status === 'synced' && r.qb_invoice_id)
+    .map(r => r.id);
+  if (!ids.length) return null;
+
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return null;
+
+  const res = await fetch(PUSH_FN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ action: 'reconcile', job_week_ids: ids, refresh_sheets: refreshSheets }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json.ok) throw new Error(json.error || `QuickBooks check failed (${res.status})`);
+  return json;
+}
+
+/* Runs itself on every week load. A week whose invoice has been deleted comes
+   back to approved without anybody asking for it.
+
+   It never throws into the page: QuickBooks being unreachable is not a reason
+   to break a week that reads perfectly well from our own database. */
+async function pickUpDeletedInvoices() {
+  try {
+    const out = await reconcileWithQuickBooks();
+    if (out && out.unsynced > 0) {
+      const which = out.results.filter(r => r.action === 'unsynced')
+        .map(r => r.invoice_no || r.qb_invoice_id).join(', ');
+      await loadWeek(true);
+      const el = document.getElementById('qbNote');
+      if (el) {
+        el.textContent = out.unsynced === 1
+          ? `Invoice ${which} is gone from QuickBooks, so that week is open again.`
+          : `Invoices ${which} are gone from QuickBooks, so those weeks are open again.`;
+        el.className = 'qb-note qb-note-ok';
+      }
+    }
+  } catch { /* the week is drawn from our own database and stands on its own */ }
+}
+
+/* Swaps the attached sheet on every synced invoice on this week. Says what it
+   did per invoice rather than "done", because a partial result is the one worth
+   knowing about: an invoice whose old sheet came off and whose new one did not
+   go on is the case somebody has to look at. */
+async function refreshCrewSheets() {
+  const btn = document.getElementById('refreshSheetsBtn');
+  const el = document.getElementById('qbNote');
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Replacing\u2026'; }
+  try {
+    const out = await reconcileWithQuickBooks({ refreshSheets: true });
+    if (!out) return;
+    const bits = [];
+    if (out.replaced) bits.push(`${out.replaced} crew sheet${out.replaced === 1 ? '' : 's'} replaced`);
+    if (out.unsynced) bits.push(`${out.unsynced} invoice${out.unsynced === 1 ? ' was' : 's were'} gone from QuickBooks and ${out.unsynced === 1 ? 'that week is' : 'those weeks are'} open again`);
+    if (out.failed) {
+      const why = out.results.filter(r => r.action === 'sheet_failed')
+        .map(r => `${r.invoice_no}: ${(r.detail && r.detail.error) || 'unknown'}`).join('; ');
+      bits.push(`${out.failed} could not be replaced \u2014 ${why}`);
+    }
+    if (el) {
+      el.textContent = bits.length ? bits.join('. ') + '.' : 'Nothing needed replacing.';
+      el.className = 'qb-note ' + (out.failed ? 'qb-note-err' : 'qb-note-ok');
+    }
+    if (out.unsynced) await loadWeek(true);
+  } catch (err) {
+    if (el) { el.textContent = 'QuickBooks could not be reached: ' + err.message; el.className = 'qb-note qb-note-err'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label || 'Replace their crew sheets'; }
+  }
 }
 
 function statusFor(groupId) {
@@ -351,6 +447,22 @@ function statusFor(groupId) {
 
 function renderGrid() {
   const totals = currentGroups.reduce((a, g) => { a.hours += g.hours; a.revenue += g.revenue; a.cost += g.cost; return a; }, { hours: 0, revenue: 0, cost: 0 });
+  // Synced weeks on this page, and therefore sheets that could be out of date.
+  const syncedCount = Object.values(currentJobWeeks)
+    .filter(r => r.status === 'synced' && r.qb_invoice_id).length;
+  const noteEl = document.getElementById('qbNote');
+  if (noteEl) {
+    noteEl.innerHTML = syncedCount
+      ? `<span class="qb-note-txt">${syncedCount} invoice${syncedCount === 1 ? '' : 's'} from this week
+           ${syncedCount === 1 ? 'is' : 'are'} on QuickBooks.</span>
+         <button type="button" class="btn2 btn2-ghost small" id="refreshSheetsBtn"
+           title="Takes the crew sheet off each of those invoices in QuickBooks and puts the current one on. The invoice itself is not touched.">Replace their crew sheets</button>`
+      : '';
+    noteEl.className = 'qb-note';
+    const rb = document.getElementById('refreshSheetsBtn');
+    if (rb) rb.addEventListener('click', refreshCrewSheets);
+  }
+
   document.getElementById('weekSummary').innerHTML = `
     <div class="ws-item"><span class="ws-num">${totals.hours}</span><span class="ws-lbl">hours</span></div>
     <div class="ws-div"></div>

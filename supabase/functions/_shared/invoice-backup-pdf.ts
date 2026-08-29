@@ -100,9 +100,9 @@ const wa = (v: unknown) => {
 export type BackupLine = {
   name: string; kind: string; hours: number; bill_rate: number;
   per_diem: boolean; per_diem_rate: number; billed: number;
-  stainless: boolean; description: string | null; worked_at: string | null;
+  stainless: boolean;
 };
-export type BackupDay = { date: string; descriptions: string[]; lines: BackupLine[] };
+export type BackupDay = { date: string; lines: BackupLine[] };
 export type BackupPerson = {
   name: string; kind: string; days: number; hours: number;
   per_diem_days: number; per_diem_amount: number; amount: number;
@@ -292,17 +292,16 @@ export async function buildInvoiceBackup(
   // is bigger than anything else in the table, it carries the accent stripe, and
   // it sits in a band deep enough to break the rows apart.
   //
-  // Hands back the x the description may start at. It has to be measured rather
-  // than fixed: the heading's width depends on the day name and the date in it,
-  // and "Wednesday, 08-19-2026" is wider than the fixed column that used to sit
-  // here -- the description ran straight into the date with no gap at all.
+  // No description beside the date. What a man types on a ticket is written for
+  // the office, on a phone, at the end of a day -- "Also helped at the yard in
+  // the valtek bench" was on a MasTec ticket, and this sheet put it in front of
+  // MasTec. The words are useful and they are not the customer's.
   const dayBar = (label: string) => {
     page.drawRectangle({ x: MARGIN, y: y - 8, width: CONTENT, height: 25, color: SOFT });
     page.drawRectangle({ x: MARGIN, y: y - 8, width: 4, height: 25, color: ACCENT });
     page.drawLine({ start: { x: MARGIN, y: y + 17 }, end: { x: MARGIN + CONTENT, y: y + 17 },
                     thickness: 0.8, color: LINE });
     text(label, MARGIN + 14, y, 12.5, bold);
-    return MARGIN + 14 + bold.widthOfTextAtSize(wa(label), 12.5) + 18;
   };
 
   // Set while the rows of one date are being drawn, so a page break in the
@@ -332,16 +331,16 @@ export async function buildInvoiceBackup(
     openDay = null;
     room(70, dayHeader);
     y -= 12;
-    const descX = dayBar(dayLabel(d.date));
-    const desc = d.descriptions.filter(Boolean).join(' \u00B7 ');
-    if (desc) text(fit(desc, MARGIN + CONTENT - descX, 8.5, ital), descX, y, 8.5, ital, GREY);
+    dayBar(dayLabel(d.date));
     y -= 24;
     openDay = d.date;
 
     for (const l of d.lines) {
-      const note = [l.description, l.stainless ? 'Stainless' : null,
-                    l.worked_at && l.worked_at !== p.job_name ? `worked at ${l.worked_at}` : null]
-        .filter(Boolean).join(' \u00B7 ');
+      // Stainless is a fact about the rate on the line and belongs on a sheet
+      // that shows the rate. The typed description and the name of whatever
+      // other job the man passed through do not: one is free text and the other
+      // is another customer's business.
+      const note = l.stainless ? 'Stainless' : '';
       const rowH = note ? 25 : 16;
       room(rowH, dayHeader);
 
