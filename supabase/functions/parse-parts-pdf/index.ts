@@ -40,6 +40,14 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 // kind; left unset otherwise and nothing is sent.
 const ANTHROPIC_WORKSPACE_ID = Deno.env.get("ANTHROPIC_WORKSPACE_ID") ?? "";
 
+// The model, and what it costs, in one place. Written into every log row rather
+// than looked up when the row is read: rates change, and a row has to keep
+// saying what it cost on the day, or last quarter's total quietly rewrites
+// itself the next time Anthropic publishes a price.
+const MODEL = "claude-opus-5";
+const INPUT_USD_PER_M = 5;
+const OUTPUT_USD_PER_M = 25;
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -126,6 +134,11 @@ Deno.serve(async (req) => {
     new Response(JSON.stringify({ ...b, support: SUPPORT }, null, 2),
       { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
+  // Held outside the try so the catch can still name the file and the person
+  // when something fails part-way through.
+  let logFilename = "";
+  let logUserId: string | null = null;
+
   try {
     if (!ANTHROPIC_API_KEY) {
       return json({
@@ -144,10 +157,12 @@ Deno.serve(async (req) => {
     if (!who?.user) return json({ ok: false, error: "not signed in" }, 401);
     const { data: me } = await db.from("profiles").select("role").eq("id", who.user.id).maybeSingle();
     if (me?.role !== "admin") return json({ ok: false, error: "admins only" }, 403);
+    logUserId = who.user.id;
 
     const body = await req.json().catch(() => ({}));
     const b64 = String(body.pdf_base64 ?? "");
     const filename = String(body.filename ?? "the file");
+    logFilename = filename;
     if (!b64) return json({ ok: false, error: "no PDF arrived" }, 400);
 
     // base64 is 4 characters for every 3 bytes.
@@ -167,7 +182,7 @@ Deno.serve(async (req) => {
     });
 
     const res = await client.beta.messages.create({
-      model: "claude-opus-5",
+      model: MODEL,
       max_tokens: 16000,
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
@@ -217,9 +232,29 @@ Deno.serve(async (req) => {
       unit_price: Number.isFinite(Number(l.unit_price)) ? Number(l.unit_price) : 0,
     })).filter((l) => l.description.trim());
 
+    const inTok = Number(res.usage?.input_tokens ?? 0);
+    const outTok = Number(res.usage?.output_tokens ?? 0);
+    const cost = (inTok / 1e6) * INPUT_USD_PER_M + (outTok / 1e6) * OUTPUT_USD_PER_M;
+
+    // Best effort. The PDF has been read and the office is waiting on it; a
+    // bookkeeping row that will not go in is not a reason to throw the answer
+    // away.
+    try {
+      await db.from("pdf_read_log").insert({
+        filename, model: MODEL, status: "read",
+        input_tokens: inTok, output_tokens: outTok,
+        input_rate_usd: INPUT_USD_PER_M, output_rate_usd: OUTPUT_USD_PER_M,
+        cost_usd: Number(cost.toFixed(6)),
+        lines_found: clean.length,
+        customer_read: parsed.customer_name ? String(parsed.customer_name).slice(0, 200) : null,
+        read_by: who.user.id,
+      });
+    } catch { /* the read still counts */ }
+
     return json({
       ok: true,
       filename,
+      cost_usd: Number(cost.toFixed(4)),
       customer_name: parsed.customer_name ?? null,
       document_date: parsed.document_date ?? null,
       po_number: parsed.po_number ?? null,
@@ -229,6 +264,18 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+
+    // Failures go in the book too, with no tokens against them. "Which file
+    // was it, whose login, and what went wrong" is a question a table of only
+    // successes cannot answer.
+    try {
+      const db2 = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+      await db2.from("pdf_read_log").insert({
+        filename: String(logFilename || "the file"),
+        model: MODEL, status: "error", detail: msg.slice(0, 780),
+        read_by: logUserId,
+      });
+    } catch { /* nothing to be done about a log that will not log */ }
 
     // The one failure whose fix is a setting rather than a bug. Worth naming,
     // because Anthropic's own wording ("send the id of the workspace this

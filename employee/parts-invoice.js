@@ -89,11 +89,56 @@ async function loadAll() {
 
   renderList();
 
+  // The item and customer lists are copies of QuickBooks'. Nothing used to
+  // refresh them, so an item added over there never appeared here -- which is
+  // how "Gas & consumables" was missing from this screen for three days.
+  refreshQuickBooksLists();
+
   // Our counter first so the page draws straight away, then QuickBooks. An
   // invoice entered over there without us leaves our counter behind, and the
   // number on the button would be one a customer already has. Not awaited:
   // the list is worth showing while QuickBooks is being asked.
   refreshNextInvoiceNo();
+}
+
+/* Pulls QuickBooks' item and customer lists down again.
+
+   Quiet and unawaited on a normal page load: the screen is already usable from
+   the copies we have, and the throttle in the function means opening this page
+   five times running costs QuickBooks one round trip. `force` is the button,
+   for when something was added over there thirty seconds ago. */
+async function refreshQuickBooksLists(force) {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return null;
+
+    const res = await fetch(PUSH_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ action: 'sync_lists', force: Boolean(force) }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) throw new Error(out.error || `QuickBooks would not answer (${res.status})`);
+    if (out.skipped) return out;
+
+    // Only redraw if the lists actually moved. A silent re-render under
+    // somebody mid-way through typing a line is its own kind of rude.
+    const [itemRes, custRes] = await Promise.all([
+      sb.from('qb_items').select('*').eq('active', true).order('name'),
+      sb.from('qb_customers').select('*').eq('active', true).order('display_name'),
+    ]);
+    const changed =
+      (!itemRes.error && (itemRes.data || []).length !== items.length) ||
+      (!custRes.error && (custRes.data || []).length !== customers.length);
+
+    if (!itemRes.error) items = itemRes.data || [];
+    if (!custRes.error) customers = custRes.data || [];
+    if (changed) { renderList(); if (editing) renderEditor(); }
+    return out;
+  } catch (err) {
+    console.warn('Could not refresh the QuickBooks lists', err);
+    return null;
+  }
 }
 
 /* Re-asks what the next number is and redraws whatever is showing it. Quiet on
@@ -257,6 +302,8 @@ function renderEditor() {
 
       <div class="pi-lines-head">
         <span>What was cut</span>
+        <button type="button" class="btn2 btn2-ghost small pi-refresh" data-action="refresh-lists"
+                title="Pulls the item and customer lists down from QuickBooks again. Use it if something you just added over there is not in the list yet.">Refresh from QuickBooks</button>
         <span class="pi-lines-total">Total ${money(total)}</span>
       </div>
 
@@ -431,7 +478,13 @@ function applyParsed(out, filename) {
   }
 
   renderEditor();
-  const head = `Filled in from ${filename}. Check it before you finish the invoice`;
+  // What that read cost, said out loud. It is pennies, but it is the one thing
+  // in this portal that is billed by use, and a number nobody sees is a number
+  // that surprises somebody later.
+  const cost = Number(out.cost_usd);
+  const price = Number.isFinite(cost) && cost > 0
+    ? ` (read for ${cost < 0.01 ? 'under a cent' : '$' + cost.toFixed(2)})` : '';
+  const head = `Filled in from ${filename}${price}. Check it before you finish the invoice`;
   dropSay(notes.length ? `${head} \u2014 ${notes.join('; ')}.` : head + '.',
           notes.length ? 'warn' : 'ok');
 }
@@ -514,7 +567,7 @@ async function saveCustomer(btn) {
   ncNote('Asking QuickBooks…', false);
 
   try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/qb-push-invoice`, {
+    const res = await fetch(PUSH_FN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
       body: JSON.stringify({
@@ -699,6 +752,19 @@ document.addEventListener('click', async (e) => {
     return;
   }
   if (action === 'save-customer') { await saveCustomer(btn); return; }
+
+  if (action === 'refresh-lists') {
+    readEditorFields();
+    btn.disabled = true;
+    const was = btn.textContent;
+    btn.textContent = 'Refreshing\u2026';
+    const out = await refreshQuickBooksLists(true);
+    btn.disabled = false; btn.textContent = was;
+    say(out && out.ok
+      ? `Lists refreshed \u2014 ${out.items_active} items and ${out.customers_active} customers from QuickBooks.`
+      : 'QuickBooks could not be reached. The lists are unchanged.', !(out && out.ok));
+    return;
+  }
 
   if (action === 'add-line') {
     readEditorFields();

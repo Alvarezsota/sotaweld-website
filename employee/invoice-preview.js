@@ -23,7 +23,7 @@
 --------------------------------------------------------------------------- */
 
 const InvoicePreview = (function () {
-  const PUSH_URL = `${SUPABASE_URL}/functions/v1/qb-push-invoice`;
+  const PUSH_URL = PUSH_FN_URL;
   const BACKUP_URL = `${SUPABASE_URL}/functions/v1/qb-invoice-backup`;
 
   let current = null;   // what is open: the ids, the payload, the callback
