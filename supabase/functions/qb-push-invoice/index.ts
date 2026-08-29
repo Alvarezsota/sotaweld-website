@@ -502,8 +502,13 @@ Deno.serve(async (req) => {
 
     // ---- the crew sheet -----------------------------------------------------
     // Everything below is best effort. The invoice is already on their books.
+    // A week, and only a week. Parts and desk invoices have no hours behind
+    // them, so there is nothing to draw and nothing missing when none appears.
+    // Testing !isParts was right when there were two kinds and quietly wrong the
+    // moment there were three -- a desk invoice would have been told its crew
+    // sheet failed to attach.
     let backup: Record<string, unknown> = { attached: false };
-    if (!isParts && jobWeekId) {
+    if (kind === "week" && jobWeekId) {
       const sheet = await buildBackupForJobWeek(db as never, jobWeekId);
       if (!sheet.ok) {
         backup = { attached: false, error: sheet.error };
@@ -538,7 +543,7 @@ Deno.serve(async (req) => {
       emailed: inv.EmailStatus ?? "NotSet",
       intuit_tid: tid,
       note: "Created in QuickBooks and not sent. Review it there before sending."
-        + (isParts ? "" : (backup.attached
+        + (kind !== "week" ? "" : (backup.attached
             ? " The crew sheet is attached to it and will go out with it."
             : " The crew sheet could not be attached -- the invoice is fine; open the sheet from Approvals.")),
     });
