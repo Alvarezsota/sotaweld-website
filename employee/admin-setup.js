@@ -36,6 +36,11 @@ function renderJobs() {
       <div class="c pd-cell billrate-cell"><span class="pd-dollar">$</span><input class="cell-in num job-billrate" value="${escAttr(j.bill_rate)}" placeholder="Default" title="Override the welder's normal bill rate for this job. Leave blank to use their default rate."></div>
       <div class="c pd-cell stainless-cell"><span class="pd-dollar">$</span><input class="cell-in num job-stainless" value="${escAttr(j.stainless_bill_rate)}" title="Bill rate per hour when a welder flags stainless work on this job"></div>
       <div class="c pd-cell helperrate-cell"><span class="pd-dollar">$</span><input class="cell-in num job-helperrate" value="${escAttr(j.helper_bill_rate)}" placeholder="Default" title="What a helper bills at per hour on this job. Leave blank and each helper bills at his own standing rate. The bill rate and stainless rate beside this are welding rates and never reach a helper."></div>
+      <div class="c"><button type="button" class="toggle2${j.bill_with_customer ? ' ton' : ''}" data-action="toggle-billwith"
+        title="${j.qb_customer_id
+          ? 'Bill this job together with this customer\u2019s other ticked jobs \u2014 one report and one invoice for the week instead of one each.'
+          : 'Pick a customer for this job first. Jobs are grouped by their QuickBooks customer, so there is nothing to group by until one is set.'}"
+        ${j.qb_customer_id ? '' : 'disabled'}><span class="tk2"></span></button></div>
       <div class="c"><button type="button" class="toggle2${j.billing_type === 'flat' ? ' ton' : ''}" data-action="toggle-flat" title="Lump sum job — bid as a price instead of billed by the hour. Bill it off bid line items on the Summary page."><span class="tk2"></span></button></div>
       <div class="c"><button type="button" class="toggle2${j.track_hours ? ' ton' : ''}" data-action="toggle-hours" title="Track hours on this job's daily log"><span class="tk2"></span></button></div>
       <div class="c"><button type="button" class="toggle2${j.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>
@@ -162,6 +167,9 @@ document.getElementById('jobsTable').addEventListener('change', async (e) => {
 
   const patch = customerPatch(e.target.value);
   if (!patch) return;
+  // Grouped by customer, so clearing the customer has to clear the grouping
+  // with it -- otherwise the job stays ticked with nothing to be ticked to.
+  if (!patch.qb_customer_id && job.bill_with_customer) patch.bill_with_customer = false;
 
   const { error } = await sb.from('jobs').update(patch).eq('id', job.id);
   if (error) { alert('Could not set the customer: ' + error.message); return; }
@@ -265,6 +273,15 @@ document.getElementById('jobsTable').addEventListener('click', async (e) => {
     job.active = !job.active;
     renderJobs();
     await sb.from('jobs').update({ active: job.active }).eq('id', id);
+    return;
+  }
+  if (e.target.closest('[data-action="toggle-billwith"]')) {
+    // Grouping is by QuickBooks customer, so without one there is nothing to
+    // group by. The button is disabled in that case; this is the second guard.
+    if (!job.qb_customer_id) return;
+    job.bill_with_customer = !job.bill_with_customer;
+    renderJobs();
+    await sb.from('jobs').update({ bill_with_customer: job.bill_with_customer }).eq('id', id);
     return;
   }
   if (e.target.closest('[data-action="toggle-flat"]')) {

@@ -104,14 +104,37 @@ function rateTag(l) {
   return set.length ? `<div class="line-desc rate-tag">Rate set on this line: ${esc(set.join(', '))}</div>` : '';
 }
 
+/* Which job a job's work bills under.
+ *
+ * Itself, unless it is ticked to bill with the customer's other jobs and an
+ * older ticked job shares that customer. This is bill_anchor_job() in
+ * supabase/migrations/20260829_bill_jobs_together.sql, term for term, and for
+ * the same reason the rate chains are written twice: the job log is drawn here
+ * and the invoice is drawn in SQL. If the two disagree, the office signs off on
+ * one grouping and bills another. Change one, change the other.
+ */
+function anchorJobId(job, jobs) {
+  if (!job || !job.bill_with_customer || !job.qb_customer_id) return job ? job.id : null;
+  const family = jobs.filter(j =>
+    j.bill_with_customer && j.qb_customer_id && j.qb_customer_id === job.qb_customer_id);
+  if (!family.length) return job.id;
+  // order by created_at nulls last, id -- same as the database.
+  family.sort((a, b) =>
+    (a.created_at || '9999').localeCompare(b.created_at || '9999') || String(a.id).localeCompare(String(b.id)));
+  return family[0].id;
+}
+
 function buildJobGroups(entries, jobs) {
   const groups = {}; // effectiveJobId -> { job, days: { dateStr: { lines: [] } } }
 
   entries.forEach(e => {
     const job = jobs.find(j => j.id === e.job_id);
     const isYardEntry = job && job.is_yard;
-    const effectiveJobId = isYardEntry && e.for_job_id ? e.for_job_id : (e.job_id || `oneoff:${e.one_off_name}`);
-    const effectiveJob = e.job_id ? (isYardEntry && e.for_job_id ? jobs.find(j => j.id === e.for_job_id) : job) : null;
+    const billsUnder = e.job_id ? anchorJobId(job, jobs) : null;
+    const effectiveJobId = isYardEntry && e.for_job_id ? e.for_job_id : (billsUnder || `oneoff:${e.one_off_name}`);
+    const effectiveJob = e.job_id
+      ? (isYardEntry && e.for_job_id ? jobs.find(j => j.id === e.for_job_id) : (jobs.find(j => j.id === effectiveJobId) || job))
+      : null;
 
     if (!groups[effectiveJobId]) {
       groups[effectiveJobId] = {
