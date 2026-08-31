@@ -1,5 +1,6 @@
 let currentUser = null;
 let jobsList = [];
+let customersList = [];   // qb_customers -- who a job can bill to
 let bidItemsByJob = {};   // job_id -> rows from job_bid_items
 let openBidJobId = null; // which lump sum job has its bid panel open
 let weldersList = [];
@@ -29,7 +30,7 @@ function renderJobs() {
     <div class="jt-row${j.active ? '' : ' off'}" data-job-id="${j.id}">
       <input class="cell-in strong job-name" value="${escAttr(j.name)}" placeholder="Job name">
       <input class="cell-in job-operator" value="${escAttr(j.operator || '')}" placeholder="Operator">
-      <input class="cell-in job-bill" value="${escAttr(j.bill_to || '')}" placeholder="Set bill-to…">
+      ${billToCell(j)}
       <input class="cell-in bid job-bidnum" value="${escAttr(j.bid_number || '')}" placeholder="Bid #" title="Your bid or quote number for this job. Optional, works on any job, and prints on the invoice.">
       <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num job-pd" value="${escAttr(j.per_diem)}"></div>
       <div class="c pd-cell billrate-cell"><span class="pd-dollar">$</span><input class="cell-in num job-billrate" value="${escAttr(j.bill_rate)}" placeholder="Default" title="Override the welder's normal bill rate for this job. Leave blank to use their default rate."></div>
@@ -106,10 +107,67 @@ async function loadBidItems(jobId) {
 }
 
 async function loadJobs() {
-  const { data } = await sb.from('jobs').select('*').order('name');
-  jobsList = data || [];
+  // The customer list is QuickBooks', not ours. A job billed to a name that is
+  // only typed here is a job the invoice cannot be sent for -- the push refuses
+  // with "job X has no QuickBooks customer mapped" -- so the choice is made from
+  // the real list and the QuickBooks id is stored with it.
+  const [jobRes, custRes] = await Promise.all([
+    sb.from('jobs').select('*').order('name'),
+    sb.from('qb_customers').select('id, display_name, active').eq('active', true).order('display_name')
+  ]);
+  jobsList = jobRes.data || [];
+  // A failed read must not look like an empty customer list, or every job would
+  // appear to be billed to nobody.
+  customersList = custRes.error ? null : (custRes.data || []);
+  if (custRes.error) console.error('customer list:', custRes.error);
   renderJobs();
 }
+
+/** The bill-to cell. A job already billing to a name QuickBooks does not have
+ *  keeps showing that name, marked, rather than being silently blanked -- it is
+ *  the thing that needs fixing, so it has to stay visible. */
+function billToCell(j) {
+  if (customersList === null) {
+    return `<input class="cell-in" value="${escAttr(j.qb_customer_name || j.bill_to || '')}" disabled
+                   title="The customer list could not be loaded. Reload the page.">`;
+  }
+  const linked = j.qb_customer_id
+    ? customersList.some(c => String(c.id) === String(j.qb_customer_id))
+    : false;
+  const stray = !linked && (j.bill_to || j.qb_customer_name);
+
+  return `<select class="cell-in job-customer" title="Who this job bills to. Taken from QuickBooks, so the invoice can actually be sent.">
+      <option value="">${stray ? '&mdash; not in QuickBooks &mdash;' : '&mdash; pick a customer &mdash;'}</option>
+      ${stray ? `<option value="" selected disabled>${esc(j.qb_customer_name || j.bill_to)} (not in QuickBooks)</option>` : ''}
+      ${customersList.map(c => `<option value="${escAttr(c.id)}" ${String(c.id) === String(j.qb_customer_id) ? 'selected' : ''}>${esc(c.display_name)}</option>`).join('')}
+    </select>`;
+}
+
+/** Picking a customer sets all three: the QuickBooks id the push needs, the
+ *  name for anything printing it, and bill_to, which Approvals and the crew
+ *  sheet already read. One pick, and the three cannot disagree. */
+function customerPatch(qbId) {
+  if (!qbId) return { qb_customer_id: null, qb_customer_name: null, bill_to: null };
+  const c = (customersList || []).find(x => String(x.id) === String(qbId));
+  if (!c) return null;
+  return { qb_customer_id: String(c.id), qb_customer_name: c.display_name, bill_to: c.display_name };
+}
+
+document.getElementById('jobsTable').addEventListener('change', async (e) => {
+  if (!e.target.classList.contains('job-customer')) return;
+  const row = e.target.closest('[data-job-id]');
+  if (!row) return;
+  const job = jobsList.find(j => j.id === row.dataset.jobId);
+  if (!job) return;
+
+  const patch = customerPatch(e.target.value);
+  if (!patch) return;
+
+  const { error } = await sb.from('jobs').update(patch).eq('id', job.id);
+  if (error) { alert('Could not set the customer: ' + error.message); return; }
+  Object.assign(job, patch);
+  renderJobs();          // drops the "not in QuickBooks" marker once it is fixed
+});
 
 document.getElementById('jobsTable').addEventListener('blur', async (e) => {
   const row = e.target.closest('[data-job-id]');
@@ -121,7 +179,6 @@ document.getElementById('jobsTable').addEventListener('blur', async (e) => {
   let patch = null;
   if (e.target.classList.contains('job-name')) patch = { name: e.target.value.trim() };
   else if (e.target.classList.contains('job-operator')) patch = { operator: e.target.value.trim() };
-  else if (e.target.classList.contains('job-bill')) patch = { bill_to: e.target.value.trim() };
   else if (e.target.classList.contains('job-pd')) patch = { per_diem: num(e.target.value) };
   else if (e.target.classList.contains('job-billrate')) patch = { bill_rate: e.target.value.trim() === '' ? null : num(e.target.value) };
   else if (e.target.classList.contains('job-stainless')) patch = { stainless_bill_rate: num(e.target.value) };

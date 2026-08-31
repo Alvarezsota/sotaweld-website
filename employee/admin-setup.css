@@ -169,3 +169,14 @@
 .od-msg { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--dim2, #6e7681); }
 .od-msg.err { color: var(--danger, #ec7d7a); }
 .od-msg.ok { color: var(--ok, #57c98c); }
+
+/* The bills-to picker sits in the same cell the typed name used to, so the row
+   keeps its shape. Styled as a cell rather than a form control for the same
+   reason every other field on this row is.                                   */
+select.cell-in { cursor: pointer; appearance: none; padding-right: 22px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%),
+                    linear-gradient(135deg, var(--dim) 50%, transparent 50%);
+  background-position: calc(100% - 13px) 55%, calc(100% - 8px) 55%;
+  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+select.cell-in option { background: var(--steel-800); color: var(--text); }
+select.cell-in:disabled { cursor: default; background-image: none; }
