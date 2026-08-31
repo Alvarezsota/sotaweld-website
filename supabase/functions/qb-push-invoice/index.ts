@@ -792,6 +792,37 @@ Deno.serve(async (req) => {
 
     const t = await liveToken(db);
 
+    // Who gets copied. QuickBooks holds CC on the invoice, not the customer -
+    // there is no customer-level CC field - so without this the addresses would
+    // have to be retyped on every invoice and one would eventually be missed.
+    // Keyed on the customer rather than the job, because seventeen jobs bill to
+    // Rocking Double S; and by environment, for the same reason
+    // jobs.qb_environment exists - the same id is a different company in sandbox.
+    //
+    // A missing row is the normal case, and a failed lookup falls back to the
+    // address already on the QuickBooks customer record. This must never be the
+    // reason an invoice does not go out.
+    let billTo: Record<string, unknown> = {};
+    try {
+      const { data: bill } = await db
+        .from("qb_customer_billing")
+        .select("to_email, cc_emails, bcc_emails")
+        .eq("qb_customer_id", String(payload.customer.id))
+        .eq("qb_environment", t.environment)
+        .maybeSingle();
+      if (bill) {
+        const join = (v: unknown) =>
+          Array.isArray(v) ? (v as string[]).map((s) => s.trim()).filter(Boolean).join(", ") : "";
+        const cc = join(bill.cc_emails);
+        const bcc = join(bill.bcc_emails);
+        if (bill.to_email) billTo.BillEmail = { Address: String(bill.to_email) };
+        if (cc) billTo.BillEmailCc = { Address: cc };
+        if (bcc) billTo.BillEmailBcc = { Address: bcc };
+      }
+    } catch (_e) {
+      billTo = {};
+    }
+
     // The number the portal proposes. Left off entirely when there is none, so
     // QuickBooks assigns its own rather than being handed a blank.
     const docNumber = payload.invoice_no ? String(payload.invoice_no).slice(0, 21) : null;
@@ -811,6 +842,7 @@ Deno.serve(async (req) => {
         // bill gives no way of telling, and a job held open waiting for one
         // that never comes is a call we get instead of a payment.
         ...(customerMemo(payload) ? { CustomerMemo: { value: customerMemo(payload) } } : {}),
+        ...billTo,
         Line: (payload.lines as Array<Record<string, unknown>>).map((l) => ({
           Amount: Number(l.amount),
           Description: l.description,
@@ -926,6 +958,7 @@ Deno.serve(async (req) => {
       proposed_number: payload.invoice_no ?? null,
       number_changed_by_quickbooks: Boolean(assigned && assigned !== payload.invoice_no),
       total: Number(inv.TotalAmt),
+      copied_to: (billTo.BillEmailCc as { Address?: string } | undefined)?.Address ?? null,
       customer: payload.customer_name,
       job: payload.job_name,
       emailed: inv.EmailStatus ?? "NotSet",
