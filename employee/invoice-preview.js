@@ -164,6 +164,11 @@ const InvoicePreview = (function () {
       </table>
       </div>
 
+      ${p.final_invoice ? `
+        <div class="inv-final" role="note">FINAL INVOICE
+          <small>Nothing further is coming for this job — they can close it out.</small>
+        </div>` : ''}
+
       ${blockers.length ? `
         <div class="inv-blockers">
           <div class="inv-blockers-h">${blockers.length === 1 ? 'This is in the way' : 'These are in the way'}</div>

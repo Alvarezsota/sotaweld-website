@@ -610,6 +610,20 @@ function renderDetail(groupId) {
             : 'Approving a week numbers it by itself. Type over it if this one needs a different number.')
         : `Approve this week and it takes ${esc(nextInvoiceNo || 'the next number')} on its own.`}
     </div>
+
+    <!-- A customer getting a weekly invoice cannot tell whether another is
+         coming. Marking the last one says so on the bill, so their accounts can
+         close the job instead of holding it open. -->
+    <label class="final-inv${jw && jw.is_final ? ' on' : ''}">
+      <input type="checkbox" id="finalInvChk" ${jw && jw.is_final ? 'checked' : ''}
+             ${status === 'synced' ? 'disabled' : ''}>
+      <span class="final-inv-txt">
+        <b>Final invoice for this job</b>
+        <small>${status === 'synced'
+          ? 'This week is already on QuickBooks, so what it says cannot be changed here.'
+          : 'Prints FINAL INVOICE on the bill so they know nothing more is coming for it.'}</small>
+      </span>
+    </label>
   `;
 
   document.getElementById('backBtn').addEventListener('click', () => {
@@ -658,6 +672,20 @@ function renderDetail(groupId) {
 
   const assignBtn = document.getElementById('assignInvBtn');
   if (assignBtn) assignBtn.addEventListener('click', () => assignInvoiceNo(g.id));
+
+  const finalChk = document.getElementById('finalInvChk');
+  if (finalChk) finalChk.addEventListener('change', async (e) => {
+    const want = e.target.checked;
+    e.target.disabled = true;
+    const { error } = await upsertJobWeek(g.id, { is_final: want });
+    e.target.disabled = false;
+    if (error) {
+      e.target.checked = !want;                       // never look saved when it is not
+      alert('Could not mark it: ' + error.message);
+      return;
+    }
+    renderDetail(g.id);
+  });
 
   document.getElementById('invoiceInput').addEventListener('blur', async (e) => {
     // A synced week is the only one whose number is settled -- it is on a real
