@@ -101,16 +101,6 @@ type Tokens = {
   access_token: string; refresh_token: string; expires_at: string;
 };
 
-/** What QuickBooks prints on the invoice for the customer to read. */
-function customerMemo(payload: Record<string, unknown>): string {
-  const bits: string[] = [];
-  if (payload.po_number) bits.push(`PO ${payload.po_number}`);
-  if (payload.final_invoice === true) bits.push("FINAL INVOICE - no further invoices for this job");
-  // 1000 is QuickBooks' limit on this field; well clear of it, but a memo that
-  // is refused would fail the whole push over a line of text.
-  return bits.join("  -  ").slice(0, 1000);
-}
-
 /** Retries transient faults only. A 4xx is QuickBooks meaning it. */
 async function fetchWithRetry(url: string, init: RequestInit, attempts = 3): Promise<Response> {
   let lastErr: unknown;
@@ -836,12 +826,9 @@ Deno.serve(async (req) => {
         ...(docNumber ? { DocNumber: docNumber } : {}),
         // A PO number is what the customer's own accounts department matches
         // against, so it goes where QuickBooks prints it rather than into a memo.
-        // CustomerMemo is the one line QuickBooks prints on the invoice the
-        // customer reads, so both things they need are said there: the PO their
-        // accounts match on, and whether another invoice is coming. A weekly
-        // bill gives no way of telling, and a job held open waiting for one
-        // that never comes is a call we get instead of a payment.
-        ...(customerMemo(payload) ? { CustomerMemo: { value: customerMemo(payload) } } : {}),
+        // A PO number is what the customer's own accounts department matches
+        // against, so it goes where QuickBooks prints it rather than into a memo.
+        ...(payload.po_number ? { CustomerMemo: { value: `PO ${payload.po_number}` } } : {}),
         ...billTo,
         Line: (payload.lines as Array<Record<string, unknown>>).map((l) => ({
           Amount: Number(l.amount),
