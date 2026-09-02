@@ -6,6 +6,7 @@ let weekStart = getMonday(new Date());
 let openJobId = null;
 let currentGroups = [];
 let currentJobWeeks = {};
+let openInvoices = [];   // weeks holding an invoice open, any week
 let weekAlreadyFiled = false;   // has this week's pay run gone to OneDrive yet
 let nextInvoiceNumber = '';    // what an unnumbered week would be given, for the button
 
@@ -311,12 +312,17 @@ async function loadWeek(skipReconcile) {
   //
   // Naming the constraint ends the argument. It costs one identifier and it does
   // not care how many other columns ever point at a person.
-  const [entriesRes, jobsRes, jwRes, hlprsRes, weldersRes] = await Promise.all([
+  const [entriesRes, jobsRes, jwRes, openRes, hlprsRes, weldersRes] = await Promise.all([
     sb.from('daily_entries')
       .select('*, profiles!daily_entries_welder_id_fkey(full_name, pay_rate, bill_rate, bills_as_helper_id, bills_as_helper:helpers!profiles_bills_as_helper_id_fkey(name, pay_rate, bill_rate)), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate)), daily_entry_parts(*)')
       .gte('entry_date', start).lte('entry_date', end),
     sb.from('jobs').select('*'),
     sb.from('job_weeks').select('*').eq('week_start', start),
+    // Weeks holding an invoice open, any week. Small set, and without it this
+    // page would show a week its own invoice number while the invoice put the
+    // work on somebody else's -- the two disagreeing about what is being billed.
+    sb.from('job_weeks').select('id, job_id, week_start, invoice_no')
+      .eq('invoice_open', true).is('qb_invoice_id', null),
     sb.from('helpers').select('*').order('name'),
     sb.from('profiles').select('*').order('full_name')
   ]);
@@ -331,6 +337,7 @@ async function loadWeek(skipReconcile) {
   // a failure wear the same face as an empty week again.
   const failed = [
     ['the tickets', entriesRes], ['the jobs', jobsRes], ['the approvals', jwRes],
+    ['the open invoices', openRes],
     ['the helpers', hlprsRes], ['the welders', weldersRes]
   ].filter(([, r]) => r.error);
 
@@ -367,6 +374,7 @@ async function loadWeek(skipReconcile) {
 
   currentJobWeeks = {};
   (jwRes.data || []).forEach(row => currentJobWeeks[row.job_id] = row);
+  openInvoices = openRes.data || [];
 
   currentGroups = buildJobGroups(entries, jobs);
   renderGrid();
@@ -468,6 +476,24 @@ async function refreshCrewSheets() {
   }
 }
 
+/* Which invoice this week's work goes on.
+ *
+ * Its own, unless an earlier week of the same job is holding its invoice open
+ * and has not been pushed. This is billing_week_for() in
+ * supabase/migrations/20260902_an_invoice_can_stay_open.sql, and it is written
+ * twice for the same reason the rate chains are: the job log is drawn here and
+ * the invoice is drawn in SQL. If they disagree, this page shows a week its own
+ * invoice number while the invoice puts the work on another. Change one, change
+ * the other.
+ */
+function billsOnInvoice(groupId, week) {
+  const held = openInvoices
+    .filter(r => r.job_id === groupId && r.week_start <= week)
+    .sort((a, b) => a.week_start.localeCompare(b.week_start))[0];
+  if (!held || held.week_start === week) return null;   // its own invoice
+  return held;                                          // somebody else's
+}
+
 function statusFor(groupId) {
   const row = currentJobWeeks[groupId];
   return row ? row.status : 'open';
@@ -511,11 +537,15 @@ function renderGrid() {
     // a page with no way of telling which invoice any of them is.
     const jwRow = currentJobWeeks[g.id];
     const invNo = jwRow && jwRow.invoice_no ? String(jwRow.invoice_no) : '';
+    const onOther = billsOnInvoice(g.id, ymd(weekStart));
+    const heldOpen = jwRow && jwRow.invoice_open;
     return `
     <button class="job-tile" data-group-id="${esc(g.id)}">
       <div class="tile-top">
         <span class="pill ${stCls}">${esc(status)}</span>
-        ${invNo ? `<span class="tile-inv">#${esc(invNo)}</span>` : ''}
+        ${onOther
+          ? `<span class="tile-inv tile-inv-other" title="This week's work is billed on the invoice for the week of ${esc(onOther.week_start)}">&rarr;&nbsp;#${esc(onOther.invoice_no || '—')}</span>`
+          : (invNo ? `<span class="tile-inv${heldOpen ? ' tile-inv-open' : ''}">#${esc(invNo)}${heldOpen ? ' open' : ''}</span>` : '')}
       </div>
       <h3 class="tile-name">${esc(g.name)}</h3>
       <div class="tile-route">${esc(g.operator || '—')} &rarr; bill ${esc(g.billTo || '—')}</div>
@@ -622,6 +652,26 @@ function renderDetail(groupId) {
         : `Approve this week and it takes ${esc(nextInvoiceNo || 'the next number')} on its own.`}
     </div>
 
+    <!-- Some jobs run into the following week. Approving is about the man's
+         hours; finishing the invoice is about the customer's bill. Holding it
+         open keeps the two apart until the job is actually done. -->
+    ${billsOnInvoice(g.id, ymd(weekStart))
+      ? `<p class="bills-elsewhere">This week's work is billed on invoice
+           <b>#${esc((billsOnInvoice(g.id, ymd(weekStart)).invoice_no) || '—')}</b>,
+           the week of ${esc(billsOnInvoice(g.id, ymd(weekStart)).week_start)}.
+           Approve it as usual &mdash; the hours are proved and paid from here.
+           The bill goes out on that invoice.</p>`
+      : `<label class="hold-open${jw && jw.invoice_open ? ' on' : ''}">
+          <input type="checkbox" id="holdOpenChk" ${jw && jw.invoice_open ? 'checked' : ''}
+                 ${status === 'synced' ? 'disabled' : ''}>
+          <span class="hold-open-txt">
+            <b>Keep this invoice open</b>
+            <small>${status === 'synced'
+              ? 'This week is already on QuickBooks, so its invoice is finished.'
+              : 'The job runs on. Later weeks bill onto this invoice instead of starting their own, and it will not be pushed until you close it.'}</small>
+          </span>
+        </label>`}
+
     <!-- A customer getting a weekly invoice cannot tell whether another is
          coming. Marking the last one says so on the bill, so their accounts can
          close the job instead of holding it open. -->
@@ -646,7 +696,8 @@ function renderDetail(groupId) {
   const actBtns = document.getElementById('actBtns');
   if (!locked) {
     actBtns.innerHTML = `
-      <button class="btn2 btn2-line" id="previewInvBtn">Preview invoice</button>
+      ${billsOnInvoice(g.id, ymd(weekStart))
+        ? '' : '<button class="btn2 btn2-line" id="previewInvBtn">Preview invoice</button>'}
       <button class="btn2 btn2-ghost" id="kickBtn">Kick back</button>
       <button class="btn2 btn2-solid" id="approveBtn">Approve week &amp; lock</button>
     `;
@@ -656,10 +707,18 @@ function renderDetail(groupId) {
     // Approved is not final. Nothing has gone to QuickBooks yet, so a mistake
     // found now is still just a mistake - it becomes expensive only once the
     // invoice is over there. Hence an unlock here and none on a synced week.
+    const onOtherInv = billsOnInvoice(g.id, ymd(weekStart));
+    const heldOpen = jw && jw.invoice_open;
     actBtns.innerHTML = `
-      <span class="locked-note2">Locked · ready for QuickBooks</span>
+      <span class="locked-note2">${onOtherInv
+        ? 'Locked · billed on #' + esc(onOtherInv.invoice_no || '—')
+        : heldOpen ? 'Locked · invoice kept open' : 'Locked · ready for QuickBooks'}</span>
       <button class="btn2 btn2-ghost" id="unlockBtn">Unlock to edit</button>
-      <button class="btn2 btn2-solid" id="previewInvBtn">Preview invoice &amp; send</button>
+      ${onOtherInv
+        ? ''
+        : heldOpen
+          ? '<span class="qbo-note">Close the invoice above when the job is done, and it can be sent.</span>'
+          : '<button class="btn2 btn2-solid" id="previewInvBtn">Preview invoice &amp; send</button>'}
     `;
     document.getElementById('unlockBtn').addEventListener('click', () => unlockJobWeek(g.id));
   } else {
@@ -683,6 +742,21 @@ function renderDetail(groupId) {
 
   const assignBtn = document.getElementById('assignInvBtn');
   if (assignBtn) assignBtn.addEventListener('click', () => assignInvoiceNo(g.id));
+
+  const holdChk = document.getElementById('holdOpenChk');
+  if (holdChk) holdChk.addEventListener('change', async (e) => {
+    const want = e.target.checked;
+    e.target.disabled = true;
+    const { error } = await upsertJobWeek(g.id, { invoice_open: want });
+    e.target.disabled = false;
+    if (error) {
+      e.target.checked = !want;
+      alert('Could not change that: ' + error.message);
+      return;
+    }
+    await loadWeek(true);          // other weeks' tiles change with it
+    renderDetail(g.id);
+  });
 
   const finalChk = document.getElementById('finalInvChk');
   if (finalChk) finalChk.addEventListener('change', async (e) => {

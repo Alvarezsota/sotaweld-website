@@ -295,3 +295,25 @@ body.inv-open { overflow: hidden; }
 .tile-inv { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px; font-weight: 700; color: var(--dim); letter-spacing: .02em; }
 .job-tile:hover .tile-inv { color: var(--text); }
+
+/* --- an invoice that stays open across weeks ------------------------------
+   Approving is about the man's hours. Finishing the invoice is about the
+   customer's bill. These say which of the two has happened.               */
+.tile-inv-open  { color: var(--molten); }
+.tile-inv-other { color: var(--dim2); font-weight: 600; }
+
+.hold-open { display: flex; align-items: flex-start; gap: 10px; margin-top: 12px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; }
+.hold-open:hover { border-color: var(--steel-600); }
+.hold-open.on { border-color: var(--molten); background: rgba(214,106,38,.08); }
+.hold-open input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--molten); cursor: pointer; }
+.hold-open input:disabled { cursor: not-allowed; }
+.hold-open-txt { display: flex; flex-direction: column; gap: 2px; }
+.hold-open-txt b { font-size: 13.5px; }
+.hold-open.on .hold-open-txt b { color: var(--molten); }
+.hold-open-txt small { color: var(--dim2); font-size: 12px; line-height: 1.45; }
+
+.bills-elsewhere { margin: 12px 0 0; padding: 10px 12px; border-radius: 9px;
+  border: 1px solid var(--line); background: rgba(255,255,255,.02);
+  color: var(--dim2); font-size: 12.5px; line-height: 1.55; }
+.bills-elsewhere b { color: var(--text); }
