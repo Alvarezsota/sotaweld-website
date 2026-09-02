@@ -289,3 +289,9 @@ body.inv-open { overflow: hidden; }
   padding: 8px 10px; font-size: 13px; font-family: inherit; }
 .inv-cc-in:focus { outline: none; border-color: var(--molten); }
 .inv-cc-note { margin: 9px 0 0; font-size: 12px; line-height: 1.5; color: var(--dim2); }
+
+/* The invoice number, beside the status on the tile. A grid of tiles that all
+   say "synced" is a grid with no way of telling which invoice each one is. */
+.tile-inv { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px; font-weight: 700; color: var(--dim); letter-spacing: .02em; }
+.job-tile:hover .tile-inv { color: var(--text); }

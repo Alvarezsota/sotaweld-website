@@ -507,10 +507,15 @@ function renderGrid() {
   grid.innerHTML = currentGroups.map(g => {
     const status = statusFor(g.id);
     const stCls = status === 'synced' ? 'st-synced' : status === 'approved' ? 'st-approved' : 'st-open';
+    // The number, next to the status. A page of tiles that all say "synced" is
+    // a page with no way of telling which invoice any of them is.
+    const jwRow = currentJobWeeks[g.id];
+    const invNo = jwRow && jwRow.invoice_no ? String(jwRow.invoice_no) : '';
     return `
     <button class="job-tile" data-group-id="${esc(g.id)}">
       <div class="tile-top">
         <span class="pill ${stCls}">${esc(status)}</span>
+        ${invNo ? `<span class="tile-inv">#${esc(invNo)}</span>` : ''}
       </div>
       <h3 class="tile-name">${esc(g.name)}</h3>
       <div class="tile-route">${esc(g.operator || '—')} &rarr; bill ${esc(g.billTo || '—')}</div>
