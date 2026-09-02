@@ -27,6 +27,7 @@ const InvoicePreview = (function () {
   const BACKUP_URL = `${SUPABASE_URL}/functions/v1/qb-invoice-backup`;
 
   let current = null;   // what is open: the ids, the payload, the callback
+  let cc = null;        // { environment, roster: [{name,email}], chosen: Set }
 
   function esc(str) {
     const d = document.createElement('div');
@@ -67,6 +68,118 @@ const InvoicePreview = (function () {
     });
     const json = await res.json().catch(() => ({}));
     return { res, json };
+  }
+
+  /* ---------------- who gets copied ----------------
+     cc_emails is what the push sends. cc_roster is everyone we hold for that
+     customer. The office picks from the roster here, and the picked ones are
+     written to cc_emails in the moment before the invoice goes -- so what was
+     ticked on this screen is what QuickBooks copies, and nothing is chosen
+     days earlier by somebody else.
+
+     A customer with nobody on the roster gets the add box and no list. That is
+     the normal state for a customer nobody has set up yet, not an error. */
+
+  async function loadCc(customerId, customerName) {
+    cc = null;
+    if (!customerId) return;
+    try {
+      const { data: cust } = await sb.from('qb_customers')
+        .select('environment, display_name').eq('id', String(customerId)).limit(1).maybeSingle();
+      const environment = (cust && cust.environment) || 'production';
+
+      const { data: row } = await sb.from('qb_customer_billing')
+        .select('cc_roster, cc_emails')
+        .eq('qb_customer_id', String(customerId)).eq('qb_environment', environment).maybeSingle();
+
+      const roster = Array.isArray(row && row.cc_roster) ? row.cc_roster : [];
+      const sending = Array.isArray(row && row.cc_emails) ? row.cc_emails : [];
+      cc = {
+        customerId: String(customerId),
+        customerName: (cust && cust.display_name) || customerName || '',
+        environment,
+        roster: roster.filter(r => r && r.email),
+        chosen: new Set(sending.map(e => String(e).toLowerCase())),
+      };
+    } catch (err) {
+      cc = null;                     // never let this stop an invoice being looked at
+      console.error('cc roster:', err);
+    }
+  }
+
+  function ccHtml() {
+    if (!cc) return '';
+    const rows = cc.roster.map((r, i) => {
+      const on = cc.chosen.has(String(r.email).toLowerCase());
+      return `<label class="inv-cc-opt${on ? ' on' : ''}">
+          <input type="checkbox" data-cc="${i}" ${on ? 'checked' : ''}>
+          <span>${esc(r.name || r.email)}${r.name ? `<small>${esc(r.email)}</small>` : ''}</span>
+        </label>`;
+    }).join('');
+
+    return `
+      <div class="inv-cc">
+        <div class="inv-cc-h">Copy this invoice to
+          <small>${cc.roster.length ? 'Ticked addresses are copied when it goes out.'
+                                    : 'Nobody on file for ' + esc(cc.customerName) + ' yet.'}</small>
+        </div>
+        ${rows ? `<div class="inv-cc-opts">${rows}</div>` : ''}
+        <div class="inv-cc-add">
+          <input class="inv-cc-in" id="ccName" placeholder="Name (optional)" maxlength="80">
+          <input class="inv-cc-in" id="ccEmail" type="email" placeholder="name@theircompany.com" maxlength="120">
+          <button type="button" class="btn2 btn2-ghost small" id="ccAddBtn">Add</button>
+        </div>
+        <p class="inv-cc-note" id="ccNote"></p>
+      </div>`;
+  }
+
+  function ccNote(msg, bad) {
+    const el = document.getElementById('ccNote');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = 'inv-cc-note' + (bad ? ' inv-err' : ' inv-ok');
+  }
+
+  /** Saves the roster, and who is ticked, as one row. */
+  async function saveCc() {
+    if (!cc) return { error: null };
+    const chosen = cc.roster
+      .map(r => r.email)
+      .filter(e => cc.chosen.has(String(e).toLowerCase()));
+    return await sb.from('qb_customer_billing').upsert({
+      qb_customer_id: cc.customerId,
+      qb_environment: cc.environment,
+      qb_customer_name: cc.customerName,
+      cc_roster: cc.roster,
+      cc_emails: chosen,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'qb_customer_id,qb_environment' });
+  }
+
+  async function addCc() {
+    const nameEl = document.getElementById('ccName');
+    const mailEl = document.getElementById('ccEmail');
+    const name = (nameEl.value || '').trim();
+    const email = (mailEl.value || '').trim();
+
+    if (!email) { ccNote('Put an email address in first.', true); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      ccNote('That address does not look right.', true); return;
+    }
+    if (cc.roster.some(r => String(r.email).toLowerCase() === email.toLowerCase())) {
+      ccNote('That address is already on the list.', true); return;
+    }
+
+    cc.roster.push({ name, email });
+    cc.chosen.add(email.toLowerCase());       // just added means wanted
+    const { error } = await saveCc();
+    if (error) {
+      cc.roster.pop(); cc.chosen.delete(email.toLowerCase());
+      ccNote('Could not save it: ' + error.message, true);
+      return;
+    }
+    render(current.json);
+    ccNote(`${name || email} will be copied.`, false);
   }
 
   const sheet = () => document.getElementById('invSheet');
@@ -110,6 +223,9 @@ const InvoicePreview = (function () {
     }
 
     current.payload = out.json.payload || null;
+    current.json = out.json;                 // kept so the sheet can redraw itself
+    const p = current.payload || {};
+    await loadCc(p.customer && p.customer.id, p.customer_name);
     render(out.json);
   }
 
@@ -124,7 +240,7 @@ const InvoicePreview = (function () {
       bodyEl().innerHTML = `
         <div class="inv-head"><h3 id="invName">${esc(p.job_name || current.name || 'This invoice')}</h3></div>
         <p class="inv-none">${esc(p.error)}</p>
-        <div class="inv-actions"><button class="btn2 btn2-ghost" data-inv-close>Close</button></div>`;
+      <div class="inv-actions"><button class="btn2 btn2-ghost" data-inv-close>Close</button></div>`;
       return;
     }
 
@@ -175,6 +291,8 @@ const InvoicePreview = (function () {
           <ul>${blockers.map(b => `<li>${esc(b.message)}</li>`).join('')}</ul>
         </div>` : ''}
 
+      ${ccHtml()}
+
       <div class="inv-actions">
         ${current.qbInvoiceId
           ? `<span class="inv-done">Already on QuickBooks invoice ${esc(current.qbInvoiceId)}.</span>`
@@ -195,6 +313,34 @@ const InvoicePreview = (function () {
 
     const pushBtn = document.getElementById('invPushBtn');
     if (pushBtn) pushBtn.addEventListener('click', push);
+
+    const addBtn = document.getElementById('ccAddBtn');
+    if (addBtn) addBtn.addEventListener('click', addCc);
+    const mailIn = document.getElementById('ccEmail');
+    if (mailIn) mailIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') addCc(); });
+
+    bodyEl().querySelectorAll('[data-cc]').forEach((box) => {
+      box.addEventListener('change', async () => {
+        const r = cc.roster[Number(box.dataset.cc)];
+        if (!r) return;
+        const key = String(r.email).toLowerCase();
+        const was = cc.chosen.has(key);
+        if (box.checked) cc.chosen.add(key); else cc.chosen.delete(key);
+        const { error } = await saveCc();
+        if (error) {
+          // Never leave a tick on screen that is not saved: the whole point is
+          // that what is ticked here is who QuickBooks copies.
+          if (was) cc.chosen.add(key); else cc.chosen.delete(key);
+          box.checked = was;
+          ccNote('Could not save that: ' + error.message, true);
+          return;
+        }
+        box.closest('.inv-cc-opt').classList.toggle('on', box.checked);
+        const n = cc.chosen.size;
+        ccNote(n ? `${n} ${n === 1 ? 'person' : 'people'} copied when this goes out.`
+                 : 'Nobody will be copied.', false);
+      });
+    });
     const backupBtn = document.getElementById('invBackupBtn');
     if (backupBtn) backupBtn.addEventListener('click', downloadBackup);
   }
@@ -216,6 +362,13 @@ const InvoicePreview = (function () {
     if (statusEl) { statusEl.textContent = ''; statusEl.className = 'inv-status'; }
 
     try {
+      // Written now rather than when it was ticked, so the addresses QuickBooks
+      // reads are the ones on screen at the moment the button was pressed.
+      const saved = await saveCc();
+      if (saved && saved.error) {
+        throw new Error('Could not save who to copy, so nothing was sent: ' + saved.error.message);
+      }
+
       const { res, json } = await call(current, false);
       if (!res.ok || !json.ok) throw new Error(json.error || `Push failed (${res.status})`);
 

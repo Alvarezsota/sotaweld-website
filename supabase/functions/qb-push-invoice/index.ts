@@ -826,8 +826,6 @@ Deno.serve(async (req) => {
         ...(docNumber ? { DocNumber: docNumber } : {}),
         // A PO number is what the customer's own accounts department matches
         // against, so it goes where QuickBooks prints it rather than into a memo.
-        // A PO number is what the customer's own accounts department matches
-        // against, so it goes where QuickBooks prints it rather than into a memo.
         ...(payload.po_number ? { CustomerMemo: { value: `PO ${payload.po_number}` } } : {}),
         ...billTo,
         Line: (payload.lines as Array<Record<string, unknown>>).map((l) => ({
