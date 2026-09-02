@@ -113,10 +113,16 @@ function rateTag(l) {
  * and the invoice is drawn in SQL. If the two disagree, the office signs off on
  * one grouping and bills another. Change one, change the other.
  */
-function anchorJobId(job, jobs) {
+function anchorJobId(job, jobs, week) {
   if (!job || !job.bill_with_customer || !job.qb_customer_id) return job ? job.id : null;
-  const family = jobs.filter(j =>
-    j.bill_with_customer && j.qb_customer_id && j.qb_customer_id === job.qb_customer_id);
+  // Merging never reaches backwards. A week billed before the jobs were put
+  // together keeps the grouping it was billed under, or the portal would stop
+  // matching invoices the customer is already holding.
+  const live = (j) => j.bill_with_customer && j.qb_customer_id
+    && j.bill_with_customer_from && week >= j.bill_with_customer_from;
+  if (!live(job)) return job.id;
+
+  const family = jobs.filter(j => j.qb_customer_id === job.qb_customer_id && live(j));
   if (!family.length) return job.id;
   // order by created_at nulls last, id -- same as the database.
   family.sort((a, b) =>
@@ -130,7 +136,7 @@ function buildJobGroups(entries, jobs) {
   entries.forEach(e => {
     const job = jobs.find(j => j.id === e.job_id);
     const isYardEntry = job && job.is_yard;
-    const billsUnder = e.job_id ? anchorJobId(job, jobs) : null;
+    const billsUnder = e.job_id ? anchorJobId(job, jobs, ymd(weekStart)) : null;
     const effectiveJobId = isYardEntry && e.for_job_id ? e.for_job_id : (billsUnder || `oneoff:${e.one_off_name}`);
     const effectiveJob = e.job_id
       ? (isYardEntry && e.for_job_id ? jobs.find(j => j.id === e.for_job_id) : (jobs.find(j => j.id === effectiveJobId) || job))
