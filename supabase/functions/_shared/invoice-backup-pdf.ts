@@ -101,6 +101,9 @@ export type BackupLine = {
   name: string; kind: string; hours: number; bill_rate: number;
   per_diem: boolean; per_diem_rate: number; billed: number;
   stainless: boolean;
+  // What the man typed on his ticket that day. Goes to the customer -- see the
+  // note where it is drawn.
+  description?: string | null;
 };
 export type BackupDay = { date: string; lines: BackupLine[] };
 export type BackupPerson = {
@@ -336,11 +339,21 @@ export async function buildInvoiceBackup(
     openDay = d.date;
 
     for (const l of d.lines) {
-      // Stainless is a fact about the rate on the line and belongs on a sheet
-      // that shows the rate. The typed description and the name of whatever
-      // other job the man passed through do not: one is free text and the other
-      // is another customer's business.
-      const note = l.stainless ? 'Stainless' : '';
+      // Stainless is a fact about the rate on the line. The description is what
+      // the man typed on his ticket that day, and it is here because the whole
+      // question this sheet answers is "who were those hours" -- "and what did
+      // they do" is the other half of it.
+      //
+      // IT IS FREE TEXT AND IT GOES TO THE CUSTOMER. It has bitten once: "Also
+      // helped at the yard in the valtek bench" was typed on a MasTec ticket
+      // and this sheet put it in front of MasTec, which is why it was taken off
+      // in the first place. It is back deliberately, asked for by name, on the
+      // understanding that a description can be corrected on Approvals before
+      // the week is approved and the sheet can be read with the Crew time sheet
+      // button before the invoice is pushed. Both of those are the office's to
+      // do; nothing here can tell whether a sentence is fit to send.
+      const note = [l.stainless ? 'Stainless' : '', (l.description || '').trim()]
+        .filter(Boolean).join('  \u00B7  ');
       const rowH = note ? 25 : 16;
       room(rowH, dayHeader);
 
