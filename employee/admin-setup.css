@@ -8,7 +8,7 @@
 .section-note2 span { font-size: 13px; color: var(--dim); font-weight: 500; line-height: 1.5; }
 .btn2.small { font-size: 13px; padding: 8px 14px; white-space: nowrap; }
 
-.jt-head, .jt-row { display: grid; grid-template-columns: 1.8fr 1fr 1.1fr .85fr .65fr .7fr .7fr .7fr .7fr .6fr .6fr .6fr 36px; align-items: center; gap: 8px; }
+.jt-head, .jt-row { display: grid; grid-template-columns: 1.7fr .95fr 1.05fr .8fr .8fr .6fr .65fr .65fr .65fr .65fr .58fr .58fr .58fr 36px; align-items: center; gap: 8px; }
 .jt-head { padding: 6px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); font-weight: 700; }
 .jt-head .c { text-align: center; }
 .jt-row { background: var(--steel-850); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; margin-bottom: 7px; }
@@ -58,12 +58,22 @@
 .pw-err { color: var(--danger); }
 
 @media (max-width: 640px) {
-  .jt-head span:nth-child(3), .jt-row > *:nth-child(3),
-  .jt-head span:nth-child(5), .jt-row .pd-cell,
-  .jt-head span:nth-child(6), .jt-row .billrate-cell,
-  .jt-head span:nth-child(7), .jt-row .stainless-cell,
-  .jt-head span:nth-child(8), .jt-row .helperrate-cell { display: none; }
-  .jt-head, .jt-row { grid-template-columns: 1.4fr .9fr .9fr .65fr .65fr .65fr .65fr 36px; }
+  /* On a phone the row keeps what a job is and whether it is on: name,
+     operator, bid number, the two toggles and active. The money columns and
+     the two customer ones come back on a wider screen.
+     Header cells are hidden by position, row cells by class, because the row
+     builds its money cells with classes and the header does not. Positions
+     here are: 1 Job, 2 Operator, 3 Bills to, 4 Bid #, 5 PO #, 6 Per diem,
+     7 Bill rate, 8 Stainless, 9 Helper, 10 Bill together, 11 Lump sum,
+     12 Hours, 13 Active, 14 delete. */
+  .jt-head span:nth-child(3),  .jt-row > *:nth-child(3),
+  .jt-head span:nth-child(5),  .jt-row > *:nth-child(5),
+  .jt-head span:nth-child(6),  .jt-row .pd-cell,
+  .jt-head span:nth-child(7),  .jt-row .billrate-cell,
+  .jt-head span:nth-child(8),  .jt-row .stainless-cell,
+  .jt-head span:nth-child(9),  .jt-row .helperrate-cell,
+  .jt-head span:nth-child(10), .jt-row > *:nth-child(10) { display: none; }
+  .jt-head, .jt-row { grid-template-columns: 1.5fr .95fr .8fr .62fr .62fr .62fr 36px; }
   .p-head span:nth-child(2), .p-row > *:nth-child(2) { display: none; }
   .p-head, .p-row { grid-template-columns: 1.8fr 1fr 1fr .8fr; }
   .helpers-row-grid { grid-template-columns: 1.8fr 1fr 1fr .8fr 20px !important; }
