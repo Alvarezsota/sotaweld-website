@@ -306,6 +306,18 @@ function updateShortWarning() {
   const box = document.getElementById('shortWarn');
   if (!box) return;
 
+  const short = shortCustomers();
+  if (!short.length) { box.hidden = true; return; }
+
+  document.getElementById('shortWarnList').innerHTML = short.map(c =>
+    `${esc(c.name)} &mdash; <span class="wr-short-warn-short">${fmt(c.inches)} in of ${fmt(c.min)}</span>,
+     <b>${fmt(c.min - c.inches)} in short</b>`).join('<br>');
+  box.hidden = false;
+}
+
+// The customers this report is short on, and by how much. Shared by the inline
+// flag and the dialog at submit so the two can never disagree with each other.
+function shortCustomers() {
   const byCustomer = {};
   entriesContainer.querySelectorAll('.wr-entry').forEach(el => {
     const entry = entries.find(e => e.uid === el.dataset.entryUid);
@@ -314,18 +326,75 @@ function updateShortWarning() {
     const acc = byCustomer[cust.id] || (byCustomer[cust.id] = { name: cust.name, min: cust.min, inches: 0 });
     acc.inches += Number(el.dataset.grand || 0);
   });
-
   // Nothing logged for a customer yet is not a short day, it is an empty form.
-  const short = Object.values(byCustomer)
+  return Object.values(byCustomer)
     .filter(c => c.inches > 0 && c.inches < c.min)
     .sort((a, b) => (a.min - a.inches) - (b.min - b.inches));
+}
 
-  if (!short.length) { box.hidden = true; return; }
+// "tomorrow" is wrong on a Saturday - the next one they will be on the pipe is
+// Monday, and telling a man to pick it up tomorrow when tomorrow is his day off
+// reads as though nobody looked at a calendar.
+function nextWorkDayLabel(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d)) return 'tomorrow';
+  const day = d.getDay();               // 0 Sun ... 6 Sat
+  if (day === 6) return 'Monday';       // Saturday -> Monday
+  if (day === 5) return 'tomorrow';     // Friday -> Saturday, they work it
+  return 'tomorrow';
+}
 
-  document.getElementById('shortWarnList').innerHTML = short.map(c =>
-    `${esc(c.name)} &mdash; <span class="wr-short-warn-short">${fmt(c.inches)} in of ${fmt(c.min)}</span>,
-     <b>${fmt(c.min - c.inches)} in short</b>`).join('<br>');
-  box.hidden = false;
+function firstNameOf(full) {
+  const n = String(full || '').trim().split(/\s+/)[0];
+  return n || '';
+}
+
+// Asks the man to acknowledge a short day before it is filed. Resolves true to
+// carry on with the submit, false if he wants to go back and look at it again.
+//
+// It never refuses the submit. A short day is still the day's work, and the
+// point of stopping him here is that he reads it once rather than finding out
+// on Friday.
+function confirmShortDay() {
+  const short = shortCustomers();
+  const modal = document.getElementById('shortModal');
+  if (!short.length || !modal) return Promise.resolve(true);
+
+  const first = firstNameOf(currentProfile && currentProfile.full_name);
+  const when = nextWorkDayLabel(dateInput.value || todayIso());
+  const total = short.reduce((s, c) => s + (c.min - c.inches), 0);
+
+  document.getElementById('shortModalLead').innerHTML =
+    (first ? esc(first) + ', your' : 'Your') + ' report is short of the inches '
+    + (short.length === 1 ? 'this customer expects' : 'these customers expect') + ' in a day.';
+
+  document.getElementById('shortModalNums').innerHTML = short.map(c =>
+    `${esc(c.name)}<br>${fmt(c.inches)} in of ${fmt(c.min)} &mdash;
+     <span class="wr-modal-gap">${fmt(c.min - c.inches)} in short</span>`).join('<br><br>');
+
+  document.getElementById('shortModalEncourage').textContent =
+    `Nothing to fix tonight — go home. See if you can pick up those ${fmt(total)} inches ${when}.`;
+
+  modal.hidden = false;
+
+  return new Promise((resolve) => {
+    const go   = document.getElementById('shortModalGo');
+    const back = document.getElementById('shortModalBack');
+    function done(answer) {
+      modal.hidden = true;
+      go.removeEventListener('click', onGo);
+      back.removeEventListener('click', onBack);
+      document.removeEventListener('keydown', onKey);
+      resolve(answer);
+    }
+    function onGo()  { done(true); }
+    function onBack(){ done(false); }
+    function onKey(e){ if (e.key === 'Escape') done(false); }
+    go.addEventListener('click', onGo);
+    back.addEventListener('click', onBack);
+    document.addEventListener('keydown', onKey);
+    go.focus();
+  });
 }
 
 function recalcGrand() {
@@ -715,6 +784,10 @@ submitBtn.addEventListener('click', async () => {
       return;
     }
   }
+
+  // Last thing before it is filed, so the numbers it quotes are the ones being
+  // submitted rather than whatever they were a few keystrokes ago.
+  if (!(await confirmShortDay())) return;
 
   submitBtn.disabled = true;
   submitBtn.textContent = 'Saving...';

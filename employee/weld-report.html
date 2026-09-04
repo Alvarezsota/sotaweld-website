@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="sota-build" content="20260903a">
+<meta name="sota-build" content="20260903b">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>Weld Report | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260903a">
-<link rel="stylesheet" href="weld-report.css?v=20260903a">
+<link rel="stylesheet" href="dark-theme.css?v=20260903b">
+<link rel="stylesheet" href="weld-report.css?v=20260903b">
 </head>
 <body>
 
@@ -83,6 +83,27 @@
   </div>
 </div>
 
+<!-- Shown on Submit when the day came in under the customer's expected inches.
+     It is an acknowledgement, not a gate: the only way it ends is the report
+     being submitted or the man going back to correct what he typed. -->
+<div class="wr-modal" id="shortModal" hidden>
+  <div class="wr-modal-card" role="dialog" aria-modal="true" aria-labelledby="shortModalTitle">
+    <div class="wr-modal-hd" id="shortModalTitle">Today came in under the mark</div>
+    <p class="wr-modal-lead" id="shortModalLead"></p>
+    <div class="wr-modal-nums" id="shortModalNums"></div>
+    <p class="wr-modal-body">
+      Your report is right to submit as it is &mdash; log what you actually welded, never more.
+      If something held you up today, add a line under <b>Miscellaneous / Off-chart</b> so the
+      office sees why instead of guessing.
+    </p>
+    <p class="wr-modal-body wr-modal-encourage" id="shortModalEncourage"></p>
+    <div class="wr-modal-btns">
+      <button type="button" class="btn2 btn2-line" id="shortModalBack">Go back and check</button>
+      <button type="button" class="btn2 btn2-solid" id="shortModalGo">Submit my report</button>
+    </div>
+  </div>
+</div>
+
 <div id="successScreen" style="display:none;">
   <div class="de-wrap success2">
     <div class="success-ring2">&#10003;</div>
@@ -93,8 +114,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260903a"></script>
-<script src="weld-report.js?v=20260903a"></script>
+<script src="supabase-client.js?v=20260903b"></script>
+<script src="weld-report.js?v=20260903b"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>
