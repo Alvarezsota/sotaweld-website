@@ -75,6 +75,19 @@ const weekLabel = (start: string) => {
   const [, em, ed] = end.split('-').map(Number);
   return `Work week ${MON[sm - 1]} ${sd} – ${MON[em - 1]} ${ed}`;
 };
+/* Payday is the Friday after the work week closes.
+ *
+ * A week runs Monday to Sunday, so that Friday is eleven days on from its
+ * Monday - Mon 24 Aug is worked, Sun 30 Aug closes it, and it is paid Fri 4 Sep.
+ * Derived rather than stored, because it is the same rule every week and a date
+ * somebody has to remember to type is a date that eventually goes in wrong. */
+const payDateIso = (weekStart: string) => addDaysIso(weekStart, 11);
+const longDate = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return `${DOW[dt.getUTCDay()]}, ${MON[m - 1]} ${d}, ${y}`;
+};
+
 const weekFolder = (start: string) =>
   `Week of ${usDate(start)} to ${usDate(addDaysIso(start, 6))}`;
 
@@ -164,13 +177,16 @@ async function buildStatement(
        MARGIN, y, 9.5, reg, GREY);
   y -= 22;
 
-  // ---- check # / pay date, filled in by hand ----
+  // ---- check # (by hand) and pay date (worked out) ----
   page.drawRectangle({ x: MARGIN, y: y - 34, width: CONTENT, height: 40,
                        color: SOFT, borderColor: LINE, borderWidth: 1 });
   text('CHECK #', MARGIN + 12, y - 6, 8, bold, GREY);
   page.drawLine({ start: { x: MARGIN + 12, y: y - 24 }, end: { x: MARGIN + 150, y: y - 24 }, thickness: 0.8, color: LINE });
+  // Printed rather than ruled. The check number still varies and is still
+  // written in by hand; the pay date never varies, so leaving it blank only
+  // meant every statement went out with an empty box on it.
   text('PAY DATE', MARGIN + 190, y - 6, 8, bold, GREY);
-  page.drawLine({ start: { x: MARGIN + 190, y: y - 24 }, end: { x: MARGIN + 328, y: y - 24 }, thickness: 0.8, color: LINE });
+  text(longDate(payDateIso(weekStart)), MARGIN + 190, y - 22, 10, bold);
   y -= 52;
 
   // ---- day table ----
