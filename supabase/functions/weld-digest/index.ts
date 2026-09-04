@@ -5,9 +5,16 @@
 // to the customer, and a log covering Rocking Double S and BT Constructors in one
 // document cannot be forwarded to either of them without editing it first.
 //
-// So the day is split by who gets billed - jobs.bill_to - and each customer gets
-// its own email, its own subject line and its own PDF. Forwarding one is now the
-// whole job rather than the start of one.
+// So the day is split by who gets billed and each customer gets its own email,
+// its own subject line and its own PDF. Forwarding one is now the whole job
+// rather than the start of one.
+//
+// Who gets billed is the QuickBooks customer the job is linked to, never the
+// bill_to text. Splitting on the text meant "Rocking Double S LLC" typed on one
+// job and "ROCKING DOUBLE S LLC" picked from the dropdown on the next were two
+// different companies, and one day's welding went out as two logs that each
+// looked complete. Two jobs pointing at the same customer are the same customer,
+// whatever anybody typed.
 //
 // A welder who worked two customers in a day appears in both, with only that
 // customer's inches under his name. His hours are the day's hours and are shown
@@ -28,7 +35,10 @@ const NO_CUSTOMER = "Unassigned";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  // x-sota-secret is on this list because the database calls this function with
+  // it. It was added to the deployed copy and never made it back to the repo, so
+  // a later deploy from here would have quietly dropped it and failed preflight.
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sota-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -145,6 +155,7 @@ Deno.serve(async (req) => {
 
     let targetDate: string;
     let toEmail = DEFAULT_ALERT_EMAIL;
+    let onlyCustomer: string | null = null;
     let ccList: string[] = [];
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -180,6 +191,10 @@ Deno.serve(async (req) => {
       toEmail = body.to || DEFAULT_ALERT_EMAIL;
       if (Array.isArray(body.cc)) ccList = body.cc.map((s: string) => s.trim()).filter(Boolean);
       else if (typeof body.cc === "string") ccList = body.cc.split(",").map((s: string) => s.trim()).filter(Boolean);
+      // Re-sending one customer's log should not re-send everybody else's. Naming
+      // a customer sends that bundle only; the day is still read whole, so the
+      // "other customers were worked that day" note stays true.
+      if (typeof body.customer === "string" && body.customer.trim()) onlyCustomer = body.customer.trim();
     } else {
       const now = new Date();
       const todayChicago = chicagoDateString(now);
@@ -194,7 +209,7 @@ Deno.serve(async (req) => {
         .select("*, profiles!weld_reports_welder_id_fkey(full_name)")
         .eq("report_date", targetDate)
         .order("total_inches", { ascending: false }),
-      supabase.from("jobs").select("id, name, is_yard, bill_to"),
+      supabase.from("jobs").select("id, name, is_yard, bill_to, qb_customer_id, qb_customer_name"),
       supabase.from("daily_entries").select("id, welder_id, hours").eq("entry_date", targetDate),
       supabase.from("helpers_public").select("id, name"),
     ]);
@@ -207,7 +222,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "no reports for " + targetDate }), { status: 200, headers: CORS_HEADERS });
     }
 
-    const jobsById: Record<string, { id: string; name: string; is_yard: boolean; bill_to: string | null }> = {};
+    const jobsById: Record<string, { id: string; name: string; is_yard: boolean; bill_to: string | null; qb_customer_id: string | null; qb_customer_name: string | null }> = {};
     (jobs || []).forEach((j) => { jobsById[j.id] = j; });
 
     const helperNameById: Record<string, string> = {};
@@ -262,10 +277,14 @@ Deno.serve(async (req) => {
       if (j) return j.name;
       return r.one_off_name || "One-off job";
     }
+    // The QuickBooks name first, so every job linked to that customer lands in
+    // one bundle however its bill_to was typed. The typed text is only a
+    // fallback, for a job with no customer picked yet.
     function customerFor(r: any): string {
       const j = effectiveJob(r);
-      const billTo = (j?.bill_to || "").trim();
-      return billTo || NO_CUSTOMER;
+      return (j?.qb_customer_name || "").trim()
+          || (j?.bill_to || "").trim()
+          || NO_CUSTOMER;
     }
 
     const dateLabel = new Date(targetDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
@@ -280,9 +299,22 @@ Deno.serve(async (req) => {
     const customers = Object.keys(byCustomer).sort((a, b) =>
       a === NO_CUSTOMER ? 1 : b === NO_CUSTOMER ? -1 : a.localeCompare(b));
 
+    // Named a customer? Match it loosely, so "rocking double s" finds
+    // "ROCKING DOUBLE S LLC" without anybody having to type it exactly.
+    const wanted = onlyCustomer
+      ? customers.filter((c) => c.toLowerCase().includes(onlyCustomer!.toLowerCase())
+                             || onlyCustomer!.toLowerCase().includes(c.toLowerCase()))
+      : customers;
+    if (onlyCustomer && !wanted.length) {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: `No weld reports for ${onlyCustomer} on ${targetDate}. Worked that day: ${customers.join(", ")}.`,
+      }), { status: 404, headers: CORS_HEADERS });
+    }
+
     const sent: any[] = [];
 
-    for (const customer of customers) {
+    for (const customer of wanted) {
       const custReports = byCustomer[customer];
       const grandTotal = custReports.reduce((s, r) => s + Number(r.total_inches), 0);
 
