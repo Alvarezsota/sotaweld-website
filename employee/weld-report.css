@@ -256,3 +256,9 @@
 }
 .wr-success-btns { width: 100%; max-width: 420px; }
 .wr-success-btns .btn2 { margin: 0; flex: 1 1 140px; min-width: 0; }
+
+/* The checking notice. Blue rather than the amber used for a short day: this
+   one is not about him, it is how the shop works. */
+.wr-modal-card-check { border-top-color: #7fb2e5; }
+.wr-modal-hd-check   { color: #7fb2e5; }
+.wr-modal-card-check .wr-modal-body:last-of-type { margin-bottom: 18px; }

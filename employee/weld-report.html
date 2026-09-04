@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="sota-build" content="20260903h">
+<meta name="sota-build" content="20260903i">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>Weld Report | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260903h">
-<link rel="stylesheet" href="weld-report.css?v=20260903h">
+<link rel="stylesheet" href="dark-theme.css?v=20260903i">
+<link rel="stylesheet" href="weld-report.css?v=20260903i">
 </head>
 <body>
 
@@ -105,6 +105,31 @@
   </div>
 </div>
 
+<!-- Shown after every report goes in, so it is read on the day rather than
+     found on a page nobody opens. Holds the countdown to the crew board until
+     it is dismissed, so nothing pulls the screen away mid-sentence. -->
+<div class="wr-modal" id="checkModal" hidden>
+  <div class="wr-modal-card wr-modal-card-check" role="dialog" aria-modal="true" aria-labelledby="checkModalTitle">
+    <div class="wr-modal-hd wr-modal-hd-check" id="checkModalTitle">How these numbers get checked</div>
+    <p class="wr-modal-body">
+      Every weld report is matched against the field reports coming off the job. The two have to
+      agree before anything gets billed, so what you turn in is what the customer sees.
+    </p>
+    <p class="wr-modal-body">
+      Nobody is trying to catch anyone out. Miscount a joint, fat-finger a number, forget a line
+      &mdash; tell the office and it gets put right, no more said. That happens and it is fine.
+    </p>
+    <p class="wr-modal-body">
+      Adding welds you did not run is a different thing altogether. It puts a bill in front of a
+      customer for work nobody did, and it is grounds for dismissal. Log what you actually welded
+      and this will never once be your problem.
+    </p>
+    <div class="wr-modal-btns">
+      <button type="button" class="btn2 btn2-solid" id="checkModalOk">Got it</button>
+    </div>
+  </div>
+</div>
+
 <div id="successScreen" style="display:none;">
   <div class="de-wrap success2">
     <div class="success-ring2">&#10003;</div>
@@ -119,8 +144,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260903h"></script>
-<script src="weld-report.js?v=20260903h"></script>
+<script src="supabase-client.js?v=20260903i"></script>
+<script src="weld-report.js?v=20260903i"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

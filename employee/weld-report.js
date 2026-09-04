@@ -943,7 +943,9 @@ submitBtn.addEventListener('click', async () => {
     document.getElementById('successSub').textContent = `${grandNow} in logged for ${new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}. It'll be included in tonight's summary.`;
     document.getElementById('reportScreen').style.display = 'none';
     document.getElementById('successScreen').style.display = 'block';
-    startBoardCountdown();
+    // The notice first, every day, and the countdown only once it is closed -
+    // nothing should pull the screen away while a man is still reading it.
+    showCheckNotice(startBoardCountdown);
   } catch (err) {
     console.error(err);
     alert('Something went wrong saving. Please try again or contact the office.');
@@ -959,6 +961,34 @@ submitBtn.addEventListener('click', async () => {
    work and may have pressed it a moment too early, so anything he does - a
    button, a tap, a key - stops it and leaves him where he is. It only ever
    fires when he has done nothing at all. */
+/* The checking notice, shown after every report goes in.
+ *
+ * On submit rather than on the crew board, because a man who files his report
+ * and closes the phone never sees the board, and this is the one moment every
+ * day when he is certain to be looking.
+ *
+ * Whatever comes next is handed in rather than assumed, so the countdown to the
+ * board cannot start behind it and take the screen away mid-sentence. */
+function showCheckNotice(next) {
+  const modal = document.getElementById('checkModal');
+  const ok = document.getElementById('checkModalOk');
+  if (!modal || !ok) { if (next) next(); return; }
+
+  modal.hidden = false;
+
+  function done() {
+    modal.hidden = true;
+    ok.removeEventListener('click', done);
+    document.removeEventListener('keydown', onKey);
+    if (next) next();
+  }
+  function onKey(e) { if (e.key === 'Escape' || e.key === 'Enter') done(); }
+
+  ok.addEventListener('click', done);
+  document.addEventListener('keydown', onKey);
+  ok.focus();
+}
+
 const BOARD_URL = 'crew-board.html';
 let boardTimer = null;
 
