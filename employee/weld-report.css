@@ -225,3 +225,34 @@
   white-space: nowrap;
 }
 .wr-modal-basis { color: #7f8794; }
+
+/* The submitted screen. These live in daily-entry.css, which this page does not
+   load, so the screen has been rendering unstyled - a bare tick against the left
+   margin. Copied here rather than pulling in another stylesheet for three rules. */
+.success2 { padding: 40px 24px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.success-ring2 { width: 88px; height: 88px; border-radius: 50%; background: rgba(87,201,140,.12); border: 2px solid var(--ok); color: var(--ok); display: flex; align-items: center; justify-content: center; margin-bottom: 22px; font-size: 34px; }
+.success-title2 { font-size: 24px; font-weight: 800; margin: 0 0 8px; }
+.success-sub2 { color: var(--dim); font-size: 14px; margin: 0; max-width: 34ch; }
+
+/* After a report is filed, the crew board comes to him rather than him having
+   to go and find it. It is a countdown and not a jump: a man who wants to fix
+   something he just typed must be able to stop it, and any button or a touch on
+   the screen does. */
+.wr-goboard {
+  margin: 20px 0 0;
+  font-size: 13px;
+  color: var(--dim);
+}
+.wr-goboard[hidden] { display: none; }
+.wr-goboard b { color: #f0c078; }
+#goBoardCount { font-variant-numeric: tabular-nums; font-weight: 800; color: var(--text); }
+
+.wr-success-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.wr-success-btns { width: 100%; max-width: 420px; }
+.wr-success-btns .btn2 { margin: 0; flex: 1 1 140px; min-width: 0; }

@@ -943,6 +943,7 @@ submitBtn.addEventListener('click', async () => {
     document.getElementById('successSub').textContent = `${grandNow} in logged for ${new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}. It'll be included in tonight's summary.`;
     document.getElementById('reportScreen').style.display = 'none';
     document.getElementById('successScreen').style.display = 'block';
+    startBoardCountdown();
   } catch (err) {
     console.error(err);
     alert('Something went wrong saving. Please try again or contact the office.');
@@ -951,7 +952,55 @@ submitBtn.addEventListener('click', async () => {
   submitBtn.textContent = 'Submit Weld Report';
 });
 
+/* Off to the crew board once the report is in, so a man sees where his week
+   sits without going looking for it.
+
+   A countdown rather than a jump. He has just pressed the button on a day's
+   work and may have pressed it a moment too early, so anything he does - a
+   button, a tap, a key - stops it and leaves him where he is. It only ever
+   fires when he has done nothing at all. */
+const BOARD_URL = 'crew-board.html';
+let boardTimer = null;
+
+function stopBoardCountdown() {
+  if (boardTimer) { clearInterval(boardTimer); boardTimer = null; }
+  const note = document.getElementById('goBoardNote');
+  if (note) note.hidden = true;
+  document.removeEventListener('pointerdown', stopBoardCountdown, true);
+  document.removeEventListener('keydown', stopBoardCountdown, true);
+}
+
+function startBoardCountdown() {
+  const note = document.getElementById('goBoardNote');
+  const countEl = document.getElementById('goBoardCount');
+  if (!note || !countEl) return;
+
+  stopBoardCountdown();
+  let left = 4;
+  countEl.textContent = left;
+  note.hidden = false;
+
+  boardTimer = setInterval(() => {
+    left -= 1;
+    countEl.textContent = left > 0 ? left : 0;
+    if (left <= 0) {
+      stopBoardCountdown();
+      window.location.href = BOARD_URL;
+    }
+  }, 1000);
+
+  // Capture, so it stops before whatever he touched does its own job.
+  document.addEventListener('pointerdown', stopBoardCountdown, true);
+  document.addEventListener('keydown', stopBoardCountdown, true);
+}
+
+document.getElementById('goBoardBtn').addEventListener('click', () => {
+  stopBoardCountdown();
+  window.location.href = BOARD_URL;
+});
+
 document.getElementById('editAgainBtn').addEventListener('click', () => {
+  stopBoardCountdown();
   document.getElementById('successScreen').style.display = 'none';
   document.getElementById('reportScreen').style.display = 'block';
 });
