@@ -196,13 +196,14 @@ export async function buildInvoiceBackup(
   const route = [p.customer_name || p.bill_to, p.operator ? `on ${p.operator}` : null]
     .filter(Boolean).join('  \u00B7  ');
   text(route + (p.bid_number ? `  \u00B7  Bid #${p.bid_number}` : ''), MARGIN, y, 9.5, reg, GREY);
-  // Their representative on the job, on its own line and named as theirs.
-  // A sheet that reaches the customer's office has to say whose job it is on
-  // their side, or it goes round the building looking for an owner.
+  // The company representative on the job - the customer's man, not ours.
+  // A sheet that reaches their office has to say whose job it is on their side,
+  // or it goes round the building looking for an owner. It is on the face of
+  // the invoice too now, in CustomerMemo; this is the copy on the backup.
   const rep = (p.company_rep || '').trim();
   if (rep) {
     y -= 13;
-    text(`Their representative: ${rep}`, MARGIN, y, 9.5, reg, GREY);
+    text(`Company representative: ${rep}`, MARGIN, y, 9.5, reg, GREY);
   }
   y -= 24;
 

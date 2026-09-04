@@ -848,9 +848,26 @@ Deno.serve(async (req) => {
         TxnDate: payload.transaction_date,
         PrivateNote: payload.memo,
         ...(docNumber ? { DocNumber: docNumber } : {}),
-        // A PO number is what the customer's own accounts department matches
-        // against, so it goes where QuickBooks prints it rather than into a memo.
-        ...(payload.po_number ? { CustomerMemo: { value: `PO ${payload.po_number}` } } : {}),
+        // CustomerMemo is the block QuickBooks prints on the face of the
+        // invoice, so it is what the customer's office actually reads. Two
+        // things belong on it and there is only one of it, so they share it,
+        // one per line.
+        //
+        //   The PO number, because their accounts match the bill against it and
+        //   without it an invoice can sit in a queue until somebody rings up.
+        //
+        //   Their representative, because it was only on the crew sheet, which
+        //   is an attachment - a second click, and a name behind a second click
+        //   is a name nobody reads.
+        //
+        // Left off entirely when there is neither, rather than sending a blank.
+        ...(() => {
+          const memo = [
+            payload.po_number ? `PO ${payload.po_number}` : null,
+            payload.company_rep ? `Company representative: ${payload.company_rep}` : null,
+          ].filter(Boolean).join("\n");
+          return memo ? { CustomerMemo: { value: memo } } : {};
+        })(),
         ...billTo,
         ...settle,
         Line: (payload.lines as Array<Record<string, unknown>>).map((l) => ({
