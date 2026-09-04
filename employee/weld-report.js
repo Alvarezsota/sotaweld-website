@@ -332,18 +332,6 @@ function shortCustomers() {
     .sort((a, b) => (a.min - a.inches) - (b.min - b.inches));
 }
 
-// "tomorrow" is wrong on a Saturday - the next one they will be on the pipe is
-// Monday, and telling a man to pick it up tomorrow when tomorrow is his day off
-// reads as though nobody looked at a calendar.
-function nextWorkDayLabel(iso) {
-  const d = new Date(iso + 'T00:00:00');
-  if (isNaN(d)) return 'tomorrow';
-  const day = d.getDay();               // 0 Sun ... 6 Sat
-  if (day === 6) return 'Monday';       // Saturday -> Monday
-  if (day === 5) return 'tomorrow';     // Friday -> Saturday, they work it
-  return 'tomorrow';
-}
-
 function firstNameOf(full) {
   const n = String(full || '').trim().split(/\s+/)[0];
   return n || '';
@@ -361,7 +349,6 @@ function confirmShortDay() {
   if (!short.length || !modal) return Promise.resolve(true);
 
   const first = firstNameOf(currentProfile && currentProfile.full_name);
-  const when = nextWorkDayLabel(dateInput.value || todayIso());
   const total = short.reduce((s, c) => s + (c.min - c.inches), 0);
 
   document.getElementById('shortModalLead').innerHTML =
@@ -372,8 +359,11 @@ function confirmShortDay() {
     `${esc(c.name)}<br>${fmt(c.inches)} in of ${fmt(c.min)} &mdash;
      <span class="wr-modal-gap">${fmt(c.min - c.inches)} in short</span>`).join('<br><br>');
 
+  // No day is named. Which day a man is next on the pipe is not something this
+  // page knows - days off, weather, a job that ends - and naming the wrong one
+  // undoes the encouragement it was meant to carry.
   document.getElementById('shortModalEncourage').textContent =
-    `Nothing to fix tonight — go home. See if you can pick up those ${fmt(total)} inches ${when}.`;
+    `Nothing to fix tonight — go home. Let's make up those ${fmt(total)} inches next time out.`;
 
   modal.hidden = false;
 
