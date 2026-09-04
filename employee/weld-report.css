@@ -94,6 +94,42 @@
 }
 .wr-big-warn-ack input { width: 17px; height: 17px; accent-color: #e8a33d; cursor: pointer; }
 
+/* Below the day's expected inches for this customer. Red rather than the amber
+   used above, because that one is a question about how a weld was logged and
+   this one is a number that is simply short. */
+.wr-short-warn {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #7a2b2b;
+  border-left: 4px solid #e0554f;
+  border-radius: 8px;
+  background: rgba(224, 85, 79, 0.08);
+}
+.wr-short-warn[hidden] { display: none; }
+.wr-short-warn-hd {
+  font-weight: 800;
+  font-size: 14px;
+  color: #f0a3a0;
+  margin-bottom: 8px;
+}
+.wr-short-warn-list {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f7dedd;
+  line-height: 1.7;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+}
+.wr-short-warn-short { color: #ff8b85; font-variant-numeric: tabular-nums; }
+.wr-short-warn-txt {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #dcbfbd;
+  margin: 0;
+}
+
 
 /* Helper-present picker. Sits with the date because it describes the whole day,
    not one job - a welder with three tickets should answer this once. */

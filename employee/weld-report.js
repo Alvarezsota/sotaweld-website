@@ -1,6 +1,10 @@
 let currentUser = null;
 let currentProfile = null;
 let jobs = [];
+// What a day is expected to produce, per QuickBooks customer, from
+// customer_weld_targets. Empty until it loads, and an empty one simply means no
+// warning - a target nobody set must never invent one.
+let weldTargets = {};
 let weldersList = [];
 let entries = [];
 
@@ -276,6 +280,54 @@ function updateBigWeldWarning(entryEl) {
   return !(ack && ack.checked);
 }
 
+// Which customer this entry's inches belong to. Yard work hops to the job it
+// was done for, the same hop the billing and the weld log make, so a day in the
+// yard for Rocking Double S is judged against Rocking Double S.
+function targetCustomerFor(entry) {
+  if (!entry || !entry.jobId || entry.jobId === 'other') return null;
+  let j = jobs.find(x => x.id === entry.jobId);
+  if (j && j.is_yard && entry.forJobId) j = jobs.find(x => x.id === entry.forJobId) || j;
+  if (!j || !j.qb_customer_id) return null;
+  const t = weldTargets[String(j.qb_customer_id)];
+  if (!t) return null;
+  return { id: String(j.qb_customer_id), name: t.name || j.qb_customer_name || j.bill_to, min: t.min };
+}
+
+// Tells the welder he is under the day's number before he submits, per customer.
+//
+// Per customer rather than on the day's grand total, because a man who split his
+// day between two jobsites has not under-produced on either just because neither
+// half reaches a full day's target on its own. Each customer is measured against
+// its own number and only the ones actually short are named.
+//
+// This never blocks Submit. What he welded is what goes on the report; the
+// warning is so he knows where he stands, not a gate to argue with.
+function updateShortWarning() {
+  const box = document.getElementById('shortWarn');
+  if (!box) return;
+
+  const byCustomer = {};
+  entriesContainer.querySelectorAll('.wr-entry').forEach(el => {
+    const entry = entries.find(e => e.uid === el.dataset.entryUid);
+    const cust = targetCustomerFor(entry);
+    if (!cust) return;
+    const acc = byCustomer[cust.id] || (byCustomer[cust.id] = { name: cust.name, min: cust.min, inches: 0 });
+    acc.inches += Number(el.dataset.grand || 0);
+  });
+
+  // Nothing logged for a customer yet is not a short day, it is an empty form.
+  const short = Object.values(byCustomer)
+    .filter(c => c.inches > 0 && c.inches < c.min)
+    .sort((a, b) => (a.min - a.inches) - (b.min - b.inches));
+
+  if (!short.length) { box.hidden = true; return; }
+
+  document.getElementById('shortWarnList').innerHTML = short.map(c =>
+    `${esc(c.name)} &mdash; <span class="wr-short-warn-short">${fmt(c.inches)} in of ${fmt(c.min)}</span>,
+     <b>${fmt(c.min - c.inches)} in short</b>`).join('<br>');
+  box.hidden = false;
+}
+
 function recalcGrand() {
   let grand = 0;
   entriesContainer.querySelectorAll('.wr-entry').forEach(el => { grand += Number(el.dataset.grand || 0); });
@@ -322,6 +374,8 @@ function updateSubmitState() {
   submitBtn.disabled = !!missing;
   const hintEl = document.getElementById('submitHint');
   if (hintEl) hintEl.textContent = missing;
+
+  updateShortWarning();
 }
 
 function buildBreakdownForEntry(entryEl, partnerId, partnerName) {
@@ -793,14 +847,23 @@ async function requireAuth() {
   dateInput.value = todayIso();
   dateInput.max = todayIso();
 
-  const [{ data: jobsData }, { data: weldersData }, { data: helpersData }] = await Promise.all([
+  const [{ data: jobsData }, { data: weldersData }, { data: helpersData }, { data: targetsData }] = await Promise.all([
     sb.from('jobs').select('*').eq('active', true).order('name'),
     sb.from('welders_public').select('*').order('full_name'),
-    sb.from('helpers_public').select('id, name').eq('active', true).order('name')
+    sb.from('helpers_public').select('id, name').eq('active', true).order('name'),
+    sb.from('customer_weld_targets').select('qb_customer_id, qb_customer_name, min_inches_per_day')
   ]);
   jobs = jobsData || [];
   weldersList = weldersData || [];
   helpersList = helpersData || [];
+  // A customer with no row here gets no warning at all. Failing to load the
+  // targets must leave the page working, not flag every day as short.
+  weldTargets = {};
+  (targetsData || []).forEach(t => {
+    const min = Number(t.min_inches_per_day);
+    if (!t.qb_customer_id || !(min > 0)) return;
+    weldTargets[String(t.qb_customer_id)] = { name: t.qb_customer_name, min };
+  });
   fillHelperPicker();
 
   // Same reason as ensureHelperListed: a page left open all week has a stale

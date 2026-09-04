@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="sota-build" content="20260902d">
+<meta name="sota-build" content="20260903a">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>Weld Report | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260902d">
-<link rel="stylesheet" href="weld-report.css?v=20260902d">
+<link rel="stylesheet" href="dark-theme.css?v=20260903a">
+<link rel="stylesheet" href="weld-report.css?v=20260903a">
 </head>
 <body>
 
@@ -69,6 +69,15 @@
       </div>
     </div>
 
+    <!-- Short of the day's expected inches for this customer. A warning only:
+         it never disables Submit, because what a man actually welded is what
+         goes on the report. -->
+    <div class="wr-short-warn" id="shortWarn" hidden>
+      <div class="wr-short-warn-hd">&#9873; Short of the day&rsquo;s production</div>
+      <div class="wr-short-warn-list" id="shortWarnList"></div>
+      <div class="wr-short-warn-txt">Log what you actually welded &mdash; do not pad it. If the day ran short for a reason (waiting on material, fit-up, weather, a breakdown), put that in <b>Miscellaneous / Off-chart</b> so the office can see why.</div>
+    </div>
+
     <button class="btn2 btn2-solid" id="submitBtn" style="width:100%; margin-top:16px;">Submit Weld Report</button>
     <div class="error-msg2" id="submitHint" style="text-align:center;"></div>
   </div>
@@ -84,8 +93,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260902d"></script>
-<script src="weld-report.js?v=20260902d"></script>
+<script src="supabase-client.js?v=20260903a"></script>
+<script src="weld-report.js?v=20260903a"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>
