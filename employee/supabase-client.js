@@ -214,37 +214,3 @@ checkBuild();
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') checkBuild();
 });
-
-/* Bring the page you are on into view in the nav.
- *
- * On a phone the nav is one row that scrolls sideways rather than three rows
- * that wrap, which is easier to read and to hit. But a scrolling row opens at
- * its left edge, and the current page can be anything up to twelfth in it - so
- * an admin opening the Crew Board saw a row starting at "Log Work" with no
- * indication that where he actually was sat off the right-hand side.
- *
- * The link marked current is scrolled to, once, on load. Instant rather than
- * smooth: this is where the row should have started, not a movement worth
- * watching. Wrapped because a nav is not worth an exception on a page that
- * otherwise works. */
-(function showCurrentNavLink() {
-  function bring() {
-    try {
-      const nav = document.getElementById('navLinks');
-      const here = nav && nav.querySelector('.et-link.on');
-      if (!nav || !here) return;
-      // Only when it actually scrolls. On a desktop the row is not scrollable
-      // and there is nothing to bring into view.
-      if (nav.scrollWidth <= nav.clientWidth + 4) return;
-      nav.scrollLeft = Math.max(0, here.offsetLeft - 12);
-    } catch { /* a nav that will not scroll is not a broken page */ }
-  }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bring);
-  } else {
-    bring();
-  }
-  // The admin links are unhidden after the profile loads, which changes the
-  // width of the row underneath whatever was just measured.
-  window.addEventListener('load', bring);
-})();

@@ -112,6 +112,8 @@ export type BackupPerson = {
 };
 export type BackupPayload = {
   job_name: string; customer_name: string | null; operator: string | null; bill_to: string | null;
+  // The customer's man on this job - theirs, not ours. Null on most jobs.
+  company_rep?: string | null;
   billing_type: string; week_start: string; week_end: string;
   invoice_no: string | null; bid_number: string | null;
   invoice_total: number; labor_amount: number;
@@ -194,6 +196,14 @@ export async function buildInvoiceBackup(
   const route = [p.customer_name || p.bill_to, p.operator ? `on ${p.operator}` : null]
     .filter(Boolean).join('  \u00B7  ');
   text(route + (p.bid_number ? `  \u00B7  Bid #${p.bid_number}` : ''), MARGIN, y, 9.5, reg, GREY);
+  // Their representative on the job, on its own line and named as theirs.
+  // A sheet that reaches the customer's office has to say whose job it is on
+  // their side, or it goes round the building looking for an owner.
+  const rep = (p.company_rep || '').trim();
+  if (rep) {
+    y -= 13;
+    text(`Their representative: ${rep}`, MARGIN, y, 9.5, reg, GREY);
+  }
   y -= 24;
 
   // ---- the four numbers, before any of the detail ----

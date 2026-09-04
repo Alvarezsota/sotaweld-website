@@ -33,6 +33,7 @@ function renderJobs() {
       ${billToCell(j)}
       <input class="cell-in bid job-bidnum" value="${escAttr(j.bid_number || '')}" placeholder="Bid #" title="Your bid or quote number for this job. Optional, works on any job, and prints on the invoice.">
       <input class="cell-in bid job-po" value="${escAttr(j.po_number || '')}" placeholder="PO #" title="The customer's purchase order number for this job. Theirs, not ours &mdash; their accounts match the bill against it, and without it an invoice can sit in a queue until somebody rings up. Prints on the invoice.">
+      <input class="cell-in job-rep" value="${escAttr(j.company_rep || '')}" placeholder="Their rep" title="The customer's representative on this job &mdash; their man, not ours. Prints on the crew sheet that goes out attached to the invoice, so whoever opens it at their end knows whose job it is on their side.">
       <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num job-pd" value="${escAttr(j.per_diem)}"></div>
       <div class="c pd-cell billrate-cell"><span class="pd-dollar">$</span><input class="cell-in num job-billrate" value="${escAttr(j.bill_rate)}" placeholder="Default" title="Override the welder's normal bill rate for this job. Leave blank to use their default rate."></div>
       <div class="c pd-cell stainless-cell"><span class="pd-dollar">$</span><input class="cell-in num job-stainless" value="${escAttr(j.stainless_bill_rate)}" title="Bill rate per hour when a welder flags stainless work on this job"></div>
@@ -194,6 +195,7 @@ document.getElementById('jobsTable').addEventListener('blur', async (e) => {
   else if (e.target.classList.contains('job-helperrate')) patch = { helper_bill_rate: num(e.target.value) };
   else if (e.target.classList.contains('job-bidnum')) patch = { bid_number: e.target.value.trim() || null };
   else if (e.target.classList.contains('job-po')) patch = { po_number: e.target.value.trim() || null };
+  else if (e.target.classList.contains('job-rep')) patch = { company_rep: e.target.value.trim() || null };
   if (!patch) return;
 
   Object.assign(job, patch);
