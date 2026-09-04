@@ -11,6 +11,7 @@
 
 let currentUser = null;
 let weekStart = null;                 // Monday of the week on screen
+let sortBy = 'inches';                // 'inches' or 'rate' - a view, never a write
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -21,6 +22,7 @@ function esc(str) {
 }
 function fmt(n) { return Math.round(Number(n || 0) * 100) / 100; }
 function fmt0(n) { return Math.round(Number(n || 0)); }
+function fmt1(n) { return (Math.round(Number(n || 0) * 10) / 10).toFixed(1); }
 
 function ymd(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -59,19 +61,34 @@ function render(rows) {
   const byWelder = {};
   rows.forEach(r => {
     const w = byWelder[r.welder_id] || (byWelder[r.welder_id] = {
-      id: r.welder_id, name: r.welder_name, days: {}, total: 0,
+      id: r.welder_id, name: r.welder_name, days: {}, total: 0, hours: 0, rate: null,
     });
     w.days[r.report_date] = (w.days[r.report_date] || 0) + Number(r.inches || 0);
     w.total += Number(r.inches || 0);
+    // Only hours from days he actually turned a report in, so the rate divides
+    // the inches by the time that produced them. A day with no ticket filed
+    // leaves hours unknown rather than counting as zero.
+    if (r.hours != null && Number(r.hours) > 0) w.hours += Number(r.hours);
+  });
+  Object.values(byWelder).forEach(w => {
+    w.rate = w.hours > 0 ? w.total / w.hours : null;
   });
 
-  const welders = Object.values(byWelder).sort((a, b) => b.total - a.total);
+  // Inches is the headline; in/hr is the fair one. A man on eight hours reads
+  // lower than one on twelve on inches alone even when he outworked him, so the
+  // board can be read either way. Nothing is edited by this - it reorders rows.
+  const welders = Object.values(byWelder).sort((a, b) => sortBy === 'rate'
+    ? (b.rate == null ? -1 : a.rate == null ? 1 : b.rate - a.rate)
+    : b.total - a.total);
   const crewTotal = welders.reduce((s, w) => s + w.total, 0);
-  const best = welders[0] ? welders[0].total : 0;
+  const crewHours = welders.reduce((s, w) => s + w.hours, 0);
+  const bestTotal = Math.max(0, ...welders.map(w => w.total));
+  const bestRate  = Math.max(0, ...welders.map(w => w.rate || 0));
 
   totalsEl.innerHTML = `
     <div class="cb-stat"><span class="cb-stat-lbl">Crew this week</span><span class="cb-stat-val">${fmt0(crewTotal)} in</span></div>
-    <div class="cb-stat"><span class="cb-stat-lbl">Welders reporting</span><span class="cb-stat-val">${welders.length}</span></div>`;
+    <div class="cb-stat"><span class="cb-stat-lbl">Welders reporting</span><span class="cb-stat-val">${welders.length}</span></div>
+    <div class="cb-stat"><span class="cb-stat-lbl">Crew in/hr</span><span class="cb-stat-val">${crewHours > 0 ? fmt1(crewTotal / crewHours) : '—'}</span></div>`;
 
   const dates = DAYS.map((_, i) => ymd(addDays(weekStart, i)));
 
@@ -82,12 +99,15 @@ function render(rows) {
         <div class="cb-c-name">Welder</div>
         ${DAYS.map(d => `<div class="cb-c-day">${d}</div>`).join('')}
         <div class="cb-c-total">Week</div>
+        <div class="cb-c-rate">In/hr</div>
       </div>
       ${welders.map((w, i) => {
         const me = w.id === (currentUser && currentUser.id);
         // The bar is relative to the best week on the board, so the shape of it
         // reads at a glance without anybody doing arithmetic.
-        const pct = best > 0 ? Math.max(3, Math.round((w.total / best) * 100)) : 0;
+        const val  = sortBy === 'rate' ? (w.rate || 0) : w.total;
+        const best = sortBy === 'rate' ? bestRate : bestTotal;
+        const pct = best > 0 && val > 0 ? Math.max(3, Math.round((val / best) * 100)) : 0;
         return `
         <div class="cb-row${me ? ' cb-row-me' : ''}">
           <div class="cb-c-rank">${i + 1}</div>
@@ -102,6 +122,9 @@ function render(rows) {
             return `<div class="cb-c-day${v ? '' : ' cb-c-nil'}" data-day="${DAYS[di]}">${v ? fmt0(v) : '·'}</div>`;
           }).join('')}
           <div class="cb-c-total">${fmt0(w.total)}</div>
+          <div class="cb-c-rate${w.rate == null ? ' cb-c-nil' : ''}"
+               title="${w.rate == null ? 'No hours on his time ticket for the days he reported' : `${fmt0(w.total)} in over ${fmt(w.hours)} hrs`}"
+          >${w.rate == null ? '—' : fmt1(w.rate)}</div>
         </div>`;
       }).join('')}
     </div>`;
@@ -120,6 +143,15 @@ async function load() {
   }
   render(data || []);
 }
+
+document.querySelectorAll('.cb-sort-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (sortBy === btn.dataset.sort) return;
+    sortBy = btn.dataset.sort;
+    document.querySelectorAll('.cb-sort-btn').forEach(b => b.classList.toggle('on', b === btn));
+    load();
+  });
+});
 
 document.getElementById('prevWeekBtn').addEventListener('click', () => { weekStart = addDays(weekStart, -7); load(); });
 document.getElementById('nextWeekBtn').addEventListener('click', () => {

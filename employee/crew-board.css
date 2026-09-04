@@ -22,11 +22,21 @@
 .cb-stat-lbl { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); font-weight: 700; }
 .cb-stat-val { font-size: 22px; font-weight: 800; color: var(--ok); font-variant-numeric: tabular-nums; }
 
+.cb-sort { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.cb-sort-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--dim); margin-right: 2px; }
+.cb-sort-btn {
+  padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); color: var(--dim);
+  font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.cb-sort-btn:hover { color: var(--text); }
+.cb-sort-btn.on { background: #e8a33d; border-color: #e8a33d; color: #1a1206; }
+
 .cb-table { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card); }
 
 .cb-row {
   display: grid;
-  grid-template-columns: 34px minmax(150px, 1.6fr) repeat(7, minmax(38px, .5fr)) 62px;
+  grid-template-columns: 34px minmax(140px, 1.5fr) repeat(7, minmax(36px, .5fr)) 62px 56px;
   align-items: center;
   gap: 4px;
   padding: 10px 12px;
@@ -49,6 +59,12 @@
 .cb-c-day   { font-size: 13px; text-align: center; color: var(--text); }
 .cb-c-nil   { color: #4a5160; }
 .cb-c-total { font-size: 15px; font-weight: 800; text-align: right; color: var(--ok); }
+
+/* The fair number. Kept visually quieter than the week total so the board still
+   reads as a tally first, but present on every row so nobody has to divide. */
+.cb-c-rate  { font-size: 14px; font-weight: 800; text-align: right; color: #7fb2e5; font-variant-numeric: tabular-nums; }
+.cb-row-head .cb-c-rate { color: var(--dim); font-size: 11px; font-weight: 700; }
+.cb-c-rate.cb-c-nil { color: #4a5160; font-weight: 600; }
 
 .cb-you {
   display: inline-block; margin-left: 6px; padding: 1px 6px;
@@ -87,6 +103,11 @@
   .cb-c-rank  { grid-column: 1 / 2; grid-row: 1; font-size: 11px; }
   .cb-c-name  { grid-column: 2 / 6; grid-row: 1; font-size: 13.5px; }
   .cb-c-total { grid-column: 6 / 8; grid-row: 1; font-size: 17px; }
+  .cb-c-rate  { grid-column: 2 / 8; grid-row: 2; font-size: 12px; text-align: right; margin-top: 2px; }
+  .cb-c-rate::after { content: ' in/hr'; font-size: 10px; font-weight: 700; color: var(--dim); }
+  .cb-c-rate.cb-c-nil::after { content: ' — no hours on ticket'; }
+  .cb-c-rate.cb-c-nil { font-size: 10px; }
+  .cb-c-day   { grid-row: 3; }
   .cb-c-total::after {
     content: ' in';
     font-size: 11px;

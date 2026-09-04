@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="sota-build" content="20260903e">
+<meta name="sota-build" content="20260903f">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>Crew Board | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260903e">
-<link rel="stylesheet" href="crew-board.css?v=20260903e">
+<link rel="stylesheet" href="dark-theme.css?v=20260903f">
+<link rel="stylesheet" href="crew-board.css?v=20260903f">
 </head>
 <body>
 
@@ -57,6 +57,13 @@
 
   <div class="cb-totals" id="crewTotals"></div>
 
+  <!-- Reorders the rows. Changes nothing and saves nothing. -->
+  <div class="cb-sort" role="group" aria-label="Order the board by">
+    <span class="cb-sort-lbl">Order by</span>
+    <button type="button" class="cb-sort-btn on" data-sort="inches">Total inches</button>
+    <button type="button" class="cb-sort-btn" data-sort="rate">Inches per hour</button>
+  </div>
+
   <div id="boardBody"><p class="cb-empty">Loading&hellip;</p></div>
 
   <p class="cb-foot">
@@ -66,8 +73,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260903e"></script>
-<script src="crew-board.js?v=20260903e"></script>
+<script src="supabase-client.js?v=20260903f"></script>
+<script src="crew-board.js?v=20260903f"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>
