@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="sota-build" content="20260903e">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
-<title>My Weld Log | State of the Arc Welding</title>
+<title>Crew Board | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="dark-theme.css?v=20260903e">
-<link rel="stylesheet" href="my-weld-log.css?v=20260903e">
+<link rel="stylesheet" href="crew-board.css?v=20260903e">
 </head>
 <body>
 
@@ -21,8 +21,8 @@
   <nav class="et-links" id="navLinks">
     <a class="et-link" href="daily-entry.html">Log Work</a>
     <a class="et-link" href="weld-report.html">Weld Report</a>
-    <a class="et-link on" href="my-weld-log.html">My Weld Log</a>
-    <a class="et-link" href="crew-board.html">Crew Board</a>
+    <a class="et-link" href="my-weld-log.html">My Weld Log</a>
+    <a class="et-link on" href="crew-board.html">Crew Board</a>
     <a class="et-link" href="dashboard.html">Office</a>
     <span id="adminNavLinks" style="display:none;">
       <a class="et-link" href="admin-setup.html">Setup</a>
@@ -41,34 +41,33 @@
   </div>
 </header>
 
-<div class="mwl-wrap">
+<div class="cb-wrap">
 
-  <div class="mwl-head">
+  <div class="cb-head">
     <div>
-      <h1 class="mwl-title">My weld log</h1>
-      <p class="mwl-sub">What you turned in. This is a record only &mdash; to change a day, use
-        <a href="weld-report.html">Weld Report</a>.</p>
+      <h1 class="cb-title">Crew Board</h1>
+      <p class="cb-sub">Weld inches the crew has turned in this week. Look only &mdash; nothing here can be changed.</p>
+    </div>
+    <div class="cb-weeknav">
+      <button type="button" class="btn2 btn2-line cb-weekbtn" id="prevWeekBtn">&larr;</button>
+      <span class="cb-weeklbl" id="weekLabel">&nbsp;</span>
+      <button type="button" class="btn2 btn2-line cb-weekbtn" id="nextWeekBtn">&rarr;</button>
     </div>
   </div>
 
-  <div class="mwl-weeknav">
-    <button class="mwl-nav-btn" id="prevWeek" type="button" aria-label="Previous week">&#8249;</button>
-    <div class="mwl-week-label" id="weekLabel">&nbsp;</div>
-    <button class="mwl-nav-btn" id="nextWeek" type="button" aria-label="Next week">&#8250;</button>
-  </div>
+  <div class="cb-totals" id="crewTotals"></div>
 
-  <div class="mwl-total-card">
-    <span class="mwl-total-label">Week total</span>
-    <span class="mwl-total-value"><span id="weekTotal">0</span><span class="mwl-unit">in</span></span>
-  </div>
+  <div id="boardBody"><p class="cb-empty">Loading&hellip;</p></div>
 
-  <div id="daysBody"></div>
+  <p class="cb-foot">
+    Inches only. What each man welded, which job it was on and what it billed stay on his own report.
+  </p>
 
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase-client.js?v=20260903e"></script>
-<script src="my-weld-log.js?v=20260903e"></script>
+<script src="crew-board.js?v=20260903e"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>
