@@ -1,6 +1,16 @@
 let currentUser = null;
 let currentProfile = null;
 let jobs = [];
+// What a day is expected to produce, per QuickBooks customer, from
+// customer_weld_targets. Empty until it loads, and an empty one simply means no
+// warning - a target nobody set must never invent one.
+let weldTargets = {};
+
+// Hours off the time ticket for the day being reported, totalled per customer.
+// The ticket records hours against a job, so a man who split his day gets each
+// customer scaled by the hours he actually gave it rather than by the whole day.
+// Empty when no ticket has been filed yet, which is not the same as zero hours.
+let ticketHoursByCustomer = {};
 let weldersList = [];
 let entries = [];
 
@@ -276,6 +286,151 @@ function updateBigWeldWarning(entryEl) {
   return !(ack && ack.checked);
 }
 
+// Which customer this entry's inches belong to. Yard work hops to the job it
+// was done for, the same hop the billing and the weld log make, so a day in the
+// yard for Rocking Double S is judged against Rocking Double S.
+// The customer a job's work is billed and measured under, following the yard
+// hop. Takes ids rather than an entry so the time ticket can use it too.
+function targetCustomerForJob(jobId, forJobId) {
+  if (!jobId) return null;
+  let j = jobs.find(x => x.id === jobId);
+  if (j && j.is_yard && forJobId) j = jobs.find(x => x.id === forJobId) || j;
+  if (!j || !j.qb_customer_id) return null;
+  const t = weldTargets[String(j.qb_customer_id)];
+  if (!t) return null;
+  return {
+    id: String(j.qb_customer_id),
+    name: t.name || j.qb_customer_name || j.bill_to,
+    min: t.min,
+    baselineHours: t.baselineHours,
+  };
+}
+
+function targetCustomerFor(entry) {
+  if (!entry || !entry.jobId || entry.jobId === 'other') return null;
+  return targetCustomerForJob(entry.jobId, entry.forJobId);
+}
+
+// Tells the welder he is under the day's number before he submits, per customer.
+//
+// Per customer rather than on the day's grand total, because a man who split his
+// day between two jobsites has not under-produced on either just because neither
+// half reaches a full day's target on its own. Each customer is measured against
+// its own number and only the ones actually short are named.
+//
+// This never blocks Submit. What he welded is what goes on the report; the
+// warning is so he knows where he stands, not a gate to argue with.
+function updateShortWarning() {
+  const box = document.getElementById('shortWarn');
+  if (!box) return;
+
+  const short = shortCustomers();
+  if (!short.length) { box.hidden = true; return; }
+
+  document.getElementById('shortWarnList').innerHTML = short.map(c =>
+    `${esc(c.name)} &mdash; <span class="wr-short-warn-short">${fmt(c.inches)} in of ${fmt(c.target)}</span>,
+     <b>${fmt(c.target - c.inches)} in short</b>
+     <span class="wr-short-warn-basis">${targetBasis(c)}</span>`).join('<br>');
+  box.hidden = false;
+}
+
+// The customers this report is short on, and by how much. Shared by the inline
+// flag and the dialog at submit so the two can never disagree with each other.
+// Says where the target came from, so the number is never just asserted at him.
+// A man who worked twelve hours should be able to see that is why he is being
+// asked for 216 instead of 180.
+function targetBasis(c) {
+  if (!c.hours) return `(${fmt(c.min)} in for a ${fmt(c.baselineHours)} hr day \u2014 no hours on your ticket yet)`;
+  const perHour = fmt(c.min / c.baselineHours);
+  return `(${fmt(c.hours)} hrs \u00d7 ${perHour} in/hr)`;
+}
+
+function shortCustomers() {
+  const byCustomer = {};
+  entriesContainer.querySelectorAll('.wr-entry').forEach(el => {
+    const entry = entries.find(e => e.uid === el.dataset.entryUid);
+    const cust = targetCustomerFor(entry);
+    if (!cust) return;
+    const acc = byCustomer[cust.id] || (byCustomer[cust.id] = {
+      id: cust.id, name: cust.name, min: cust.min, baselineHours: cust.baselineHours, inches: 0,
+    });
+    acc.inches += Number(el.dataset.grand || 0);
+  });
+  // The number is quoted for a ten hour day. A man who worked twelve is owed a
+  // twelve hour target, and one sent home at eight should not be measured
+  // against a full one - so it is scaled by the hours actually on his ticket.
+  //
+  // No ticket filed yet means no hours to scale by, and inventing some would be
+  // worse than measuring him against the plain day. In that case the baseline
+  // stands and the wording says so.
+  Object.values(byCustomer).forEach(c => {
+    const hrs = ticketHoursByCustomer[c.id];
+    c.hours = hrs > 0 ? hrs : null;
+    c.target = c.hours ? fmt(c.min * (c.hours / c.baselineHours)) : c.min;
+  });
+
+  // Nothing logged for a customer yet is not a short day, it is an empty form.
+  return Object.values(byCustomer)
+    .filter(c => c.inches > 0 && c.inches < c.target)
+    .sort((a, b) => (a.target - a.inches) - (b.target - b.inches));
+}
+
+function firstNameOf(full) {
+  const n = String(full || '').trim().split(/\s+/)[0];
+  return n || '';
+}
+
+// Asks the man to acknowledge a short day before it is filed. Resolves true to
+// carry on with the submit, false if he wants to go back and look at it again.
+//
+// It never refuses the submit. A short day is still the day's work, and the
+// point of stopping him here is that he reads it once rather than finding out
+// on Friday.
+function confirmShortDay() {
+  const short = shortCustomers();
+  const modal = document.getElementById('shortModal');
+  if (!short.length || !modal) return Promise.resolve(true);
+
+  const first = firstNameOf(currentProfile && currentProfile.full_name);
+  const total = fmt(short.reduce((s, c) => s + (c.target - c.inches), 0));
+
+  document.getElementById('shortModalLead').innerHTML =
+    (first ? esc(first) + ', your' : 'Your') + ' report is short of the inches '
+    + (short.length === 1 ? 'this customer expects' : 'these customers expect') + ' in a day.';
+
+  document.getElementById('shortModalNums').innerHTML = short.map(c =>
+    `${esc(c.name)}<br>${fmt(c.inches)} in of ${fmt(c.target)} &mdash;
+     <span class="wr-modal-gap">${fmt(c.target - c.inches)} in short</span>
+     <br><span class="wr-modal-basis">${targetBasis(c)}</span>`).join('<br><br>');
+
+  // No day is named. Which day a man is next on the pipe is not something this
+  // page knows - days off, weather, a job that ends - and naming the wrong one
+  // undoes the encouragement it was meant to carry.
+  document.getElementById('shortModalEncourage').textContent =
+    `Nothing to fix tonight — go home. Let's make up those ${total} inches next time out.`;
+
+  modal.hidden = false;
+
+  return new Promise((resolve) => {
+    const go   = document.getElementById('shortModalGo');
+    const back = document.getElementById('shortModalBack');
+    function done(answer) {
+      modal.hidden = true;
+      go.removeEventListener('click', onGo);
+      back.removeEventListener('click', onBack);
+      document.removeEventListener('keydown', onKey);
+      resolve(answer);
+    }
+    function onGo()  { done(true); }
+    function onBack(){ done(false); }
+    function onKey(e){ if (e.key === 'Escape') done(false); }
+    go.addEventListener('click', onGo);
+    back.addEventListener('click', onBack);
+    document.addEventListener('keydown', onKey);
+    go.focus();
+  });
+}
+
 function recalcGrand() {
   let grand = 0;
   entriesContainer.querySelectorAll('.wr-entry').forEach(el => { grand += Number(el.dataset.grand || 0); });
@@ -322,6 +477,8 @@ function updateSubmitState() {
   submitBtn.disabled = !!missing;
   const hintEl = document.getElementById('submitHint');
   if (hintEl) hintEl.textContent = missing;
+
+  updateShortWarning();
 }
 
 function buildBreakdownForEntry(entryEl, partnerId, partnerName) {
@@ -574,6 +731,36 @@ function setHelper(id, why) {
 
 /* Nothing chosen yet, so offer whoever is already on his time ticket that day.
    It is only a suggestion - he can set it back to "Worked alone". */
+/* The hours on the time ticket for this day, per customer, which the day's
+   inch target is scaled by.
+
+   Deliberately not hung off the helper suggestion. That only runs when a report
+   already exists and none of its rows names a helper - so on a fresh report,
+   which is the normal case for a man logging his day, it never runs at all and
+   the hours were never read. A twelve hour day would have been measured against
+   the ten hour number, quietly, which is the exact thing this was built to stop.
+
+   Called on every path, and only after jobs and targets are loaded, because
+   without those a row cannot be resolved to a customer and every hour is
+   dropped on the floor. */
+async function loadTicketHours(date) {
+  ticketHoursByCustomer = {};
+  try {
+    const { data: rows } = await sb.from('daily_entries')
+      .select('hours, job_id, for_job_id')
+      .eq('welder_id', currentUser.id).eq('entry_date', date);
+    (rows || []).forEach((r) => {
+      const cust = targetCustomerForJob(r.job_id, r.for_job_id);
+      const hrs = Number(r.hours);
+      if (!cust || !(hrs > 0)) return;
+      ticketHoursByCustomer[cust.id] = (ticketHoursByCustomer[cust.id] || 0) + hrs;
+    });
+  } catch {
+    ticketHoursByCustomer = {};   // never judge a day against another day's hours
+  }
+  updateSubmitState();
+}
+
 async function suggestHelperFromTimeTicket(date) {
   try {
     const { data: rows } = await sb.from('daily_entries')
@@ -601,6 +788,10 @@ async function loadReportsForDate() {
   suggestedHelperId = '';
   entriesContainer.innerHTML = '';
   entries = [];
+
+  // Before the cards are built, so the first total drawn is measured against
+  // the right target rather than the ten hour one for a moment.
+  await loadTicketHours(date);
 
   const { data } = await sb.from('weld_reports')
     .select('*')
@@ -661,6 +852,10 @@ submitBtn.addEventListener('click', async () => {
       return;
     }
   }
+
+  // Last thing before it is filed, so the numbers it quotes are the ones being
+  // submitted rather than whatever they were a few keystrokes ago.
+  if (!(await confirmShortDay())) return;
 
   submitBtn.disabled = true;
   submitBtn.textContent = 'Saving...';
@@ -748,6 +943,9 @@ submitBtn.addEventListener('click', async () => {
     document.getElementById('successSub').textContent = `${grandNow} in logged for ${new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}. It'll be included in tonight's summary.`;
     document.getElementById('reportScreen').style.display = 'none';
     document.getElementById('successScreen').style.display = 'block';
+    // The notice first, every day, and the countdown only once it is closed -
+    // nothing should pull the screen away while a man is still reading it.
+    showCheckNotice(startBoardCountdown);
   } catch (err) {
     console.error(err);
     alert('Something went wrong saving. Please try again or contact the office.');
@@ -756,7 +954,83 @@ submitBtn.addEventListener('click', async () => {
   submitBtn.textContent = 'Submit Weld Report';
 });
 
+/* Off to the crew board once the report is in, so a man sees where his week
+   sits without going looking for it.
+
+   A countdown rather than a jump. He has just pressed the button on a day's
+   work and may have pressed it a moment too early, so anything he does - a
+   button, a tap, a key - stops it and leaves him where he is. It only ever
+   fires when he has done nothing at all. */
+/* The checking notice, shown after every report goes in.
+ *
+ * On submit rather than on the crew board, because a man who files his report
+ * and closes the phone never sees the board, and this is the one moment every
+ * day when he is certain to be looking.
+ *
+ * Whatever comes next is handed in rather than assumed, so the countdown to the
+ * board cannot start behind it and take the screen away mid-sentence. */
+function showCheckNotice(next) {
+  const modal = document.getElementById('checkModal');
+  const ok = document.getElementById('checkModalOk');
+  if (!modal || !ok) { if (next) next(); return; }
+
+  modal.hidden = false;
+
+  function done() {
+    modal.hidden = true;
+    ok.removeEventListener('click', done);
+    document.removeEventListener('keydown', onKey);
+    if (next) next();
+  }
+  function onKey(e) { if (e.key === 'Escape' || e.key === 'Enter') done(); }
+
+  ok.addEventListener('click', done);
+  document.addEventListener('keydown', onKey);
+  ok.focus();
+}
+
+const BOARD_URL = 'crew-board.html';
+let boardTimer = null;
+
+function stopBoardCountdown() {
+  if (boardTimer) { clearInterval(boardTimer); boardTimer = null; }
+  const note = document.getElementById('goBoardNote');
+  if (note) note.hidden = true;
+  document.removeEventListener('pointerdown', stopBoardCountdown, true);
+  document.removeEventListener('keydown', stopBoardCountdown, true);
+}
+
+function startBoardCountdown() {
+  const note = document.getElementById('goBoardNote');
+  const countEl = document.getElementById('goBoardCount');
+  if (!note || !countEl) return;
+
+  stopBoardCountdown();
+  let left = 4;
+  countEl.textContent = left;
+  note.hidden = false;
+
+  boardTimer = setInterval(() => {
+    left -= 1;
+    countEl.textContent = left > 0 ? left : 0;
+    if (left <= 0) {
+      stopBoardCountdown();
+      window.location.href = BOARD_URL;
+    }
+  }, 1000);
+
+  // Capture, so it stops before whatever he touched does its own job.
+  document.addEventListener('pointerdown', stopBoardCountdown, true);
+  document.addEventListener('keydown', stopBoardCountdown, true);
+}
+
+document.getElementById('goBoardBtn').addEventListener('click', () => {
+  stopBoardCountdown();
+  window.location.href = BOARD_URL;
+});
+
 document.getElementById('editAgainBtn').addEventListener('click', () => {
+  stopBoardCountdown();
   document.getElementById('successScreen').style.display = 'none';
   document.getElementById('reportScreen').style.display = 'block';
 });
@@ -793,14 +1067,28 @@ async function requireAuth() {
   dateInput.value = todayIso();
   dateInput.max = todayIso();
 
-  const [{ data: jobsData }, { data: weldersData }, { data: helpersData }] = await Promise.all([
+  const [{ data: jobsData }, { data: weldersData }, { data: helpersData }, { data: targetsData }] = await Promise.all([
     sb.from('jobs').select('*').eq('active', true).order('name'),
     sb.from('welders_public').select('*').order('full_name'),
-    sb.from('helpers_public').select('id, name').eq('active', true).order('name')
+    sb.from('helpers_public').select('id, name').eq('active', true).order('name'),
+    sb.from('customer_weld_targets').select('qb_customer_id, qb_customer_name, min_inches_per_day, baseline_hours')
   ]);
   jobs = jobsData || [];
   weldersList = weldersData || [];
   helpersList = helpersData || [];
+  // A customer with no row here gets no warning at all. Failing to load the
+  // targets must leave the page working, not flag every day as short.
+  weldTargets = {};
+  (targetsData || []).forEach(t => {
+    const min = Number(t.min_inches_per_day);
+    if (!t.qb_customer_id || !(min > 0)) return;
+    const base = Number(t.baseline_hours);
+    weldTargets[String(t.qb_customer_id)] = {
+      name: t.qb_customer_name,
+      min,
+      baselineHours: base > 0 ? base : 10,
+    };
+  });
   fillHelperPicker();
 
   // Same reason as ensureHelperListed: a page left open all week has a stale

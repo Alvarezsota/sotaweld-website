@@ -1,0 +1,164 @@
+/* Crew board - read only. Deliberately has no buttons on a row and no links
+   into a record, because there is nothing here anybody is meant to open. */
+
+.cb-wrap { max-width: 980px; margin: 0 auto; padding: 22px 16px 60px; }
+
+.cb-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+}
+.cb-title { font-family: Oswald, sans-serif; font-size: 30px; font-weight: 700; margin: 0 0 4px; color: var(--text); }
+.cb-sub   { margin: 0; font-size: 13px; color: var(--dim); }
+
+.cb-weeknav { display: flex; align-items: center; gap: 8px; }
+.cb-weekbtn { padding: 7px 14px; margin: 0; font-size: 15px; line-height: 1; }
+.cb-weeklbl { font-size: 13px; font-weight: 700; color: var(--text); min-width: 150px; text-align: center; }
+
+.cb-totals { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.cb-stat {
+  flex: 1 1 160px; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--card);
+}
+.cb-stat-lbl { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); font-weight: 700; }
+.cb-stat-val { font-size: 22px; font-weight: 800; color: var(--ok); font-variant-numeric: tabular-nums; }
+
+.cb-sort { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.cb-sort-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--dim); margin-right: 2px; }
+.cb-sort-btn {
+  padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); color: var(--dim);
+  font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.cb-sort-btn:hover { color: var(--text); }
+.cb-sort-btn.on { background: #e8a33d; border-color: #e8a33d; color: #1a1206; }
+
+.cb-table { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card); }
+
+.cb-row {
+  display: grid;
+  grid-template-columns: 34px minmax(140px, 1.5fr) repeat(7, minmax(36px, .5fr)) 62px 56px;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.cb-row:last-child { border-bottom: 0; }
+
+.cb-row-head {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+  font-weight: 700; color: var(--dim); background: rgba(255,255,255,.02);
+}
+.cb-row-head .cb-c-total { color: var(--dim); }
+
+/* The man looking at it. Marked, never moved - the order is the order. */
+.cb-row-me { background: rgba(232, 163, 61, .07); box-shadow: inset 3px 0 0 #e8a33d; }
+
+.cb-c-rank  { font-size: 12px; font-weight: 700; color: var(--dim); }
+.cb-c-name  { font-size: 13.5px; font-weight: 700; color: var(--text); min-width: 0; }
+.cb-c-day   { font-size: 13px; text-align: center; color: var(--text); }
+.cb-c-nil   { color: #4a5160; }
+.cb-c-total { font-size: 15px; font-weight: 800; text-align: right; color: var(--ok); }
+
+/* The fair number. Kept visually quieter than the week total so the board still
+   reads as a tally first, but present on every row so nobody has to divide. */
+.cb-c-rate  { font-size: 14px; font-weight: 800; text-align: right; color: #7fb2e5; font-variant-numeric: tabular-nums; }
+.cb-row-head .cb-c-rate { color: var(--dim); font-size: 11px; font-weight: 700; }
+.cb-c-rate.cb-c-nil { color: #4a5160; font-weight: 600; }
+
+.cb-you {
+  display: inline-block; margin-left: 6px; padding: 1px 6px;
+  border-radius: 999px; background: #e8a33d; color: #1a1206;
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
+  vertical-align: middle;
+}
+
+/* Relative to the best week on the board, so the shape reads without anybody
+   doing arithmetic. */
+.cb-bar { display: block; height: 4px; margin-top: 6px; border-radius: 999px; background: rgba(255,255,255,.07); overflow: hidden; }
+.cb-bar-fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #37b24d, #6bd47f); }
+.cb-row-me .cb-bar-fill { background: linear-gradient(90deg, #e8a33d, #f5c877); }
+
+.cb-empty { padding: 26px 14px; text-align: center; color: var(--dim); font-size: 14px; }
+.cb-err   { color: #e0554f; }
+.cb-foot  { margin-top: 14px; font-size: 11.5px; color: var(--dim); text-align: center; }
+
+/* On a phone nine columns cannot fit, and squeezing them clipped the week total
+   - the one number a man opens this for. So the row becomes two: his name and
+   his week across the top, the seven days on their own line underneath, each
+   carrying its own label so the header row is not needed.
+
+   The days are placed by leaving them unplaced: rank, name and total are pinned
+   to row 1, so the seven of them auto-fill row 2 exactly. */
+@media (max-width: 700px) {
+  .cb-row {
+    grid-template-columns: repeat(7, 1fr);
+    row-gap: 0;
+    column-gap: 2px;
+    padding: 11px 12px;
+    align-items: baseline;
+  }
+  .cb-row-head { display: none; }
+
+  .cb-c-rank  { grid-column: 1 / 2; grid-row: 1; font-size: 11px; }
+  .cb-c-name  { grid-column: 2 / 6; grid-row: 1; font-size: 13.5px; }
+  .cb-c-total { grid-column: 6 / 8; grid-row: 1; font-size: 17px; }
+  .cb-c-rate  { grid-column: 2 / 8; grid-row: 2; font-size: 12px; text-align: right; margin-top: 2px; }
+  .cb-c-rate::after { content: ' in/hr'; font-size: 10px; font-weight: 700; color: var(--dim); }
+  .cb-c-rate.cb-c-nil::after { content: ' — no hours on ticket'; }
+  .cb-c-rate.cb-c-nil { font-size: 10px; }
+  .cb-c-day   { grid-row: 3; }
+  .cb-c-total::after {
+    content: ' in';
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--dim);
+  }
+
+  .cb-c-day {
+    margin-top: 9px;
+    padding-top: 5px;
+    border-top: 1px solid var(--line);
+    font-size: 12.5px;
+  }
+  .cb-c-day::before {
+    content: attr(data-day);
+    display: block;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 2px;
+  }
+
+  .cb-title   { font-size: 24px; }
+  .cb-you     { font-size: 9px; padding: 1px 4px; }
+  .cb-weeklbl { min-width: 0; }
+}
+
+/* How the numbers are checked. Sits under the board, in the app's own voice
+   rather than a warning colour: the point is that an honest man reads it once
+   and never thinks about it again. */
+.cb-note {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-left: 3px solid #7fb2e5;
+  border-radius: 10px;
+  background: var(--card);
+}
+.cb-note-hd {
+  font-size: 13px;
+  font-weight: 800;
+  color: #7fb2e5;
+  margin-bottom: 8px;
+}
+.cb-note p {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--dim);
+  max-width: 72ch;
+}
+.cb-note p:last-child { margin-bottom: 0; }

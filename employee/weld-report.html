@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="sota-build" content="20260902d">
+<meta name="sota-build" content="20260903i">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>Weld Report | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260902d">
-<link rel="stylesheet" href="weld-report.css?v=20260902d">
+<link rel="stylesheet" href="dark-theme.css?v=20260903i">
+<link rel="stylesheet" href="weld-report.css?v=20260903i">
 </head>
 <body>
 
@@ -22,6 +22,7 @@
     <a class="et-link" href="daily-entry.html">Log Work</a>
     <a class="et-link on" href="weld-report.html">Weld Report</a>
     <a class="et-link" href="my-weld-log.html">My Weld Log</a>
+    <a class="et-link" href="crew-board.html">Crew Board</a>
     <a class="et-link" href="dashboard.html">Office</a>
     <span id="adminNavLinks" style="display:none;">
       <a class="et-link" href="admin-setup.html">Setup</a>
@@ -69,8 +70,63 @@
       </div>
     </div>
 
+    <!-- Short of the day's expected inches for this customer. A warning only:
+         it never disables Submit, because what a man actually welded is what
+         goes on the report. -->
+    <div class="wr-short-warn" id="shortWarn" hidden>
+      <div class="wr-short-warn-hd">&#9873; Short of the day&rsquo;s production</div>
+      <div class="wr-short-warn-list" id="shortWarnList"></div>
+      <div class="wr-short-warn-txt">Log what you actually welded &mdash; do not pad it. If the day ran short for a reason (waiting on material, fit-up, weather, a breakdown), put that in <b>Miscellaneous / Off-chart</b> so the office can see why.</div>
+    </div>
+
     <button class="btn2 btn2-solid" id="submitBtn" style="width:100%; margin-top:16px;">Submit Weld Report</button>
     <div class="error-msg2" id="submitHint" style="text-align:center;"></div>
+  </div>
+</div>
+
+<!-- Shown on Submit when the day came in under the customer's expected inches.
+     It is an acknowledgement, not a gate: the only way it ends is the report
+     being submitted or the man going back to correct what he typed. -->
+<div class="wr-modal" id="shortModal" hidden>
+  <div class="wr-modal-card" role="dialog" aria-modal="true" aria-labelledby="shortModalTitle">
+    <div class="wr-modal-hd" id="shortModalTitle">Today came in under the mark</div>
+    <p class="wr-modal-lead" id="shortModalLead"></p>
+    <div class="wr-modal-nums" id="shortModalNums"></div>
+    <p class="wr-modal-body">
+      Your report is right to submit as it is &mdash; log what you actually welded, never more.
+      If something held you up today, add a line under <b>Miscellaneous / Off-chart</b> so the
+      office sees why instead of guessing.
+    </p>
+    <p class="wr-modal-body wr-modal-encourage" id="shortModalEncourage"></p>
+    <div class="wr-modal-btns">
+      <button type="button" class="btn2 btn2-line" id="shortModalBack">Go back and check</button>
+      <button type="button" class="btn2 btn2-solid" id="shortModalGo">Submit my report</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shown after every report goes in, so it is read on the day rather than
+     found on a page nobody opens. Holds the countdown to the crew board until
+     it is dismissed, so nothing pulls the screen away mid-sentence. -->
+<div class="wr-modal" id="checkModal" hidden>
+  <div class="wr-modal-card wr-modal-card-check" role="dialog" aria-modal="true" aria-labelledby="checkModalTitle">
+    <div class="wr-modal-hd wr-modal-hd-check" id="checkModalTitle">How these numbers get checked</div>
+    <p class="wr-modal-body">
+      Every weld report is matched against the field reports coming off the job. The two have to
+      agree before anything gets billed, so what you turn in is what the customer sees.
+    </p>
+    <p class="wr-modal-body">
+      Nobody is trying to catch anyone out. Miscount a joint, fat-finger a number, forget a line
+      &mdash; tell the office and it gets put right, no more said. That happens and it is fine.
+    </p>
+    <p class="wr-modal-body">
+      Adding welds you did not run is a different thing altogether. It puts a bill in front of a
+      customer for work nobody did, and it is grounds for dismissal. Log what you actually welded
+      and this will never once be your problem.
+    </p>
+    <div class="wr-modal-btns">
+      <button type="button" class="btn2 btn2-solid" id="checkModalOk">Got it</button>
+    </div>
   </div>
 </div>
 
@@ -79,13 +135,17 @@
     <div class="success-ring2">&#10003;</div>
     <h2 class="success-title2">Weld report submitted</h2>
     <p class="success-sub2" id="successSub">Saved for today. It'll be included in tonight's summary.</p>
-    <button class="btn2 btn2-line" id="editAgainBtn" style="margin-top:24px;">Edit today's report</button>
+    <p class="wr-goboard" id="goBoardNote" hidden>Taking you to the <b>Crew Board</b> in <span id="goBoardCount">4</span>&hellip;</p>
+    <div class="wr-success-btns">
+      <button class="btn2 btn2-line" id="editAgainBtn">Edit today's report</button>
+      <button class="btn2 btn2-solid" id="goBoardBtn">See the Crew Board</button>
+    </div>
   </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260902d"></script>
-<script src="weld-report.js?v=20260902d"></script>
+<script src="supabase-client.js?v=20260903i"></script>
+<script src="weld-report.js?v=20260903i"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="sota-build" content="20260903i">
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<title>Crew Board | State of the Arc Welding</title>
+<meta name="robots" content="noindex">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dark-theme.css?v=20260903i">
+<link rel="stylesheet" href="crew-board.css?v=20260903i">
+</head>
+<body>
+
+<header class="et-nav">
+  <div class="et-nav-left">
+    <img src="../assets/img/logo.jpeg" alt="Logo">
+    <span class="et-wordmark">State of the Arc</span>
+  </div>
+  <nav class="et-links" id="navLinks">
+    <a class="et-link" href="daily-entry.html">Log Work</a>
+    <a class="et-link" href="weld-report.html">Weld Report</a>
+    <a class="et-link" href="my-weld-log.html">My Weld Log</a>
+    <a class="et-link on" href="crew-board.html">Crew Board</a>
+    <a class="et-link" href="dashboard.html">Office</a>
+    <span id="adminNavLinks" style="display:none;">
+      <a class="et-link" href="admin-setup.html">Setup</a>
+      <a class="et-link" href="approvals.html">Approvals</a>
+      <a class="et-link" href="quotes.html">Quotes</a>
+      <a class="et-link" href="parts-invoice.html">Parts Invoice</a>
+      <a class="et-link" href="summary.html">Summary</a>
+      <a class="et-link" href="weld-log.html">Weld Log</a>
+      <a class="et-link" href="security.html">Security</a>
+    </span>
+  </nav>
+  <div class="et-user">
+    <span id="userName">Loading...</span>
+    <span id="adminBadge" class="admin-pill" style="display:none;">Admin</span>
+    <button class="et-logout" id="logoutBtn">Log Out</button>
+  </div>
+</header>
+
+<div class="cb-wrap">
+
+  <div class="cb-head">
+    <div>
+      <h1 class="cb-title">Crew Board</h1>
+      <p class="cb-sub">Weld inches the crew has turned in this week. Look only &mdash; nothing here can be changed.</p>
+    </div>
+    <div class="cb-weeknav">
+      <button type="button" class="btn2 btn2-line cb-weekbtn" id="prevWeekBtn">&larr;</button>
+      <span class="cb-weeklbl" id="weekLabel">&nbsp;</span>
+      <button type="button" class="btn2 btn2-line cb-weekbtn" id="nextWeekBtn">&rarr;</button>
+    </div>
+  </div>
+
+  <div class="cb-totals" id="crewTotals"></div>
+
+  <!-- Reorders the rows. Changes nothing and saves nothing. -->
+  <div class="cb-sort" role="group" aria-label="Order the board by">
+    <span class="cb-sort-lbl">Order by</span>
+    <button type="button" class="cb-sort-btn on" data-sort="inches">Total inches</button>
+    <button type="button" class="cb-sort-btn" data-sort="rate">Inches per hour</button>
+  </div>
+
+  <div id="boardBody"><p class="cb-empty">Loading&hellip;</p></div>
+
+  <div class="cb-note">
+    <div class="cb-note-hd">How these numbers get checked</div>
+    <p>
+      Every weld report is matched against the field reports coming off the job. The two have to
+      agree before anything gets billed, so what you turn in is what the customer sees.
+    </p>
+    <p>
+      Nobody is trying to catch anyone out. Miscount a joint, fat-finger a number, forget a line
+      &mdash; tell the office and it gets put right, no more said. That happens and it is fine.
+    </p>
+    <p>
+      Adding welds you did not run is a different thing altogether. It puts a bill in front of a
+      customer for work nobody did, and it is grounds for dismissal. Log what you actually welded
+      and this will never once be your problem.
+    </p>
+  </div>
+
+  <p class="cb-foot">
+    Inches only. What each man welded, which job it was on and what it billed stay on his own report.
+  </p>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-client.js?v=20260903i"></script>
+<script src="crew-board.js?v=20260903i"></script>
+<div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
+</body>
+</html>
