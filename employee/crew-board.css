@@ -136,3 +136,29 @@
   .cb-you     { font-size: 9px; padding: 1px 4px; }
   .cb-weeklbl { min-width: 0; }
 }
+
+/* How the numbers are checked. Sits under the board, in the app's own voice
+   rather than a warning colour: the point is that an honest man reads it once
+   and never thinks about it again. */
+.cb-note {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-left: 3px solid #7fb2e5;
+  border-radius: 10px;
+  background: var(--card);
+}
+.cb-note-hd {
+  font-size: 13px;
+  font-weight: 800;
+  color: #7fb2e5;
+  margin-bottom: 8px;
+}
+.cb-note p {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--dim);
+  max-width: 72ch;
+}
+.cb-note p:last-child { margin-bottom: 0; }
