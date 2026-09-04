@@ -212,3 +212,16 @@
 @media (max-width: 380px) {
   .wr-modal-btns { flex-direction: column-reverse; }
 }
+
+/* Where the target came from. Small, because it answers a question rather than
+   making the point - but present, because a number nobody can check is a number
+   a man argues with instead of hitting. */
+.wr-short-warn-basis,
+.wr-modal-basis {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #a89a88;
+  white-space: nowrap;
+}
+.wr-modal-basis { color: #7f8794; }
