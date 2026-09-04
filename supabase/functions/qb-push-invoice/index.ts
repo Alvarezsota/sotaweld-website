@@ -793,10 +793,14 @@ Deno.serve(async (req) => {
     // address already on the QuickBooks customer record. This must never be the
     // reason an invoice does not go out.
     let billTo: Record<string, unknown> = {};
+    // How this one settles up: whether Pay Now appears, and on what terms. Same
+    // row, same trip, because who an invoice goes to and how it gets paid are
+    // the same question about the same customer.
+    let settle: Record<string, unknown> = {};
     try {
       const { data: bill } = await db
         .from("qb_customer_billing")
-        .select("to_email, cc_emails, bcc_emails")
+        .select("to_email, cc_emails, bcc_emails, allow_online_payment, qb_term_id")
         .eq("qb_customer_id", String(payload.customer.id))
         .eq("qb_environment", t.environment)
         .maybeSingle();
@@ -808,9 +812,29 @@ Deno.serve(async (req) => {
         if (bill.to_email) billTo.BillEmail = { Address: String(bill.to_email) };
         if (cc) billTo.BillEmailCc = { Address: cc };
         if (bcc) billTo.BillEmailBcc = { Address: bcc };
+
+        // Only ever written when the answer is no. Left off entirely otherwise,
+        // so a customer with no row keeps whatever QuickBooks does on its own
+        // rather than having the current default frozen onto every invoice.
+        //
+        // These three are the writable ones. AllowOnlinePayment and
+        // AllowOnlinePayPalPayment are derived by QuickBooks from them, so
+        // clearing these clears the Pay Now button and everything under it.
+        if (bill.allow_online_payment === false) {
+          settle.AllowOnlineCreditCardPayment = false;
+          settle.AllowOnlineACHPayment = false;
+          settle.AllowIPNPayment = false;
+        }
+        // Stamped rather than inherited. QuickBooks does inherit the term from
+        // the customer record, and does today, but that is a default somebody
+        // can change in another screen without anyone noticing.
+        if (bill.qb_term_id) settle.SalesTermRef = { value: String(bill.qb_term_id) };
       }
     } catch (_e) {
+      // Never the reason an invoice does not go out. A customer who should not
+      // be offered a card is a worse invoice, not a failed one.
       billTo = {};
+      settle = {};
     }
 
     // The number the portal proposes. Left off entirely when there is none, so
@@ -828,6 +852,7 @@ Deno.serve(async (req) => {
         // against, so it goes where QuickBooks prints it rather than into a memo.
         ...(payload.po_number ? { CustomerMemo: { value: `PO ${payload.po_number}` } } : {}),
         ...billTo,
+        ...settle,
         Line: (payload.lines as Array<Record<string, unknown>>).map((l) => ({
           Amount: Number(l.amount),
           Description: l.description,

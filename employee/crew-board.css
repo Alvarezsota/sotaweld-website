@@ -17,7 +17,7 @@
 .cb-totals { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .cb-stat {
   flex: 1 1 160px; padding: 12px 14px; border: 1px solid var(--line);
-  border-radius: 10px; background: var(--card);
+  border-radius: 10px; background: var(--steel-800);
 }
 .cb-stat-lbl { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); font-weight: 700; }
 .cb-stat-val { font-size: 22px; font-weight: 800; color: var(--ok); font-variant-numeric: tabular-nums; }
@@ -26,13 +26,13 @@
 .cb-sort-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--dim); margin-right: 2px; }
 .cb-sort-btn {
   padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;
-  background: var(--card); color: var(--dim);
+  background: var(--steel-800); color: var(--dim);
   font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
 }
 .cb-sort-btn:hover { color: var(--text); }
-.cb-sort-btn.on { background: #e8a33d; border-color: #e8a33d; color: #1a1206; }
+.cb-sort-btn.on { background: var(--molten); border-color: var(--molten); color: var(--molten-ink); }
 
-.cb-table { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card); }
+.cb-table { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--steel-800); }
 
 .cb-row {
   display: grid;
@@ -52,7 +52,7 @@
 .cb-row-head .cb-c-total { color: var(--dim); }
 
 /* The man looking at it. Marked, never moved - the order is the order. */
-.cb-row-me { background: rgba(232, 163, 61, .07); box-shadow: inset 3px 0 0 #e8a33d; }
+.cb-row-me { background: rgba(232, 163, 61, .07); box-shadow: inset 3px 0 0 var(--molten); }
 
 .cb-c-rank  { font-size: 12px; font-weight: 700; color: var(--dim); }
 .cb-c-name  { font-size: 13.5px; font-weight: 700; color: var(--text); min-width: 0; }
@@ -68,7 +68,7 @@
 
 .cb-you {
   display: inline-block; margin-left: 6px; padding: 1px 6px;
-  border-radius: 999px; background: #e8a33d; color: #1a1206;
+  border-radius: 999px; background: var(--molten); color: var(--molten-ink);
   font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
   vertical-align: middle;
 }
@@ -77,7 +77,7 @@
    doing arithmetic. */
 .cb-bar { display: block; height: 4px; margin-top: 6px; border-radius: 999px; background: rgba(255,255,255,.07); overflow: hidden; }
 .cb-bar-fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #37b24d, #6bd47f); }
-.cb-row-me .cb-bar-fill { background: linear-gradient(90deg, #e8a33d, #f5c877); }
+.cb-row-me .cb-bar-fill { background: linear-gradient(90deg, var(--molten), var(--molten-2)); }
 
 .cb-empty { padding: 26px 14px; text-align: center; color: var(--dim); font-size: 14px; }
 .cb-err   { color: #e0554f; }
@@ -146,7 +146,7 @@
   border: 1px solid var(--line);
   border-left: 3px solid #7fb2e5;
   border-radius: 10px;
-  background: var(--card);
+  background: var(--steel-800);
 }
 .cb-note-hd {
   font-size: 13px;

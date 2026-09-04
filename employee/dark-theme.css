@@ -38,6 +38,46 @@ a { color: inherit; }
 .et-nav-left img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
 .et-wordmark { font-weight: 800; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
 .et-links { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* On a phone the links wrapped into three stacked rows that pushed the page
+   itself below the fold, and an admin carries twelve of them. One row that
+   scrolls sideways is easier to read and easier to hit than a block of text
+   that happens to be links: the current page stays put on the left, and the
+   rest are a thumb-swipe away.
+
+   Kept to narrow screens only - there is room for the lot on a desktop and
+   wrapping there is fine. */
+@media (max-width: 760px) {
+  .et-nav { flex-wrap: nowrap; padding: 10px 12px; gap: 8px; }
+  .et-nav-left { flex: 0 0 auto; }
+  .et-nav-left .et-wordmark { display: none; }   /* the mark is enough at this width */
+
+  .et-links {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    /* Fades at the edge so a half-cut link reads as "there is more", rather
+       than as the list simply ending there. */
+    mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 18px), transparent 100%);
+  }
+  .et-links::-webkit-scrollbar { display: none; }
+  .et-links > span { display: contents; }        /* the admin block must not be one unbreakable item */
+  .et-link {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    padding: 9px 11px;
+    font-size: 12.5px;
+  }
+  /* Where you are, first and staying put, so the row always opens on it. */
+  .et-link.on { position: sticky; left: 0; z-index: 1; background: var(--gold-soft); box-shadow: 0 0 0 6px var(--steel-850); }
+
+  .et-user { flex: 0 0 auto; gap: 6px; }
+  .et-user #userName { display: none; }          /* his own name is not navigation */
+}
 .et-link {
   font-size: 13px; font-weight: 700; color: var(--dim);
   padding: 8px 12px; border-radius: 8px; text-decoration: none;

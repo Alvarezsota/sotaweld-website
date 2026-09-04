@@ -9,6 +9,18 @@
  * A welder cannot read another man's weld_reports row, and should not be able
  * to. That is why this goes through the function rather than the table. */
 
+/* Every page in this portal carries its own copy of this. There is no shared
+   one, and calling it without defining it is why this page came up stuck on
+   "Loading..." - init threw on the first line and nothing after it ran. */
+async function requireAuth() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) {
+    window.location.href = 'login.html';
+    return null;
+  }
+  return session.user;
+}
+
 let currentUser = null;
 let weekStart = null;                 // Monday of the week on screen
 let sortBy = 'inches';                // 'inches' or 'rate' - a view, never a write
@@ -163,6 +175,7 @@ document.getElementById('nextWeekBtn').addEventListener('click', () => {
 });
 
 (async function init() {
+ try {
   currentUser = await requireAuth();
   if (!currentUser) return;
 
@@ -180,4 +193,10 @@ document.getElementById('nextWeekBtn').addEventListener('click', () => {
 
   weekStart = mondayOf(new Date());
   await load();
+ } catch (err) {
+  // A page that fails silently reads as a broken link. Say what happened.
+  console.error(err);
+  const body = document.getElementById('boardBody');
+  if (body) body.innerHTML = `<p class="cb-empty cb-err">The board could not load: ${esc(err.message || err)}</p>`;
+ }
 })();
