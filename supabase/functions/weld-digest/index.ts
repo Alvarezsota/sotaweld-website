@@ -17,8 +17,11 @@
 // whatever anybody typed.
 //
 // A welder who worked two customers in a day appears in both, with only that
-// customer's inches under his name. His hours are the day's hours and are shown
-// as such, because a man's hours are not divisible by customer here.
+// customer's inches under his name - and now only that customer's hours. The
+// hours ticket records them against a job, so a split day is shown split: six
+// hours here, six hours there, each beside the inches that came off it. What
+// used to print was one number for the whole day against whichever job he
+// happened to weld on, which made half a day's work look like a bad one.
 //
 // ---------------------------------------------------------------------------
 // THE EMAIL IS FOR THE OFFICE. THE PDF IS FOR THE CUSTOMER.
@@ -56,7 +59,14 @@ function chicagoDateString(d: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 }
 
-type Welder = { name: string; total: number; hours: number | null; helper: string | null; rows: any[] };
+type JobLine = { id: string; name: string; inches: number; hours: number | null; rows: any[] };
+type Welder = {
+  name: string; total: number; helper: string | null; rows: any[];
+  jobs: JobLine[];
+  // Hours on this customer's jobs, and hours across his whole day. They differ
+  // when a man split the day, which is the case this was built for.
+  hours: number | null; dayHours: number | null;
+};
 
 /* The PDF is the half that leaves the building.
  *
@@ -70,7 +80,7 @@ type Welder = { name: string; total: number; hours: number | null; helper: strin
  * taking them as an argument is deliberate: a parameter that must not be drawn
  * is one somebody eventually draws.
  */
-async function buildPdf(customer: string, dateLabel: string, grandTotal: number, welders: Welder[], jobNameFor: (r: any) => string): Promise<Uint8Array> {
+async function buildPdf(customer: string, dateLabel: string, grandTotal: number, welders: Welder[]): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -109,29 +119,42 @@ async function buildPdf(customer: string, dateLabel: string, grandTotal: number,
         text(withLabel, startX, 10, font, rgb(0.35, 0.35, 0.35));
       }
     }
-    const hoursLabel = w.hours != null ? `${w.hours} hrs logged` : "no hours logged";
-    const hoursColor = w.hours != null ? rgb(0.45, 0.45, 0.45) : rgb(0.75, 0.2, 0.2);
+    // His hours on this customer, against the whole day when they differ.
+    const split = w.hours != null && w.dayHours != null && w.hours < w.dayHours;
+    const hoursLabel = w.dayHours == null ? "no hours logged"
+      : split ? `${w.hours} of ${w.dayHours} hrs` : `${w.dayHours} hrs logged`;
+    const hoursColor = w.dayHours == null ? rgb(0.75, 0.2, 0.2) : rgb(0.45, 0.45, 0.45);
     text(hoursLabel, pageW - margin - 160, 10, font, hoursColor);
     text(`${w.total.toFixed(2)} in`, pageW - margin - 70, 13, bold, rgb(0.13, 0.5, 0.25));
     y -= 18;
 
-    for (const r of w.rows) {
+    // One line per job, carrying the hours worked on it as well as the inches.
+    // A job with hours and no inches is on here too: cutting and prepping is
+    // work, and leaving it off makes the rest of the day look like the whole of
+    // it. This is the customer's own copy, so it is the customer's own jobs.
+    for (const jl of w.jobs) {
       newPageIfNeeded(16);
-      text(`${jobNameFor(r)}`, margin + 14, 11, bold, rgb(0.2, 0.2, 0.2));
-      text(`${Number(r.total_inches).toFixed(2)} in`, pageW - margin - 70, 11, font, rgb(0.13, 0.5, 0.25));
+      text(`${jl.name}`, margin + 14, 11, bold, rgb(0.2, 0.2, 0.2));
+      if (jl.hours != null) {
+        text(`${jl.hours} hrs`, pageW - margin - 160, 10, font, rgb(0.45, 0.45, 0.45));
+      }
+      text(jl.inches > 0 ? `${jl.inches.toFixed(2)} in` : "\u2014",
+           pageW - margin - 70, 11, font, rgb(0.13, 0.5, 0.25));
       y -= 14;
 
-      const breakdown = (r.breakdown || []) as { label: string; qty: number; total: number }[];
-      const misc = (r.misc_items || []) as { description: string; inches: number }[];
-      for (const b of breakdown) {
-        newPageIfNeeded(13);
-        text(`${b.label} x ${b.qty} = ${b.total} in`, margin + 28, 9, font, rgb(0.45, 0.45, 0.45));
-        y -= 12;
-      }
-      for (const m of misc) {
-        newPageIfNeeded(13);
-        text(`MISC: ${m.description}${m.inches ? " = " + m.inches + " in" : ""}`, margin + 28, 9, font, rgb(0.45, 0.45, 0.45));
-        y -= 12;
+      for (const r of jl.rows) {
+        const breakdown = (r.breakdown || []) as { label: string; qty: number; total: number }[];
+        const misc = (r.misc_items || []) as { description: string; inches: number }[];
+        for (const b of breakdown) {
+          newPageIfNeeded(13);
+          text(`${b.label} x ${b.qty} = ${b.total} in`, margin + 28, 9, font, rgb(0.45, 0.45, 0.45));
+          y -= 12;
+        }
+        for (const m of misc) {
+          newPageIfNeeded(13);
+          text(`MISC: ${m.description}${m.inches ? " = " + m.inches + " in" : ""}`, margin + 28, 9, font, rgb(0.45, 0.45, 0.45));
+          y -= 12;
+        }
       }
     }
     y -= 12;
@@ -206,7 +229,7 @@ Deno.serve(async (req) => {
         .eq("report_date", targetDate)
         .order("total_inches", { ascending: false }),
       supabase.from("jobs").select("id, name, is_yard, bill_to, qb_customer_id, qb_customer_name"),
-      supabase.from("daily_entries").select("id, welder_id, hours").eq("entry_date", targetDate),
+      supabase.from("daily_entries").select("id, welder_id, hours, job_id, for_job_id").eq("entry_date", targetDate),
       supabase.from("helpers_public").select("id, name"),
     ]);
 
@@ -221,14 +244,37 @@ Deno.serve(async (req) => {
     const jobsById: Record<string, { id: string; name: string; is_yard: boolean; bill_to: string | null; qb_customer_id: string | null; qb_customer_name: string | null }> = {};
     (jobs || []).forEach((j) => { jobsById[j.id] = j; });
 
+    /* Yard work belongs to the job it was done for. One rule, used by the weld
+       reports, the hours tickets and the customer split alike - a day in the
+       yard for Targa has to land on Targa in all three or the three disagree. */
+    function effectiveJobId(jobId: string | null, forJobId: string | null): string | null {
+      const j = jobId ? jobsById[jobId] : null;
+      if (j?.is_yard && forJobId && jobsById[forJobId]) return forJobId;
+      return jobId || null;
+    }
+
     const helperNameById: Record<string, string> = {};
     (helpers || []).forEach((h: { id: string; name: string }) => { helperNameById[h.id] = h.name; });
 
+    // Hours twice over: the day's total, and the same hours split by the job
+    // they were worked on.
+    //
+    // A man who splits a day was reading as one number against one job. Gilbert
+    // Alvarez on 5 Sep is the case: 6 hours fabricating at P66 Viper, where his
+    // inches are, and 6 hours cutting and prepping for the Targa bullmoose to
+    // yeti stainless, where there are no inches because prep does not produce
+    // any. The log said "12 hrs" beside 135 inches at Viper - it made his day
+    // look half as productive as it was and left the other job off the page.
     const hoursByWelder: Record<string, number> = {};
+    const jobHours: Record<string, Record<string, number>> = {};
     const welderByEntryId: Record<string, string> = {};
     (entries || []).forEach((e) => {
       hoursByWelder[e.welder_id] = (hoursByWelder[e.welder_id] || 0) + Number(e.hours);
       welderByEntryId[e.id] = e.welder_id;
+      const jid = effectiveJobId(e.job_id, e.for_job_id);
+      if (!jid) return;
+      const forWelder = jobHours[e.welder_id] = jobHours[e.welder_id] || {};
+      forWelder[jid] = (forWelder[jid] || 0) + Number(e.hours);
     });
 
     // Who was with him, taken off the hours ticket as well as off the weld report.
@@ -260,13 +306,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Yard work belongs to the job it was done for, so both the job name and the
-    // customer follow the same hop. Otherwise a day in the yard for Targa would
-    // file itself under the yard and never reach Targa's log.
+    // The job name and the customer follow the same hop the hours do.
     function effectiveJob(r: any) {
-      const j = r.job_id ? jobsById[r.job_id] : null;
-      if (j?.is_yard && r.for_job_id && jobsById[r.for_job_id]) return jobsById[r.for_job_id];
-      return j;
+      const id = effectiveJobId(r.job_id ?? null, r.for_job_id ?? null);
+      return id ? jobsById[id] ?? null : null;
+    }
+    function customerOfJobId(id: string): string {
+      const j = jobsById[id];
+      return (j?.qb_customer_name || "").trim() || (j?.bill_to || "").trim() || NO_CUSTOMER;
     }
     function jobNameFor(r: any): string {
       const j = effectiveJob(r);
@@ -320,9 +367,11 @@ Deno.serve(async (req) => {
         if (!byWelder[key]) byWelder[key] = {
           name: r.profiles?.full_name || "Unknown welder",
           total: 0,
-          hours: hoursByWelder[key] != null ? hoursByWelder[key] : null,
+          hours: null,
+          dayHours: hoursByWelder[key] != null ? hoursByWelder[key] : null,
           helper: null,
           rows: [],
+          jobs: [],
         };
         byWelder[key].total += Number(r.total_inches);
         byWelder[key].rows.push(r);
@@ -336,6 +385,63 @@ Deno.serve(async (req) => {
         const fromTicket = ticketHelpersByWelder[key];
         if (fromTicket && fromTicket.length) byWelder[key].helper = fromTicket.join(", ");
       });
+
+      /* A man's day, job by job.
+       *
+       * Two sources meet here and neither is complete on its own. The weld
+       * reports say where the inches went; the hours ticket says where the time
+       * went. A job can appear on one and not the other:
+       *
+       *   inches and no hours - he welded it but has not filed his ticket yet.
+       *   hours and no inches - cutting, prepping, fitting. Real work, no inches
+       *     to show for it, and it must not vanish or the day reads as though
+       *     the rest of it was spent on whatever he did weld.
+       *
+       * Grouped by job rather than per report, so two reports on one job are one
+       * line with the hours counted once.
+       *
+       * Only this customer's jobs. A man who spent the morning on Rocking Double
+       * S and the afternoon on BT Constructors gets each half in that customer's
+       * own log and neither log names the other's work.
+       */
+      Object.keys(byWelder).forEach((key) => {
+        const w = byWelder[key];
+        const mine = jobHours[key] || {};
+        const byJob: Record<string, JobLine> = {};
+
+        w.rows.forEach((r: any) => {
+          const id = effectiveJobId(r.job_id ?? null, r.for_job_id ?? null)
+                  || `oneoff:${r.one_off_name || "One-off job"}`;
+          const line = byJob[id] || (byJob[id] = {
+            id, name: jobNameFor(r), inches: 0, hours: null, rows: [],
+          });
+          line.inches += Number(r.total_inches);
+          line.rows.push(r);
+        });
+
+        Object.values(byJob).forEach((line) => {
+          const h = mine[line.id];
+          if (h > 0) line.hours = h;
+        });
+
+        // Hours on this customer's jobs that produced no weld report.
+        Object.keys(mine).forEach((jid) => {
+          if (byJob[jid]) return;
+          const j = jobsById[jid];
+          if (!j || customerOfJobId(jid) !== customer) return;
+          byJob[jid] = { id: jid, name: j.name, inches: 0, hours: mine[jid], rows: [] };
+        });
+
+        w.jobs = Object.values(byJob).sort((a, b) =>
+          (b.inches - a.inches) || ((b.hours || 0) - (a.hours || 0)) || a.name.localeCompare(b.name));
+
+        // His hours on this customer. Null rather than zero when no ticket has
+        // been filed at all, because "none logged" and "none yet" are different
+        // things and only the first is a gap.
+        const onThis = w.jobs.reduce((sum, l) => sum + (l.hours || 0), 0);
+        w.hours = onThis > 0 ? onThis : (w.dayHours != null ? 0 : null);
+      });
+
       const welders = Object.values(byWelder).sort((a, b) => b.total - a.total);
 
       // Gaps are scoped to this customer's own reports. A backdated report belongs
@@ -360,24 +466,38 @@ Deno.serve(async (req) => {
       });
 
       const welderSections = welders.map((w) => {
-        const jobBlocks = w.rows.map((r) => {
-          const breakdown = (r.breakdown || []) as { label: string; qty: number; total: number }[];
-          const misc = (r.misc_items || []) as { description: string; inches: number }[];
+        const jobBlocks = w.jobs.map((jl) => {
           const lines: string[] = [];
-          breakdown.forEach((b) => lines.push(`${b.label} &times; ${b.qty} = ${b.total} in`));
-          misc.forEach((m) => lines.push(`MISC: ${m.description}${m.inches ? " = " + m.inches + " in" : ""}`));
+          jl.rows.forEach((r: any) => {
+            const breakdown = (r.breakdown || []) as { label: string; qty: number; total: number }[];
+            const misc = (r.misc_items || []) as { description: string; inches: number }[];
+            breakdown.forEach((b) => lines.push(`${b.label} &times; ${b.qty} = ${b.total} in`));
+            misc.forEach((m) => lines.push(`MISC: ${m.description}${m.inches ? " = " + m.inches + " in" : ""}`));
+          });
+          // Hours first, then inches. The hours are what was in question.
+          const hrs = jl.hours != null
+            ? `<span style="color:#e9a23b;">${jl.hours} hrs</span>`
+            : `<span style="color:#6b7280;">hours not logged</span>`;
+          const inches = jl.inches > 0
+            ? `<span style="color:#37b24d;">${jl.inches.toFixed(2)} in</span>`
+            : `<span style="color:#6b7280;">no inches</span>`;
           return `
             <div style="margin-top:10px;padding:10px 12px;background:#20242c;border:1px solid #2c313c;border-radius:8px;">
               <div style="display:flex;justify-content:space-between;font-weight:700;font-size:13px;color:#c7cfd9;">
-                <span>${jobNameFor(r)}</span><span style="color:#37b24d;">${Number(r.total_inches).toFixed(2)} in</span>
+                <span>${jl.name}</span><span>${hrs} &nbsp;&middot;&nbsp; ${inches}</span>
               </div>
               ${lines.length ? `<div style="font-size:12px;color:#9aa3b2;margin-top:6px;line-height:1.6;">${lines.join("<br>")}</div>` : ""}
             </div>`;
         }).join("");
 
-        const hoursNote = w.hours != null
-          ? `<span style="color:#9aa3b2;font-weight:600;font-size:13px;"> &middot; ${w.hours} hrs logged that day</span>`
-          : `<span style="color:#e0554f;font-weight:600;font-size:13px;"> &middot; no hours logged</span>`;
+        // The header carries his hours on this customer, and says so against the
+        // whole day when the two differ - which is the shape of a split day.
+        const split = w.hours != null && w.dayHours != null && w.hours < w.dayHours;
+        const hoursNote = w.dayHours == null
+          ? `<span style="color:#e0554f;font-weight:600;font-size:13px;"> &middot; no hours logged</span>`
+          : split
+            ? `<span style="color:#9aa3b2;font-weight:600;font-size:13px;"> &middot; ${w.hours} of ${w.dayHours} hrs that day</span>`
+            : `<span style="color:#9aa3b2;font-weight:600;font-size:13px;"> &middot; ${w.dayHours} hrs logged that day</span>`;
         const helperNote = w.helper
           ? `<span style="color:#e9a23b;font-weight:600;font-size:13px;"> &middot; with ${w.helper}</span>`
           : `<span style="color:#6b7280;font-weight:600;font-size:13px;"> &middot; worked alone</span>`;
@@ -424,10 +544,16 @@ Deno.serve(async (req) => {
 
       const text = `Daily Weld Inch Summary - ${customer} - ${dateLabel}\n\n${grandTotal.toFixed(2)} in total across ${welders.length} welder(s)\n\n` +
         (gaps.length ? `DATA GAPS TO CHECK (office only - not on the attached PDF):\n` + gaps.map((g) => `  ! ${g}`).join("\n") + `\n\n` : "") +
-        welders.map((w) => `${w.name} (${w.hours != null ? w.hours + " hrs logged that day" : "no hours logged"}${w.helper ? ", with " + w.helper : ", worked alone"}): ${w.total.toFixed(2)} in\n` + w.rows.map((r) => `  - ${jobNameFor(r)}: ${Number(r.total_inches).toFixed(2)} in`).join("\n")).join("\n\n") +
+        welders.map((w) => {
+          const hrsLabel = w.dayHours == null ? "no hours logged"
+            : (w.hours != null && w.hours < w.dayHours) ? `${w.hours} of ${w.dayHours} hrs that day`
+            : `${w.dayHours} hrs logged that day`;
+          return `${w.name} (${hrsLabel}${w.helper ? ", with " + w.helper : ", worked alone"}): ${w.total.toFixed(2)} in\n`
+            + w.jobs.map((jl) => `  - ${jl.name}: ${jl.hours != null ? jl.hours + " hrs" : "hours not logged"}, ${jl.inches > 0 ? jl.inches.toFixed(2) + " in" : "no inches"}`).join("\n");
+        }).join("\n\n") +
         (otherCustomers.length ? `\n\nThis log covers ${customer} only. Other customers worked that day: ${otherCustomers.join(", ")}.` : "");
 
-      const pdfBytes = await buildPdf(customer, dateLabel, grandTotal, welders, jobNameFor);
+      const pdfBytes = await buildPdf(customer, dateLabel, grandTotal, welders);
       let pdfBinary = "";
       for (let i = 0; i < pdfBytes.length; i++) pdfBinary += String.fromCharCode(pdfBytes[i]);
       const pdfBase64 = btoa(pdfBinary);

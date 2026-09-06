@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="sota-build" content="20260904c">
+<meta name="sota-build" content="20260906a">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>Weld Report | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260904c">
-<link rel="stylesheet" href="weld-report.css?v=20260904c">
+<link rel="stylesheet" href="dark-theme.css?v=20260906a">
+<link rel="stylesheet" href="weld-report.css?v=20260906a">
 </head>
 <body>
 
@@ -46,6 +46,22 @@
     <div class="wr-date-line">
       <span class="de-date-label">Date</span>
       <input type="date" id="dateInput" class="input de-date-input">
+    </div>
+
+    <!-- Shown when no hours ticket exists for the day being reported. It sends
+         him to Log Work rather than only stopping him. -->
+    <div class="wr-noticket" id="noTicketNotice" hidden>
+      <div class="wr-noticket-hd">Log your work first</div>
+      <p class="wr-noticket-txt">
+        You have not logged your hours <b id="noTicketDay">today</b>. Your weld inches go against
+        the job on your hours ticket &mdash; without it there is no way to say which job they were on,
+        or how long you were on it.
+      </p>
+      <p class="wr-noticket-txt">
+        Log the day on <b>Log Work</b>, then come back. If you split the day, put each job on
+        separately with its own hours and this report will show them apart.
+      </p>
+      <a class="btn2 btn2-solid wr-noticket-btn" href="daily-entry.html">Go to Log Work</a>
     </div>
     <!-- Presence only. The helper's hours stay on the time ticket; this just
          records that somebody was with him, which the weld log could not show. -->
@@ -144,8 +160,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260904c"></script>
-<script src="weld-report.js?v=20260904c"></script>
+<script src="supabase-client.js?v=20260906a"></script>
+<script src="weld-report.js?v=20260906a"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

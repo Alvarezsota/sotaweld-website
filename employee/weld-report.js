@@ -11,6 +11,18 @@ let weldTargets = {};
 // customer scaled by the hours he actually gave it rather than by the whole day.
 // Empty when no ticket has been filed yet, which is not the same as zero hours.
 let ticketHoursByCustomer = {};
+
+/* Whether he has filed his hours for the day he is reporting on.
+ *
+ * The weld report says what he welded. The hours ticket says which job he was
+ * on and for how long. Without the ticket the inches have nowhere to land: the
+ * daily log cannot say six hours at Viper and six at the Targa stainless, it
+ * can only say he welded something somewhere. So the report waits for the
+ * ticket rather than being filed against a day nobody can account for.
+ *
+ * Null while it is still being looked up, so the form does not accuse him of
+ * anything during the half second before the answer comes back. */
+let ticketFiled = null;
 let weldersList = [];
 let entries = [];
 
@@ -472,6 +484,11 @@ function updateSubmitState() {
       if (unconfirmed) missing = 'Confirm the 12" and bigger welds you ran by yourself, or move them to Split Welds.';
     }
     if (!missing && !(grand > 0 || hasMiscDesc)) missing = 'Enter at least some weld inches, or a description under Miscellaneous / Off-chart.';
+    // Last, so it is the message left standing once the rest of the form is
+    // right - the one thing between him and a filed report.
+    if (!missing && ticketFiled === false) {
+      missing = 'Log your work for this day first, on Log Work. Your inches go against the job on your hours ticket.';
+    }
   }
 
   submitBtn.disabled = !!missing;
@@ -745,10 +762,14 @@ function setHelper(id, why) {
    dropped on the floor. */
 async function loadTicketHours(date) {
   ticketHoursByCustomer = {};
+  ticketFiled = null;
   try {
     const { data: rows } = await sb.from('daily_entries')
       .select('hours, job_id, for_job_id')
       .eq('welder_id', currentUser.id).eq('entry_date', date);
+    // Any ticket at all counts, including one on a job with no customer set.
+    // The question is whether the day is accounted for, not whose it was.
+    ticketFiled = (rows || []).length > 0;
     (rows || []).forEach((r) => {
       const cust = targetCustomerForJob(r.job_id, r.for_job_id);
       const hrs = Number(r.hours);
@@ -757,8 +778,26 @@ async function loadTicketHours(date) {
     });
   } catch {
     ticketHoursByCustomer = {};   // never judge a day against another day's hours
+    // A lookup that failed is not proof he skipped it. Letting him through is
+    // the right way to be wrong here: the alternative is a man who did log his
+    // work being locked out of his report by a dropped connection.
+    ticketFiled = true;
   }
+  updateNoTicketNotice();
   updateSubmitState();
+}
+
+/* The banner. Says what to do and takes him there, rather than only refusing. */
+function updateNoTicketNotice() {
+  const box = document.getElementById('noTicketNotice');
+  if (!box) return;
+  const show = ticketFiled === false;
+  box.hidden = !show;
+  if (!show) return;
+  const d = dateInput.value || todayIso();
+  const when = d === todayIso() ? 'today' : `for ${d}`;
+  const el = document.getElementById('noTicketDay');
+  if (el) el.textContent = when;
 }
 
 async function suggestHelperFromTimeTicket(date) {
