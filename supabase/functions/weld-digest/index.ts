@@ -19,6 +19,16 @@
 // A welder who worked two customers in a day appears in both, with only that
 // customer's inches under his name. His hours are the day's hours and are shown
 // as such, because a man's hours are not divisible by customer here.
+//
+// ---------------------------------------------------------------------------
+// THE EMAIL IS FOR THE OFFICE. THE PDF IS FOR THE CUSTOMER.
+// ---------------------------------------------------------------------------
+//
+// Both are built from the same day, and they do not carry the same things. The
+// data gaps - a man with inches and no hours ticket, a report filed two days
+// after the date on it - are the office's business and stay in the email body
+// and its subject line. The attached PDF is the half that gets forwarded, and
+// it carries none of them.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
@@ -48,7 +58,19 @@ function chicagoDateString(d: Date): string {
 
 type Welder = { name: string; total: number; hours: number | null; helper: string | null; rows: any[] };
 
-async function buildPdf(customer: string, dateLabel: string, grandTotal: number, welders: Welder[], jobNameFor: (r: any) => string, gaps: string[]): Promise<Uint8Array> {
+/* The PDF is the half that leaves the building.
+ *
+ * It carries no gaps. A gap is an instruction to the office - chase a missing
+ * ticket, ask a man why his report was filed two days late - and "possible
+ * backdating" printed on a document handed to the customer reads as an
+ * admission that the hours on it are in doubt. They are not; they are being
+ * checked, which is a different thing and none of the customer's business.
+ *
+ * They stay in the email body, which is read here and forwarded nowhere. Not
+ * taking them as an argument is deliberate: a parameter that must not be drawn
+ * is one somebody eventually draws.
+ */
+async function buildPdf(customer: string, dateLabel: string, grandTotal: number, welders: Welder[], jobNameFor: (r: any) => string): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -65,18 +87,6 @@ async function buildPdf(customer: string, dateLabel: string, grandTotal: number,
   function text(str: string, x: number, size: number, f = font, color = rgb(0.1, 0.1, 0.1)) {
     page.drawText(str, { x, y, size, font: f, color });
   }
-  function wrapText(str: string, maxWidth: number, size: number, f = font): string[] {
-    const words = str.split(" ");
-    const lines: string[] = [];
-    let line = "";
-    for (const w of words) {
-      const trial = line ? line + " " + w : w;
-      if (f.widthOfTextAtSize(trial, size) > maxWidth && line) { lines.push(line); line = w; }
-      else { line = trial; }
-    }
-    if (line) lines.push(line);
-    return lines;
-  }
 
   text("Daily Weld Inch Summary", margin, 18, bold, rgb(0, 0, 0));
   y -= 22;
@@ -88,20 +98,6 @@ async function buildPdf(customer: string, dateLabel: string, grandTotal: number,
   y -= 26;
   text(`${grandTotal.toFixed(2)} in total  ·  ${welders.length} welder${welders.length === 1 ? "" : "s"} reported`, margin, 14, bold, rgb(0.13, 0.5, 0.25));
   y -= 26;
-
-  if (gaps.length) {
-    newPageIfNeeded(20 + gaps.length * 13);
-    text("Data gaps to check", margin, 12, bold, rgb(0.75, 0.2, 0.2));
-    y -= 16;
-    for (const g of gaps) {
-      for (const line of wrapText(g, pageW - margin * 2 - 14, 10)) {
-        newPageIfNeeded(13);
-        text(line, margin + 14, 10, font, rgb(0.6, 0.25, 0.2));
-        y -= 13;
-      }
-    }
-    y -= 14;
-  }
 
   for (const w of welders) {
     newPageIfNeeded(40);
@@ -345,6 +341,10 @@ Deno.serve(async (req) => {
       // Gaps are scoped to this customer's own reports. A backdated report belongs
       // in the log it appears in; a welder with no hours is flagged wherever he
       // shows up, since either log is a fair place for the office to notice.
+      //
+      // These reach the email and the subject line and stop there. The attached
+      // PDF is the half that gets forwarded to the customer, and it does not
+      // take them - see buildPdf.
       const gaps: string[] = [];
       welders.forEach((w) => {
         if (w.hours == null) gaps.push(`${w.name} submitted ${w.total.toFixed(2)} in but has no hours logged for ${targetDate}.`);
@@ -391,12 +391,14 @@ Deno.serve(async (req) => {
           </div>`;
       }).join("");
 
+      // The office's copy of the gaps. This block is in the email body only.
       const gapsHtml = gaps.length ? `
         <div style="margin-bottom:20px;padding:14px 16px;background:#2a1c1c;border:1px solid #5c2d2d;border-radius:10px;">
           <div style="font-weight:800;font-size:14px;color:#f0a3a0;margin-bottom:8px;">&#9888; Data gaps to check</div>
           <ul style="margin:0;padding-left:18px;color:#e8c4c2;font-size:13px;line-height:1.7;">
             ${gaps.map((g) => `<li>${g}</li>`).join("")}
           </ul>
+          <p style="margin:10px 0 0;font-size:11.5px;color:#b99a98;">For the office. None of this is on the attached PDF.</p>
         </div>` : "";
 
       const otherCustomers = customers.filter((c) => c !== customer);
@@ -416,16 +418,16 @@ Deno.serve(async (req) => {
           <div style="font-size:28px;font-weight:800;color:#37b24d;margin-bottom:20px;">${grandTotal.toFixed(2)} in total &middot; ${welders.length} welder${welders.length === 1 ? "" : "s"} reported</div>
           ${gapsHtml}
           ${welderSections}
-          <p style="color:#6b7280;font-size:11px;margin-top:22px;">A PDF copy of this log is attached.</p>
+          <p style="color:#6b7280;font-size:11px;margin-top:22px;">A PDF copy of this log is attached, ready to forward.</p>
           ${elsewhereNote}
         </div>`;
 
       const text = `Daily Weld Inch Summary - ${customer} - ${dateLabel}\n\n${grandTotal.toFixed(2)} in total across ${welders.length} welder(s)\n\n` +
-        (gaps.length ? `DATA GAPS TO CHECK:\n` + gaps.map((g) => `  ! ${g}`).join("\n") + `\n\n` : "") +
+        (gaps.length ? `DATA GAPS TO CHECK (office only - not on the attached PDF):\n` + gaps.map((g) => `  ! ${g}`).join("\n") + `\n\n` : "") +
         welders.map((w) => `${w.name} (${w.hours != null ? w.hours + " hrs logged that day" : "no hours logged"}${w.helper ? ", with " + w.helper : ", worked alone"}): ${w.total.toFixed(2)} in\n` + w.rows.map((r) => `  - ${jobNameFor(r)}: ${Number(r.total_inches).toFixed(2)} in`).join("\n")).join("\n\n") +
         (otherCustomers.length ? `\n\nThis log covers ${customer} only. Other customers worked that day: ${otherCustomers.join(", ")}.` : "");
 
-      const pdfBytes = await buildPdf(customer, dateLabel, grandTotal, welders, jobNameFor, gaps);
+      const pdfBytes = await buildPdf(customer, dateLabel, grandTotal, welders, jobNameFor);
       let pdfBinary = "";
       for (let i = 0; i < pdfBytes.length; i++) pdfBinary += String.fromCharCode(pdfBytes[i]);
       const pdfBase64 = btoa(pdfBinary);
