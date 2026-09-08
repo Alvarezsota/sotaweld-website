@@ -7,6 +7,10 @@ let openJobId = null;
 let currentGroups = [];
 let currentJobWeeks = {};
 let openInvoices = [];   // weeks holding an invoice open, any week
+// The week an already-sent invoice was pushed from, for the weeks it carried
+// out with it: id -> { week_start, invoice_no, qb_invoice_id }. Only fetched
+// when something on screen actually points at one.
+let carriedParents = {};
 let weekAlreadyFiled = false;   // has this week's pay run gone to OneDrive yet
 let nextInvoiceNumber = '';    // what an unnumbered week would be given, for the button
 
@@ -376,6 +380,18 @@ async function loadWeek(skipReconcile) {
   (jwRes.data || []).forEach(row => currentJobWeeks[row.job_id] = row);
   openInvoices = openRes.data || [];
 
+  // A week whose work went out on an earlier week's invoice needs that week to
+  // say anything useful about it -- which invoice, and which one to open to see
+  // it. Nothing on screen points home most weeks, so this asks for nothing.
+  carriedParents = {};
+  const parentIds = [...new Set(Object.values(currentJobWeeks)
+    .map((r) => r.billed_on_job_week_id).filter(Boolean))];
+  if (parentIds.length) {
+    const { data: parents } = await sb.from('job_weeks')
+      .select('id, week_start, invoice_no, qb_invoice_id').in('id', parentIds);
+    (parents || []).forEach((r) => { carriedParents[r.id] = r; });
+  }
+
   currentGroups = buildJobGroups(entries, jobs);
   renderGrid();
   if (openJobId) renderDetail(openJobId);
@@ -487,6 +503,21 @@ async function refreshCrewSheets() {
  * the other.
  */
 function billsOnInvoice(groupId, week) {
+  // Once that invoice has gone out the calculation stops being true -- a pushed
+  // week is skipped by billing_week_for -- so the answer is written on the row
+  // at push time and read from there afterwards. Same question, and after the
+  // push it is the only one that can still be answered.
+  const jw = currentJobWeeks[groupId];
+  if (jw && jw.billed_on_job_week_id) {
+    const parent = carriedParents[jw.billed_on_job_week_id];
+    return {
+      id: jw.billed_on_job_week_id,
+      invoice_no: (parent && parent.invoice_no) || jw.invoice_no,
+      week_start: parent ? parent.week_start : null,
+      qb_invoice_id: parent ? parent.qb_invoice_id : null,
+      carried: true,
+    };
+  }
   const held = openInvoices
     .filter(r => r.job_id === groupId && r.week_start <= week)
     .sort((a, b) => a.week_start.localeCompare(b.week_start))[0];
@@ -544,7 +575,9 @@ function renderGrid() {
       <div class="tile-top">
         <span class="pill ${stCls}">${esc(status)}</span>
         ${onOther
-          ? `<span class="tile-inv tile-inv-other" title="This week's work is billed on the invoice for the week of ${esc(onOther.week_start)}">&rarr;&nbsp;#${esc(onOther.invoice_no || '—')}</span>`
+          ? `<span class="tile-inv tile-inv-other" title="${onOther.week_start
+                ? `This week's work is billed on the invoice for the week of ${esc(onOther.week_start)}`
+                : 'This week\'s work went out on an earlier week\'s invoice'}">&rarr;&nbsp;#${esc(onOther.invoice_no || '—')}</span>`
           : (invNo ? `<span class="tile-inv${heldOpen ? ' tile-inv-open' : ''}">#${esc(invNo)}${heldOpen ? ' open' : ''}</span>` : '')}
       </div>
       <h3 class="tile-name">${esc(g.name)}</h3>
@@ -716,26 +749,38 @@ function renderDetail(groupId) {
       <button class="btn2 btn2-ghost" id="unlockBtn">Unlock to edit</button>
       ${onOtherInv
         ? ''
-        : heldOpen
-          ? '<span class="qbo-note">Close the invoice above when the job is done, and it can be sent.</span>'
-          : '<button class="btn2 btn2-solid" id="previewInvBtn">Preview invoice &amp; send</button>'}
+        : `<button class="btn2 btn2-solid" id="previewInvBtn">Preview invoice &amp; send</button>
+           ${heldOpen ? `<span class="qbo-note">This invoice is open, so it carries the later weeks of
+             this job as well. Sending it bills the lot and closes it.</span>` : ''}`}
     `;
     document.getElementById('unlockBtn').addEventListener('click', () => unlockJobWeek(g.id));
   } else {
-    actBtns.innerHTML = `
-      <span class="locked-note2">Synced to QuickBooks</span>
-      <button class="btn2 btn2-line" id="previewInvBtn">See the invoice</button>
-      <span class="qbo-note">Reverse it in QuickBooks before changing anything here.</span>
-    `;
+    // A week carried out on an earlier week's invoice has no invoice of its own
+    // to show. Opening its own id would draw the few hours on this week alone
+    // and call it the invoice, which is the one thing it is not.
+    const carried = jw && jw.billed_on_job_week_id ? billsOnInvoice(g.id, ymd(weekStart)) : null;
+    actBtns.innerHTML = carried
+      ? `<span class="locked-note2">Billed on #${esc(carried.invoice_no || '—')}</span>
+         <button class="btn2 btn2-line" id="previewInvBtn">See that invoice</button>
+         <span class="qbo-note">These hours went out on the invoice for
+           ${carried.week_start ? 'the week of ' + esc(carried.week_start) : 'an earlier week of this job'},
+           which was held open until the job finished.</span>`
+      : `<span class="locked-note2">Synced to QuickBooks</span>
+         <button class="btn2 btn2-line" id="previewInvBtn">See the invoice</button>
+         <span class="qbo-note">Reverse it in QuickBooks before changing anything here.</span>`;
   }
 
   const previewBtn = document.getElementById('previewInvBtn');
   if (previewBtn) previewBtn.addEventListener('click', () => {
     const week = currentJobWeeks[g.id];
+    // On a week that was carried, the invoice belongs to the week that held it
+    // open. Everything the preview needs comes from there.
+    const home = week && week.billed_on_job_week_id
+      ? carriedParents[week.billed_on_job_week_id] : null;
     InvoicePreview.open({
-      jobWeekId: week ? week.id : null,
+      jobWeekId: home ? home.id : (week ? week.id : null),
       name: g.name,
-      qbInvoiceId: week ? week.qb_invoice_id : null,
+      qbInvoiceId: home ? home.qb_invoice_id : (week ? week.qb_invoice_id : null),
       onPushed: loadWeek,
     });
   });
@@ -746,6 +791,18 @@ function renderDetail(groupId) {
   const holdChk = document.getElementById('holdOpenChk');
   if (holdChk) holdChk.addEventListener('change', async (e) => {
     const want = e.target.checked;
+    // Untick it and billing_week_for stops finding this week, so any later work
+    // riding on this invoice goes straight back to invoices of its own. That is
+    // the opposite of what somebody unticking "keep it open" to send it means,
+    // and it is silent, so it gets said out loud instead.
+    if (!want && !confirm(
+        'Any later weeks of this job billing onto this invoice will go back to '
+        + 'invoices of their own.\n\nIf you meant to send this one, leave it '
+        + 'ticked and hit "Preview invoice & send" — it bills the later weeks '
+        + 'with it and closes itself.\n\nUntick it anyway?')) {
+      e.target.checked = true;
+      return;
+    }
     e.target.disabled = true;
     const { error } = await upsertJobWeek(g.id, { invoice_open: want });
     e.target.disabled = false;
