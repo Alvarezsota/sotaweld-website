@@ -14,7 +14,19 @@ let currentProfile = null;
 let logForWelderId = null;
 let weldersList = [];
 
+/* ...and a helper, who is a different animal.
+ *
+ * A helper has no login and no row of his own on a ticket -- he is named on
+ * somebody's ticket, in daily_entry_helpers, and that is where his hours and his
+ * per diem live. So there is no "log in as him" to imitate. Picking a helper
+ * here puts the page in helpers-only mode: every ticket it writes carries no
+ * welder, the office man turning it in as supervisor, and this helper's hours
+ * as the one helper line on it. */
+let logForHelperId = null;
+
 function logForId() { return logForWelderId || currentUser.id; }
+function loggingForHelper() { return !!logForHelperId; }
+function selectedHelper() { return helpers.find((h) => h.id === logForHelperId) || null; }
 
 /* How far back the date picker will go.
  *
@@ -36,7 +48,15 @@ function applyDateLimits() {
 }
 function isAdmin() { return !!(currentProfile && currentProfile.role === 'admin'); }
 function loggingForSomeoneElse() { return !!logForWelderId && logForWelderId !== currentUser.id; }
+function welderNameFor(id) {
+  const w = weldersList.find((x) => x.id === id);
+  return w ? w.full_name : 'the welder';
+}
 function logForName() {
+  if (loggingForHelper()) {
+    const h = selectedHelper();
+    return h ? h.name : 'that helper';
+  }
   if (!loggingForSomeoneElse()) return currentProfile ? currentProfile.full_name : 'you';
   const w = weldersList.find((x) => x.id === logForWelderId);
   return w ? w.full_name : 'that welder';
@@ -105,6 +125,23 @@ function jobLabelFor(row) {
   return row.one_off_name || 'One-off job';
 }
 
+/* Whose tickets to read.
+ *
+ * A welder's are his outright -- welder_id, or supervisor_id on a day he turned
+ * in for his helpers -- so they come straight off daily_entries. A helper owns
+ * nothing: his week is every ticket he is named on, which is only reachable
+ * through the helper lines. The inner join on his id is what makes that his
+ * week and not the whole crew's. */
+function entriesQuery(cols) {
+  if (loggingForHelper()) {
+    return sb.from('daily_entries')
+      .select(cols + ', daily_entry_helpers!inner(helper_id)')
+      .eq('daily_entry_helpers.helper_id', logForHelperId);
+  }
+  return sb.from('daily_entries').select(cols)
+    .or(`welder_id.eq.${logForId()},supervisor_id.eq.${logForId()}`);
+}
+
 async function loadWeekPanel() {
   weekPanelLabel.textContent = formatWeekLabel(weekPanelStart);
   weekPanelBody.innerHTML = '<div class="week-day-empty">Loading…</div>';
@@ -115,8 +152,7 @@ async function loadWeekPanel() {
   const end = ymd(addDays(weekPanelStart, 6));
 
   const [rowsRes, jwRes] = await Promise.all([
-    sb.from('daily_entries').select('*')
-      .or(`welder_id.eq.${logForId()},supervisor_id.eq.${logForId()}`)
+    entriesQuery('*')
       .gte('entry_date', start).lte('entry_date', end).order('entry_date'),
     sb.from('job_weeks').select('*').eq('week_start', start)
   ]);
@@ -172,7 +208,7 @@ function isLockedRow(row) {
 function renderWeekPanelBody() {
   let weekTotal = 0;
   weekPanelDays.forEach(day => {
-    day.dayHrs = day.dayEntries.reduce((s, d) => s + Number(d.row.hours), 0);
+    day.dayHrs = day.dayEntries.reduce((s, d) => s + hoursOnEntry(d), 0);
     weekTotal += day.dayHrs;
   });
 
@@ -187,17 +223,34 @@ function renderWeekPanelBody() {
   `).join('') + `<div class="week-total-row"><span>Week total</span><span>${weekTotal} hrs</span></div>`;
 }
 
+// A welder's hours for a day are the ticket's. A helper's are only his own
+// lines on it -- the rest of that ticket belongs to other men.
+function helperLinesFor(d) {
+  return d.helpers.filter((h) => h.helper_id === logForHelperId);
+}
+function hoursOnEntry(d) {
+  if (!loggingForHelper()) return Number(d.row.hours);
+  return helperLinesFor(d).reduce((s, h) => s + Number(h.hours), 0);
+}
+
 function weekEntryHtml(d) {
   const e = d.row;
   if (editingEntryUid === e.id) {
     return `<div class="week-entry-editing" data-entry-id="${e.id}">${editCardHtml(editState)}</div>`;
   }
   const locked = isLockedRow(e);
+  // A helper's week takes in tickets that are not his to change -- a welder's own
+  // day that he happened to be on. Those are read-only here; the way to fix one
+  // is to pick that welder above, on his own ticket, where the rest of it is.
+  const foreign = loggingForHelper() && !!e.welder_id;
+  const hrsText = loggingForHelper()
+    ? (hoursOnEntry(d) ? hoursOnEntry(d) + ' hrs' : '')
+    : (!e.welder_id ? 'Helpers only' : `${hoursTracked(e.job_id) ? e.hours + ' hrs' : ''}${e.per_diem ? ' · PD' : ''}${e.is_stainless ? ' · Stainless' : ''}`);
   return `
     <div class="week-entry" data-entry-id="${e.id}">
       <div class="week-entry-row">
         <span class="week-entry-name">${esc(jobLabelFor(e))}</span>
-        <span class="week-entry-hrs">${!e.welder_id ? 'Helpers only' : `${hoursTracked(e.job_id) ? e.hours + ' hrs' : ''}${e.per_diem ? ' · PD' : ''}${e.is_stainless ? ' · Stainless' : ''}`}</span>
+        <span class="week-entry-hrs">${hrsText}</span>
       </div>
       ${e.bid_item_id ? `<div class="week-entry-bid">${esc(bidItemName(e.bid_item_id))}</div>` : ''}
       ${e.description ? `<div class="week-entry-desc">${esc(e.description)}</div>` : ''}
@@ -207,7 +260,8 @@ function weekEntryHtml(d) {
         return `<div class="week-entry-helper">&#8618; ${esc(hp ? hp.name : 'Helper')} — ${h.hours} hrs${h.per_diem ? ' · PD' : ''}</div>`;
       }).join('')}
       <div class="week-entry-actions">
-        ${locked ? '<span class="week-entry-lock">Approved by office — contact them to change</span>' : `
+        ${locked ? '<span class="week-entry-lock">Approved by office — contact them to change</span>'
+          : foreign ? `<span class="week-entry-lock">On ${esc(welderNameFor(e.welder_id))}'s ticket — pick him above to change it</span>` : `
           <button type="button" class="we-edit-btn" data-action="edit-entry">Edit</button>
           <button type="button" class="we-del-btn" data-action="delete-entry">Delete</button>
         `}
@@ -236,6 +290,11 @@ function startEditEntry(entryId) {
     perDiem: !!e.per_diem,
     stainless: !!e.is_stainless,
     helpersOnly: !e.welder_id,
+    // Who this ticket already belongs to. Saving must put it back where it was:
+    // the picker says whose week is on screen, which on a helper's week is not
+    // the same man as the one who turned the ticket in.
+    ownerWelderId: e.welder_id || null,
+    ownerSupervisorId: e.supervisor_id || null,
     helpers: found.helpers.map(h => ({ uid: uid(), helperId: h.helper_id, hours: Number(h.hours), perDiem: !!h.per_diem })),
     parts: found.parts.length ? found.parts.map(p => ({ uid: uid(), name: p.description, qty: p.quantity, rate: p.rate })) : [newPart()],
     // How many child rows are on this ticket in the database right now. Saving
@@ -270,11 +329,10 @@ async function saveEditEntry(entryId) {
     // correcting a mistake could quietly create the very thing he was fixing.
     const sig = dupSigForCard(editState);
     if (sig && editState.entryDate) {
-      const { data: sameDay, error: sdErr } = await sb.from('daily_entries')
-        .select('id,welder_id,job_id,one_off_name,hours,description')
-        .or(`welder_id.eq.${logForId()},supervisor_id.eq.${logForId()}`)
-        .eq('entry_date', editState.entryDate)
-        .neq('id', entryId);
+      const { data: sameDay, error: sdErr } =
+        await entriesQuery('id,welder_id,job_id,one_off_name,hours,description')
+          .eq('entry_date', editState.entryDate)
+          .neq('id', entryId);
       if (sdErr) throw sdErr;
       const clash = (sameDay || []).find((r) => dupSigForRow(r) === sig);
       if (clash) {
@@ -290,8 +348,8 @@ async function saveEditEntry(entryId) {
 
     const helpersOnly = !!editState.helpersOnly;
     const { error: upErr } = await sb.from('daily_entries').update({
-      welder_id: helpersOnly ? null : logForId(),
-      supervisor_id: helpersOnly ? logForId() : null,
+      welder_id: helpersOnly ? null : (editState.ownerWelderId || logForId()),
+      supervisor_id: helpersOnly ? (editState.ownerSupervisorId || logForId()) : null,
       job_id: other ? null : editState.jobId,
       one_off_name: other ? editState.oneOffName.trim() : null,
       for_job_id: yard ? editState.forJobId : null,
@@ -545,7 +603,16 @@ function esc(str) {
 function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
 
 function newEntry() {
-  return { uid: uid(), jobId: '', oneOffName: '', forJobId: '', bidItemId: '', description: '', hours: 10, perDiem: true, stainless: false, helpersOnly: false, helpers: [], parts: [newPart()] };
+  const entry = { uid: uid(), jobId: '', oneOffName: '', forJobId: '', bidItemId: '', description: '', hours: 10, perDiem: true, stainless: false, helpersOnly: false, helpers: [], parts: [newPart()] };
+  // Logging for a helper: nobody's hours on the card are the office man's, so
+  // his are zeroed and the helper's line is already there with his name on it.
+  if (loggingForHelper()) {
+    entry.helpersOnly = true;
+    entry.hours = 0;
+    entry.perDiem = false;
+    entry.helpers = [{ uid: uid(), helperId: logForHelperId, hours: 10, perDiem: true }];
+  }
+  return entry;
 }
 
 // A card for a day the helpers worked and you did not. Your hours, per diem,
@@ -595,9 +662,7 @@ async function loadLoggedForDate() {
   loggedForDateKey = d;
   loggedForDate = [];
   if (!d || !currentUser) { updateSubmitState(); return; }
-  const { data } = await sb.from('daily_entries')
-    .select('id,welder_id,job_id,one_off_name,hours,description')
-    .or(`welder_id.eq.${logForId()},supervisor_id.eq.${logForId()}`)
+  const { data } = await entriesQuery('id,welder_id,job_id,one_off_name,hours,description')
     .eq('entry_date', d);
   if (dateInput.value !== d) return;  // they changed the date while this was in flight
   loggedForDate = data || [];
@@ -731,16 +796,25 @@ function partRowHtml(p) {
       </div>
     </div>`;
 }
+function helperModeNoteHtml() {
+  return `<span class="oneoff-note ho-note">This ticket is ${esc(logForName())}&rsquo;s day &mdash;
+    the hours below are the ones he gets paid for. You are turning it in for him.</span>`;
+}
 function helperBlockHtml(h) {
+  const named = helpers.find(x => x.id === h.helperId);
   return `
     <div class="helper-block" data-helper-uid="${h.uid}">
+      ${loggingForHelper() ? `
+      <div class="helper-top">
+        <span class="helper-locked-name">${esc(named ? named.name : 'Helper')}</span>
+      </div>` : `
       <div class="helper-top">
         <select class="input helper-select">
           <option value="">Pick helper…</option>
           ${helpers.map(hp => `<option value="${hp.id}" ${h.helperId === hp.id ? 'selected' : ''}>${esc(hp.name)}</option>`).join('')}
         </select>
         <button type="button" class="remove-helper" data-action="remove-helper">&times;</button>
-      </div>
+      </div>`}
       <div class="you-row">
         ${stepperHtml('Helper hours', h.hours)}
         ${pdToggleHtml(h.perDiem)}
@@ -797,11 +871,12 @@ function editCardHtml(entry) {
           ${hrsOn ? stepperHtml('Your hours', entry.hours) : ''}
           ${pdToggleHtml(entry.perDiem)}
           ${stainlessToggleHtml(entry.stainless)}`}
-        ${helpersOnlyToggleHtml(entry.helpersOnly)}
+        ${loggingForHelper() ? '' : helpersOnlyToggleHtml(entry.helpersOnly)}
       </div>
-      ${entry.helpersOnly ? '<span class="oneoff-note ho-note">You are not on this ticket — it is the helpers\' day only. The office will see you turned it in.</span>' : ''}
+      ${loggingForHelper() ? helperModeNoteHtml()
+        : entry.helpersOnly ? '<span class="oneoff-note ho-note">You are not on this ticket — it is the helpers\' day only. The office will see you turned it in.</span>' : ''}
       ${entry.helpers.map(h => helperBlockHtml(h)).join('')}
-      <button type="button" class="add-helper" data-action="add-helper">+ Add helper</button>
+      ${loggingForHelper() ? '' : '<button type="button" class="add-helper" data-action="add-helper">+ Add helper</button>'}
       <div class="edit-card-footer">
         <button type="button" class="btn2 btn2-line small" data-action="delete-entry">Delete ticket</button>
         <button type="button" class="btn2 btn2-solid small" data-action="save-edit">Save changes</button>
@@ -863,11 +938,12 @@ function entryCardHtml(entry, idx) {
           ${hrsOn ? stepperHtml('Your hours', entry.hours) : ''}
           ${pdToggleHtml(entry.perDiem)}
           ${stainlessToggleHtml(entry.stainless)}`}
-        ${helpersOnlyToggleHtml(entry.helpersOnly)}
+        ${loggingForHelper() ? '' : helpersOnlyToggleHtml(entry.helpersOnly)}
       </div>
-      ${entry.helpersOnly ? '<span class="oneoff-note ho-note">You are not on this ticket — it is the helpers\' day only. The office will see you turned it in.</span>' : ''}
+      ${loggingForHelper() ? helperModeNoteHtml()
+        : entry.helpersOnly ? '<span class="oneoff-note ho-note">You are not on this ticket — it is the helpers\' day only. The office will see you turned it in.</span>' : ''}
       ${entry.helpers.map(h => helperBlockHtml(h)).join('')}
-      <button type="button" class="add-helper" data-action="add-helper">+ Add helper</button>
+      ${loggingForHelper() ? '' : '<button type="button" class="add-helper" data-action="add-helper">+ Add helper</button>'}
     </div>`;
 }
 
@@ -1097,22 +1173,43 @@ function renderLogForPicker() {
   row.hidden = false;
 
   const me = currentProfile ? currentProfile.full_name : 'Me';
+  const crew = weldersList
+    .filter((w) => w.id !== currentUser.id)
+    .map((w) => `<option value="${escAttr(w.id)}"${w.id === logForWelderId ? ' selected' : ''}>${esc(w.full_name)}</option>`)
+    .join('');
+  // Helpers carry a prefix on the value because their ids come out of a
+  // different table than the crew's and must never be read as a welder's.
+  const hands = helpers
+    .map((h) => `<option value="helper:${escAttr(h.id)}"${h.id === logForHelperId ? ' selected' : ''}>${esc(h.name)}</option>`)
+    .join('');
   sel.innerHTML = `<option value="">${esc(me)} (me)</option>`
-    + weldersList
-        .filter((w) => w.id !== currentUser.id)
-        .map((w) => `<option value="${escAttr(w.id)}"${w.id === logForWelderId ? ' selected' : ''}>${esc(w.full_name)}</option>`)
-        .join('');
+    + (crew ? `<optgroup label="Crew">${crew}</optgroup>` : '')
+    + (hands ? `<optgroup label="Helpers">${hands}</optgroup>` : '');
   updateOnBehalfBanner();
 }
 
 function updateOnBehalfBanner() {
   const box = document.getElementById('onBehalfBanner');
   if (!box) return;
-  const on = loggingForSomeoneElse();
+  const on = loggingForSomeoneElse() || loggingForHelper();
   box.hidden = !on;
   if (!on) return;
-  const el = document.getElementById('onBehalfName');
-  if (el) el.textContent = logForName();
+  box.innerHTML = loggingForHelper()
+    ? `Logging for <b>${esc(logForName())}</b> &mdash; a helper. These hours go on his pay,
+       on a ticket you are turning in for him.`
+    : `Logging for <b>${esc(logForName())}</b> &mdash; these hours go on his ticket and his pay, not yours.`;
+}
+
+/* The safety gear check is the man's own truck -- his monitor, his extinguisher,
+   his gloves. A helper has none of that to report, and a flag raised while his
+   name is in the picker would file under the office man anyway, so the whole
+   card comes off screen rather than quietly land somewhere it does not belong. */
+function applyHelperMode() {
+  const card = document.getElementById('safetyCard');
+  if (card) card.style.display = loggingForHelper() ? 'none' : '';
+  if (loggingForHelper()) {
+    gasFlag = ''; extFlag = ''; needGloves = false; gloveSize = ''; needShields = false;
+  }
 }
 
 /* Switching welder reloads everything the page is showing, because all of it -
@@ -1121,8 +1218,16 @@ function updateOnBehalfBanner() {
    against a new name is how one man's day gets saved onto another's. */
 document.addEventListener('change', async (e) => {
   if (!e.target || e.target.id !== 'logForSelect') return;
-  logForWelderId = e.target.value || null;
+  const picked = e.target.value || '';
+  if (picked.startsWith('helper:')) {
+    logForHelperId = picked.slice('helper:'.length);
+    logForWelderId = null;
+  } else {
+    logForHelperId = null;
+    logForWelderId = picked || null;
+  }
   updateOnBehalfBanner();
+  applyHelperMode();
 
   entries = [newEntry()];
   render();
@@ -1180,10 +1285,9 @@ async function handleSubmit() {
   try {
     // Last line of defence: re-check the server right before inserting, in case
     // this day was already turned in from another device or on a double-tap.
-    const { data: freshRows, error: freshErr } = await sb.from('daily_entries')
-      .select('id,welder_id,job_id,one_off_name,hours,description')
-      .or(`welder_id.eq.${logForId()},supervisor_id.eq.${logForId()}`)
-      .eq('entry_date', entryDate);
+    const { data: freshRows, error: freshErr } =
+      await entriesQuery('id,welder_id,job_id,one_off_name,hours,description')
+        .eq('entry_date', entryDate);
     if (freshErr) throw freshErr;
     loggedForDate = freshRows || [];
     loggedForDateKey = entryDate;
@@ -1248,7 +1352,7 @@ async function handleSubmit() {
       }
     }
 
-    if (gasFlag || extFlag || needGloves || needShields) {
+    if (!loggingForHelper() && (gasFlag || extFlag || needGloves || needShields)) {
       await sb.from('safety_flags').insert({
         // His gear request, not the office's, even when the office typed it.
         welder_id: logForId(),
@@ -1278,7 +1382,8 @@ function showSuccess() {
   const successScreen = document.getElementById('successScreen');
   successScreen.style.display = 'block';
 
-  const total = entries.reduce((sum, e) => sum + Number(e.hours) + e.helpers.reduce((s, h) => s + (h.helperId ? Number(h.hours) : 0), 0), 0);
+  const total = entries.reduce((sum, e) => sum + (e.helpersOnly ? 0 : Number(e.hours))
+    + e.helpers.reduce((s, h) => s + (h.helperId ? Number(h.hours) : 0), 0), 0);
 
   const receiptBox = document.getElementById('receiptBox');
   receiptBox.innerHTML = `
@@ -1287,7 +1392,7 @@ function showSuccess() {
       <div class="receipt-job2">
         <div class="receipt-row2">
           <span class="rj-name2">${esc(jobName(e))}${isYard(e.jobId) && e.forJobId ? ' &rarr; ' + esc(jobs.find(j => j.id === e.forJobId)?.name || '') : ''}</span>
-          <span class="rj-hrs2">${hoursTracked(e.jobId) ? e.hours + ' hrs' : ''}${e.perDiem ? ' · PD' : ''}${e.stainless ? ' · Stainless' : ''}</span>
+          <span class="rj-hrs2">${e.helpersOnly ? '' : `${hoursTracked(e.jobId) ? e.hours + ' hrs' : ''}${e.perDiem ? ' · PD' : ''}${e.stainless ? ' · Stainless' : ''}`}</span>
         </div>
         ${isFlat(e.jobId) ? e.parts.filter(p => p.name.trim() && Number(p.qty) > 0 && Number(p.rate) > 0).map(p => `
           <div class="receipt-row2 receipt-helper2"><span>&#8618; ${esc(p.name)} (${p.qty} &times; $${p.rate})</span><span>$${partTotal(p).toLocaleString()}</span></div>
@@ -1379,9 +1484,10 @@ async function requireAuth() {
       : Promise.resolve({ data: [] }),
   ]);
   weldersList = weldersData || [];
-  renderLogForPicker();
   jobs = jobsData || [];
   helpers = helpersData || [];
+  // After helpers, not before: the picker lists them too.
+  renderLogForPicker();
   bidItemsByJob = {};
   (bidData || []).forEach(b => { (bidItemsByJob[b.job_id] ||= []).push(b); });
 
@@ -1396,7 +1502,7 @@ async function requireAuth() {
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden) return;
     const { data } = await sb.from('helpers_public').select('*').eq('active', true).order('name');
-    if (data && data.length) helpers = data;
+    if (data && data.length) { helpers = data; renderLogForPicker(); }
   });
 
   // Only the saved-work views, never `render()` — that would clear the entries

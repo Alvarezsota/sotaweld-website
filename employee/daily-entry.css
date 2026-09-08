@@ -170,6 +170,20 @@
 .de-logfor { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 .de-logfor[hidden] { display: none; }
 .de-logfor-select { flex: 1 1 auto; min-width: 0; max-width: 320px; }
+/* Native optgroup styling is white-on-white in a dark select on some phones. */
+.de-logfor-select optgroup { color: var(--text); background: var(--steel-800); font-weight: 700; }
+.de-logfor-select option { color: var(--text); background: var(--steel-800); font-weight: 500; }
+
+/* The helper's name on his own ticket. He was chosen in the picker above, so
+   there is nothing to pick here -- only a name, so it is plain that the hours
+   under it are his. */
+.helper-locked-name {
+  flex: 1 1 auto;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+  letter-spacing: .01em;
+}
 
 /* On somebody else's behalf. Amber and unmissable: an entry filed against the
    wrong man is his pay and his production, and nothing later in the week says

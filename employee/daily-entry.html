@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sota-build" content="20260906c">
+<meta name="sota-build" content="20260908a">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>Log Today's Work | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260906c">
-<link rel="stylesheet" href="daily-entry.css?v=20260906c">
+<link rel="stylesheet" href="dark-theme.css?v=20260908a">
+<link rel="stylesheet" href="daily-entry.css?v=20260908a">
 </head>
 <body>
 
@@ -57,10 +57,9 @@
 
     <!-- Loud on purpose. Typing a day onto the wrong man's payroll is the one
          mistake this screen can now make that it could not before. -->
-    <div class="de-onbehalf" id="onBehalfBanner" hidden>
-      Logging for <b id="onBehalfName">a welder</b> &mdash; these hours go on
-      his ticket and his pay, not yours.
-    </div>
+    <!-- Written by updateOnBehalfBanner(); a welder and a helper do not read
+         the same, because a helper has no ticket of his own to go on. -->
+    <div class="de-onbehalf" id="onBehalfBanner" hidden></div>
 
     <button type="button" class="week-toggle-btn" id="weekToggleBtn">
       <span>This week's logs</span>
@@ -79,7 +78,7 @@
 
     <button class="add-job" id="addJobBtn">+ Add another job (split day)</button>
 
-    <div class="card safety-card">
+    <div class="card safety-card" id="safetyCard">
       <div class="safety-head">Safety gear check</div>
       <p class="safety-note">Flag anything wrong and the office will see it right away.</p>
 
@@ -142,8 +141,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260906c"></script>
-<script src="daily-entry.js?v=20260906c"></script>
+<script src="supabase-client.js?v=20260908a"></script>
+<script src="daily-entry.js?v=20260908a"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>
