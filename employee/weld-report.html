@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="sota-build" content="20260906a">
+<meta name="sota-build" content="20260906b">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>Weld Report | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260906a">
-<link rel="stylesheet" href="weld-report.css?v=20260906a">
+<link rel="stylesheet" href="dark-theme.css?v=20260906b">
+<link rel="stylesheet" href="weld-report.css?v=20260906b">
 </head>
 <body>
 
@@ -51,15 +51,19 @@
     <!-- Shown when no hours ticket exists for the day being reported. It sends
          him to Log Work rather than only stopping him. -->
     <div class="wr-noticket" id="noTicketNotice" hidden>
-      <div class="wr-noticket-hd">Log your work first</div>
+      <div class="wr-noticket-hd" id="noTicketHd">Log your work first</div>
       <p class="wr-noticket-txt">
-        You have not logged your hours <b id="noTicketDay">today</b>. Your weld inches go against
-        the job on your hours ticket &mdash; without it there is no way to say which job they were on,
-        or how long you were on it.
+        No hours are logged <b id="noTicketDay">today</b>. Weld inches go against the job on the
+        hours ticket &mdash; without it there is no way to say which job they were on, or how long
+        that took.
       </p>
-      <p class="wr-noticket-txt">
+      <p class="wr-noticket-txt" id="noTicketStop">
         Log the day on <b>Log Work</b>, then come back. If you split the day, put each job on
         separately with its own hours and this report will show them apart.
+      </p>
+      <p class="wr-noticket-txt" id="noTicketAdmin" hidden>
+        You can file this anyway &mdash; the hours can follow. It will read as
+        <b>hours not logged</b> on the daily weld log until they do.
       </p>
       <a class="btn2 btn2-solid wr-noticket-btn" href="daily-entry.html">Go to Log Work</a>
     </div>
@@ -160,8 +164,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260906a"></script>
-<script src="weld-report.js?v=20260906a"></script>
+<script src="supabase-client.js?v=20260906b"></script>
+<script src="weld-report.js?v=20260906b"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

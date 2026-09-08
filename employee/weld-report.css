@@ -293,3 +293,7 @@
   width: auto;
   text-decoration: none;
 }
+
+/* An admin is being told, not stopped. Quieter edge to match. */
+.wr-noticket-soft { border-left-color: #6b7280; background: rgba(255, 255, 255, 0.03); }
+.wr-noticket-soft .wr-noticket-hd { color: #9aa3b2; }

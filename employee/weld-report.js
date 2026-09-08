@@ -387,6 +387,10 @@ function shortCustomers() {
     .sort((a, b) => (a.target - a.inches) - (b.target - b.inches));
 }
 
+function isAdmin() {
+  return !!(currentProfile && currentProfile.role === 'admin');
+}
+
 function firstNameOf(full) {
   const n = String(full || '').trim().split(/\s+/)[0];
   return n || '';
@@ -486,7 +490,12 @@ function updateSubmitState() {
     if (!missing && !(grand > 0 || hasMiscDesc)) missing = 'Enter at least some weld inches, or a description under Miscellaneous / Off-chart.';
     // Last, so it is the message left standing once the rest of the form is
     // right - the one thing between him and a filed report.
-    if (!missing && ticketFiled === false) {
+    //
+    // A welder is held. An admin is not: he is the one who fixes a day nobody
+    // logged, and the first thing this gate did was lock the office out of its
+    // own tool. He still gets the notice, because the inches still have nowhere
+    // good to land until the ticket exists - it just does not stop him.
+    if (!missing && ticketFiled === false && !isAdmin()) {
       missing = 'Log your work for this day first, on Log Work. Your inches go against the job on your hours ticket.';
     }
   }
@@ -794,10 +803,22 @@ function updateNoTicketNotice() {
   const show = ticketFiled === false;
   box.hidden = !show;
   if (!show) return;
+
   const d = dateInput.value || todayIso();
   const when = d === todayIso() ? 'today' : `for ${d}`;
   const el = document.getElementById('noTicketDay');
   if (el) el.textContent = when;
+
+  // Same facts, different standing. The office is being told; a welder is being
+  // stopped, and the box should not pretend otherwise in either direction.
+  const admin = isAdmin();
+  const hd = document.getElementById('noTicketHd');
+  if (hd) hd.textContent = admin ? 'No hours logged for this day' : 'Log your work first';
+  const stop = document.getElementById('noTicketStop');
+  if (stop) stop.hidden = admin;
+  const note = document.getElementById('noTicketAdmin');
+  if (note) note.hidden = !admin;
+  box.classList.toggle('wr-noticket-soft', admin);
 }
 
 async function suggestHelperFromTimeTicket(date) {
