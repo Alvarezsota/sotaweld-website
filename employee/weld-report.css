@@ -297,3 +297,16 @@
 /* An admin is being told, not stopped. Quieter edge to match. */
 .wr-noticket-soft { border-left-color: #6b7280; background: rgba(255, 255, 255, 0.03); }
 .wr-noticket-soft .wr-noticket-hd { color: #9aa3b2; }
+
+/* Phone: the weld-count boxes were 14px, and Safari zooms the page in on any
+   field under 16px the moment it is focused. On this screen a man taps twenty
+   of them in a row, so the page was jumping on every single tap and staying
+   zoomed in between.
+   
+   The table already scrolls inside .wr-table-scroll, so the extra width the
+   larger digits cost is absorbed there rather than pushing the page sideways.
+   Slightly wider boxes on a table that already scrolls beats a page that
+   re-zooms twenty times. */
+@media (max-width: 760px) {
+  .wr-qty-input { font-size: 16px; width: 58px; padding: 9px 3px; }
+}

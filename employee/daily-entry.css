@@ -201,3 +201,9 @@
   line-height: 1.5;
 }
 .de-onbehalf[hidden] { display: none; }
+
+/* Phone: the date box was 15px -- one pixel under the line at which Safari
+   zooms the page in on focus. It is the first thing touched on this screen. */
+@media (max-width: 760px) {
+  .de-date-input { font-size: 16px; }
+}

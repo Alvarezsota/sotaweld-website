@@ -9,6 +9,13 @@
 .btn2.small { font-size: 13px; padding: 8px 14px; white-space: nowrap; }
 
 .jt-head, .jt-row { display: grid; grid-template-columns: 1.7fr .95fr 1.05fr .75fr .75fr .95fr .6fr .65fr .65fr .65fr .65fr .58fr .58fr .58fr 36px; align-items: center; gap: 8px; }
+
+/* The per-cell wrappers carry each column's name for the phone layout. On a
+   wide screen they are not boxes at all: display:contents drops the wrapper and
+   hands its child straight to the grid above, so the table lays out exactly as
+   it did before they existed. The name they carry is drawn only on a phone. */
+.jt-f { display: contents; }
+.jt-f::before { content: none; }
 .jt-head { padding: 6px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); font-weight: 700; }
 .jt-head .c { text-align: center; }
 .jt-row { background: var(--steel-850); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; margin-bottom: 7px; }
@@ -57,31 +64,114 @@
 .pw-ok { color: var(--ok); }
 .pw-err { color: var(--danger); }
 
-@media (max-width: 640px) {
-  /* On a phone the row keeps what a job is and whether it is on: name,
-     operator, bid number, the two toggles and active. The money columns and
-     the two customer ones come back on a wider screen.
-     Header cells are hidden by position, row cells by class, because the row
-     builds its money cells with classes and the header does not. Positions
-     here are: 1 Job, 2 Operator, 3 Bills to, 4 Bid #, 5 PO #, 6 Their rep,
-     7 Per diem, 8 Bill rate, 9 Stainless, 10 Helper, 11 Bill together,
-     12 Lump sum, 13 Hours, 14 Active, 15 delete.
+/* ---------------------------------------------------------------------------
+   THE PHONE LAYOUT
+   ---------------------------------------------------------------------------
+   This used to hide eight of the fifteen columns below 640px and squeeze the
+   rest into a seven-column grid. Bills to, PO, Company rep, per diem and the
+   three rates were all among the eight, so on a phone the company rep could not
+   be set at all -- there was no field, only the gap where one would have been --
+   and what remained was seven borderless boxes about fifty pixels wide with a
+   header row too small to read.
 
-     Adding a column shifts every number after it, so these were renumbered
-     with it. Getting one wrong hides the wrong column and nothing says so. */
-  .jt-head span:nth-child(3),  .jt-row > *:nth-child(3),
-  .jt-head span:nth-child(5),  .jt-row > *:nth-child(5),
-  .jt-head span:nth-child(6),  .jt-row > *:nth-child(6),
-  .jt-head span:nth-child(7),  .jt-row .pd-cell,
-  .jt-head span:nth-child(8),  .jt-row .billrate-cell,
-  .jt-head span:nth-child(9),  .jt-row .stainless-cell,
-  .jt-head span:nth-child(10), .jt-row .helperrate-cell,
-  .jt-head span:nth-child(11), .jt-row > *:nth-child(11) { display: none; }
-  .jt-head, .jt-row { grid-template-columns: 1.5fr .95fr .8fr .62fr .62fr .62fr 36px; }
-  .p-head span:nth-child(2), .p-row > *:nth-child(2) { display: none; }
-  .p-head, .p-row { grid-template-columns: 1.8fr 1fr 1fr .8fr; }
-  .helpers-row-grid { grid-template-columns: 1.8fr 1fr 1fr .8fr 20px !important; }
-  .welders-row-grid { grid-template-columns: 1.8fr 1fr 1fr .8fr 100px !important; }
+   A wide table does not belong on a phone at all, so on a phone it stops being
+   one. Each job becomes a card, each field gets a line of its own with its name
+   above it, and nothing is left out. It is taller. Being able to read and reach
+   every field beats fitting more of them on a screen where none of them can be
+   read.
+
+   The breakpoint is 760px to match the navigation, so the page changes shape
+   once rather than twice.
+   --------------------------------------------------------------------------- */
+@media (max-width: 760px) {
+  /* No header row: the labels are on the fields now. */
+  .jt-head, .p-head, .bid-line-head { display: none; }
+
+  .jt-row {
+    display: block;
+    padding: 14px 14px 6px;
+    margin-bottom: 12px;
+    border-radius: 14px;
+  }
+  .jt-f {
+    display: block;
+    margin-bottom: 12px;
+  }
+  .jt-f::before {
+    content: attr(data-l);
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin: 0 0 5px 2px;
+  }
+
+  /* On the desk these are bare text that only look like fields when you reach
+     them. On a phone there is no hover, so a field has to look like one before
+     it is touched, or the card reads as a list of words. */
+  /* Every cell-in on the page, not just the ones in a job row -- the letterhead
+     fields are the same control and were left at 14px, which is enough on its
+     own to zoom the page. */
+  /* .cell-in.bid and .cell-in.num each carry two classes and so outrank a bare
+     .cell-in however late it is written. Bid # and PO # stayed at 13px on the
+     phone for exactly that reason. Matched here rather than reached for with
+     !important. */
+  .cell-in, .cell-in.bid, .cell-in.num {
+    border-color: var(--line);
+    background: var(--steel-800);
+    /* 16px, and not a pixel less. Safari zooms the whole page in on any input
+       under 16px, and then the man is pinching back out to see what he typed. */
+    font-size: 16px;
+    padding: 12px 13px;
+    border-radius: 10px;
+  }
+  /* The money cells are centred and 56px wide on the desk. Full width here. */
+  .jt-row .cell-in.num { width: 100%; text-align: left; }
+  .jt-row .c { justify-content: flex-start; }
+  .jt-row .pd-cell { gap: 6px; }
+  .jt-row .pd-dollar { font-size: 15px; }
+
+  /* A switch reads better beside its name than under it. */
+  .jt-f.jt-sw {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 2px;
+    margin-bottom: 8px;
+  }
+  .jt-f.jt-sw::before { margin: 0; }
+  .jt-f.jt-sw .c { flex: 0 0 auto; }
+  .toggle2 { width: 52px; height: 30px; }
+  .toggle2 .tk2 { width: 24px; height: 24px; }
+  .toggle2.ton .tk2 { left: 25px; }
+
+  /* Delete sits on its own at the foot of the card rather than as a stray
+     cross in a corner, where it is next to nothing and easy to hit. */
+  .jt-f.jt-del {
+    display: flex;
+    justify-content: flex-end;
+    border-top: 1px solid var(--line);
+    margin: 10px -14px 0;
+    padding: 8px 14px 4px;
+  }
+  .jt-f.jt-del::before {
+    flex: 1 1 auto;
+    align-self: center;
+    margin: 0;
+    color: var(--dim2);
+  }
+  .jt-row .row-x { font-size: 20px; padding: 6px 12px; }
+
+  /* Crew rows get the same treatment: everything shown, nothing squeezed. */
+  .p-row { display: block; padding: 14px; margin-bottom: 12px; border-radius: 14px; }
+  .p-row > * { margin-bottom: 10px; }
+  .p-row .cell-in { width: 100%; }
+  .p-row .cell-in.num { width: 100%; text-align: left; }
+
+  .bid-line { grid-template-columns: 1fr; gap: 6px; }
 }
 
 /* Lump sum bid items, entered per job right under its row on Setup. */

@@ -149,6 +149,61 @@ a { color: inherit; }
 .input:focus { outline: 2px solid var(--molten); outline-offset: -1px; }
 .input::placeholder { color: #6a7482; }
 
+/* ---------------------------------------------------------------------------
+   FIELDS AND DROPDOWNS ON A PHONE
+   ---------------------------------------------------------------------------
+   Every office page carries these, so the rules live here rather than being
+   written out once per page and drifting apart.
+
+   SIXTEEN PIXELS IS NOT A STYLE CHOICE. Safari zooms the page in whenever a
+   field under 16px is focused, and it does not zoom back out. Tap a 14px
+   dropdown on an iPhone and the page jumps; every page after that is being
+   read at the wrong magnification until it is reloaded. Several of these
+   screens were built at 13 and 14px.
+
+   A select is also the one control whose closed text cannot be ellipsised by
+   CSS, so a narrow one simply cuts a customer's name off mid-word with nothing
+   to say it did. They are given the full width of their line here instead. The
+   open list is drawn by the phone and shows the option in full, which is why
+   the wording and the price both belong in the option text itself.
+   --------------------------------------------------------------------------- */
+@media (max-width: 760px) {
+  /* Every control, not a list of type attributes. An <input> written without a
+     type is a text box, and input[type="text"] does not match it -- which is
+     how the Summary bid boxes stayed at 13px while everything beside them was
+     lifted. */
+  input, select, textarea,
+  .input, select.input, textarea.input {
+    font-size: 16px;
+  }
+  select, select.input {
+    width: 100%;
+    max-width: 100%;
+    /* The native arrow is drawn inside the box, and a select with no room left
+       for it puts the arrow on top of the last word. */
+    padding-right: 34px;
+    /* Ours instead of the platform's, so there is one arrow in one place at a
+       size that can be seen. */
+    -webkit-appearance: none;
+    appearance: none;
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--dim) 50%),
+      linear-gradient(135deg, var(--dim) 50%, transparent 50%);
+    background-position: right 16px center, right 11px center;
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+  }
+  /* Options are drawn by the phone, not by us, and inherit almost nothing --
+     but the colours matter on the handsets that do honour them, or the list
+     comes up white on white. */
+  select option { font-size: 16px; color: var(--text); background: var(--steel-800); }
+  select optgroup { font-size: 15px; font-weight: 800; color: var(--molten-2); background: var(--steel-850); }
+
+  /* A field that is only outlined when you hover it has no outline at all on a
+     phone, because there is no hover. */
+  .input, select.input, textarea.input { border-color: var(--line); }
+}
+
 .error-msg2 { color: var(--danger); font-size: 13px; margin-top: 8px; min-height: 1.2em; }
 .empty-state2 { color: var(--dim2); font-size: 14px; padding: 12px 4px; }
 

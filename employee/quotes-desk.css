@@ -313,3 +313,31 @@
   .qd-pull-bar { margin-left: 12px; margin-right: 12px; }
   .qd-pull-bar .btn2 { width: 100%; }
 }
+
+/* Phone: the quote desk's controls carry the same 16px floor as everywhere
+   else. Under it, focusing any of them zooms the page in and does not zoom
+   back out, so the rest of the quote is written at the wrong magnification. */
+@media (max-width: 760px) {
+  #sota-quote-desk .qd-input,
+  #sota-quote-desk .qd-select,
+  #sota-quote-desk .qd-area,
+  #sota-quote-desk input,
+  #sota-quote-desk select,
+  #sota-quote-desk textarea { font-size: 16px; }
+  /* One line item per line, each field full width, instead of seven columns
+     folded into two. */
+  #sota-quote-desk .qd-row { grid-template-columns: minmax(0,1fr); }
+
+  /* The tab strip scrolled sideways, which is the same thing that made the main
+     navigation unusable: a row you have to drag to read, opening somewhere
+     other than the left with most of it off-screen. It wraps instead. */
+  #sota-quote-desk .qd-tabs {
+    overflow-x: visible;
+    flex-wrap: wrap;
+    padding: 0 calc(var(--u) * 3);
+  }
+  #sota-quote-desk .qd-tab {
+    font-size: 14px;
+    padding: calc(var(--u) * 2.5) calc(var(--u) * 3);
+  }
+}

@@ -24,29 +24,48 @@ async function requireAuth() {
 }
 
 // ---------- Jobs ----------
+
+/* Every cell is wrapped, and the wrapper carries the column's name.
+ *
+ * On a wide screen the wrapper is display:contents -- it vanishes, its input
+ * lands straight in the fifteen-column grid, and the table looks exactly as it
+ * always has. On a phone the grid is abandoned, the wrapper becomes a block,
+ * and the name it is carrying is drawn above the field as a label.
+ *
+ * This replaces hiding columns by number. Eight of the fifteen used to be set
+ * to display:none below 640px -- Bills to, PO, Company rep, per diem and the
+ * three rates among them -- so on a phone there was no company rep field at
+ * all, only a gap where it would have been. The old comment there warned that
+ * adding a column shifted every number after it and nothing would say so if
+ * one was wrong. Nothing is numbered now, and nothing is hidden: a phone gets
+ * every field the desk gets, one per line with its name on it. */
+function jf(label, inner, cls) {
+  return `<div class="jt-f${cls ? ' ' + cls : ''}" data-l="${escAttr(label)}">${inner}</div>`;
+}
+
 function renderJobs() {
   const table = document.getElementById('jobsTable');
   table.innerHTML = jobsList.map(j => `
     <div class="jt-row${j.active ? '' : ' off'}" data-job-id="${j.id}">
-      <input class="cell-in strong job-name" value="${escAttr(j.name)}" placeholder="Job name">
-      <input class="cell-in job-operator" value="${escAttr(j.operator || '')}" placeholder="Operator">
-      ${billToCell(j)}
-      <input class="cell-in bid job-bidnum" value="${escAttr(j.bid_number || '')}" placeholder="Bid #" title="Your bid or quote number for this job. Optional, works on any job, and prints on the invoice.">
-      <input class="cell-in bid job-po" value="${escAttr(j.po_number || '')}" placeholder="PO #" title="The customer's purchase order number for this job. Theirs, not ours &mdash; their accounts match the bill against it, and without it an invoice can sit in a queue until somebody rings up. Prints on the invoice.">
-      <input class="cell-in job-rep" value="${escAttr(j.company_rep || '')}" placeholder="Company rep" title="The company representative on this job &mdash; the customer's man, not ours. Prints on the face of the invoice and on the crew sheet behind it, so whoever opens either one at their end knows whose job it is on their side.">
-      <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num job-pd" value="${escAttr(j.per_diem)}"></div>
-      <div class="c pd-cell billrate-cell"><span class="pd-dollar">$</span><input class="cell-in num job-billrate" value="${escAttr(j.bill_rate)}" placeholder="Default" title="Override the welder's normal bill rate for this job. Leave blank to use their default rate."></div>
-      <div class="c pd-cell stainless-cell"><span class="pd-dollar">$</span><input class="cell-in num job-stainless" value="${escAttr(j.stainless_bill_rate)}" title="Bill rate per hour when a welder flags stainless work on this job"></div>
-      <div class="c pd-cell helperrate-cell"><span class="pd-dollar">$</span><input class="cell-in num job-helperrate" value="${escAttr(j.helper_bill_rate)}" placeholder="Default" title="What a helper bills at per hour on this job. Leave blank and each helper bills at his own standing rate. The bill rate and stainless rate beside this are welding rates and never reach a helper."></div>
-      <div class="c"><button type="button" class="toggle2${j.bill_with_customer ? ' ton' : ''}" data-action="toggle-billwith"
+      ${jf('Job', `<input class="cell-in strong job-name" value="${escAttr(j.name)}" placeholder="Job name">`)}
+      ${jf('Operator', `<input class="cell-in job-operator" value="${escAttr(j.operator || '')}" placeholder="Operator">`)}
+      ${jf('Bills to', billToCell(j))}
+      ${jf('Bid #', `<input class="cell-in bid job-bidnum" value="${escAttr(j.bid_number || '')}" placeholder="Bid #" title="Your bid or quote number for this job. Optional, works on any job, and prints on the invoice.">`)}
+      ${jf('PO #', `<input class="cell-in bid job-po" value="${escAttr(j.po_number || '')}" placeholder="PO #" title="The customer's purchase order number for this job. Theirs, not ours &mdash; their accounts match the bill against it, and without it an invoice can sit in a queue until somebody rings up. Prints on the invoice.">`)}
+      ${jf('Company rep', `<input class="cell-in job-rep" value="${escAttr(j.company_rep || '')}" placeholder="Company rep" title="The company representative on this job &mdash; the customer's man, not ours. Prints on the face of the invoice and on the crew sheet behind it, so whoever opens either one at their end knows whose job it is on their side.">`)}
+      ${jf('Per diem', `<div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num job-pd" value="${escAttr(j.per_diem)}"></div>`)}
+      ${jf('Bill rate $/hr', `<div class="c pd-cell billrate-cell"><span class="pd-dollar">$</span><input class="cell-in num job-billrate" value="${escAttr(j.bill_rate)}" placeholder="Default" title="Override the welder's normal bill rate for this job. Leave blank to use their default rate."></div>`)}
+      ${jf('Stainless $/hr', `<div class="c pd-cell stainless-cell"><span class="pd-dollar">$</span><input class="cell-in num job-stainless" value="${escAttr(j.stainless_bill_rate)}" title="Bill rate per hour when a welder flags stainless work on this job"></div>`)}
+      ${jf('Helper $/hr', `<div class="c pd-cell helperrate-cell"><span class="pd-dollar">$</span><input class="cell-in num job-helperrate" value="${escAttr(j.helper_bill_rate)}" placeholder="Default" title="What a helper bills at per hour on this job. Leave blank and each helper bills at his own standing rate. The bill rate and stainless rate beside this are welding rates and never reach a helper."></div>`)}
+      ${jf('Bill together', `<div class="c"><button type="button" class="toggle2${j.bill_with_customer ? ' ton' : ''}" data-action="toggle-billwith"
         title="${j.qb_customer_id
           ? 'Bill this job together with this customer\u2019s other ticked jobs \u2014 one report and one invoice for the week instead of one each.'
           : 'Pick a customer for this job first. Jobs are grouped by their QuickBooks customer, so there is nothing to group by until one is set.'}"
-        ${j.qb_customer_id ? '' : 'disabled'}><span class="tk2"></span></button></div>
-      <div class="c"><button type="button" class="toggle2${j.billing_type === 'flat' ? ' ton' : ''}" data-action="toggle-flat" title="Lump sum job — bid as a price instead of billed by the hour. Bill it off bid line items on the Summary page."><span class="tk2"></span></button></div>
-      <div class="c"><button type="button" class="toggle2${j.track_hours ? ' ton' : ''}" data-action="toggle-hours" title="Track hours on this job's daily log"><span class="tk2"></span></button></div>
-      <div class="c"><button type="button" class="toggle2${j.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>
-      <button type="button" class="row-x" data-action="delete-job">&times;</button>
+        ${j.qb_customer_id ? '' : 'disabled'}><span class="tk2"></span></button></div>`, 'jt-sw')}
+      ${jf('Lump sum', `<div class="c"><button type="button" class="toggle2${j.billing_type === 'flat' ? ' ton' : ''}" data-action="toggle-flat" title="Lump sum job — bid as a price instead of billed by the hour. Bill it off bid line items on the Summary page."><span class="tk2"></span></button></div>`, 'jt-sw')}
+      ${jf('Track hours', `<div class="c"><button type="button" class="toggle2${j.track_hours ? ' ton' : ''}" data-action="toggle-hours" title="Track hours on this job's daily log"><span class="tk2"></span></button></div>`, 'jt-sw')}
+      ${jf('Active', `<div class="c"><button type="button" class="toggle2${j.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>`, 'jt-sw')}
+      ${jf('Delete', `<button type="button" class="row-x" data-action="delete-job">&times;</button>`, 'jt-del')}
     </div>
     ${bidPanelHtml(j)}
   `).join('');
