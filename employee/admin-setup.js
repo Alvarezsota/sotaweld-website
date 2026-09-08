@@ -1,6 +1,14 @@
 let currentUser = null;
 let jobsList = [];
 let customersList = [];   // qb_customers -- who a job can bill to
+
+/* Rate sheets: a customer who bills by named classification rather than by one
+   welder rate. Electric Hydrogen is the first. Loaded here so the People tab
+   can say which classification each man bills as on that customer's work. */
+let rateSheets = [];          // rate_sheets rows
+let ratePersonnel = {};       // sheet id -> personnel items, priced
+let crewClass = {};           // sheet id -> 'welder:<id>' -> rate_sheet_item_id
+let activeSheetId = null;
 let bidItemsByJob = {};   // job_id -> rows from job_bid_items
 let openBidJobId = null; // which lump sum job has its bid panel open
 let weldersList = [];
@@ -21,6 +29,101 @@ async function requireAuth() {
     return null;
   }
   return session.user;
+}
+
+/* ---------- Rate sheets ----------
+   A man's classification is worth money, so the dropdown says what it is worth.
+   "Combo Welder" and "Combo Welder - $94.80/hr" are the same choice, but only
+   one of them can be checked against the rate sheet the customer signed without
+   opening the rate sheet the customer signed. */
+function rateLabel(it) {
+  const per = it.unit === 'hourly' ? '/hr'
+            : it.unit === 'day' ? '/day'
+            : it.unit === 'each_per_day' ? ' each/day'
+            : ' each';
+  const money = Number(it.rate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${it.description} \u2014 $${money}${per}`;
+}
+
+async function loadRateSheets() {
+  const [sheetRes, itemRes, classRes] = await Promise.all([
+    sb.from('rate_sheets').select('*').eq('active', true).order('effective_on', { ascending: false }),
+    sb.from('rate_sheet_items').select('*').eq('kind', 'personnel').eq('active', true).order('sort_order'),
+    sb.from('crew_rate_class').select('*'),
+  ]);
+  rateSheets = sheetRes.data || [];
+  ratePersonnel = {};
+  (itemRes.data || []).forEach((i) => { (ratePersonnel[i.rate_sheet_id] ||= []).push(i); });
+  crewClass = {};
+  (classRes.data || []).forEach((c) => {
+    (crewClass[c.rate_sheet_id] ||= {})[`${c.person_kind}:${c.person_id}`] = c.rate_sheet_item_id;
+  });
+  if (!activeSheetId || !rateSheets.some((s) => s.id === activeSheetId)) {
+    activeSheetId = rateSheets.length ? rateSheets[0].id : null;
+  }
+  renderRateBar();
+}
+
+function renderRateBar() {
+  const bar = document.getElementById('rsBar');
+  if (!bar) return;
+  // Nothing to choose and nothing to explain until a customer has a sheet.
+  if (!rateSheets.length) { bar.hidden = true; return; }
+  bar.hidden = false;
+
+  const pick = document.getElementById('rsPick');
+  pick.innerHTML = rateSheets
+    .map((s) => `<option value="${escAttr(s.id)}"${s.id === activeSheetId ? ' selected' : ''}>${esc(s.name)}</option>`)
+    .join('');
+
+  const sheet = rateSheets.find((s) => s.id === activeSheetId);
+  const note = document.getElementById('rsNote');
+  if (sheet && note) {
+    const ot = sheet.ot_after_hours
+      ? `Time and a half after ${Number(sheet.ot_after_hours)} hrs a week, per man.`
+      : 'Straight time.';
+    note.textContent = `${(ratePersonnel[sheet.id] || []).length} classifications. ${ot}`;
+  }
+}
+
+/* The classification cell. Blank is a real answer and stays available: most of
+   the crew never touch this customer's work, and a man with no classification
+   simply is not billed off this sheet. */
+function classLabel() {
+  const sheet = rateSheets.find((x) => x.id === activeSheetId);
+  return sheet ? `${sheet.name} class` : 'Classification';
+}
+
+function classCell(kind, id) {
+  if (!activeSheetId) return '<span class="rs-col rs-none">&mdash;</span>';
+  const items = ratePersonnel[activeSheetId] || [];
+  const chosen = (crewClass[activeSheetId] || {})[`${kind}:${id}`] || '';
+  return `<div class="rs-col">
+      <select class="cell-in rate-class" data-kind="${escAttr(kind)}" title="What this man bills as on this customer's rate sheet. Set once here, never picked in the field.">
+        <option value="">&mdash; not on this sheet &mdash;</option>
+        ${items.map((it) => `<option value="${escAttr(it.id)}"${it.id === chosen ? ' selected' : ''}>${esc(rateLabel(it))}</option>`).join('')}
+      </select>
+    </div>`;
+}
+
+async function saveRateClass(kind, personId, itemId) {
+  if (!activeSheetId) return;
+  const key = `${kind}:${personId}`;
+  const bag = (crewClass[activeSheetId] ||= {});
+  if (!itemId) {
+    delete bag[key];
+    const { error } = await sb.from('crew_rate_class').delete()
+      .eq('rate_sheet_id', activeSheetId).eq('person_kind', kind).eq('person_id', personId);
+    if (error) alert('That classification did not clear: ' + error.message);
+    return;
+  }
+  bag[key] = itemId;
+  const { error } = await sb.from('crew_rate_class').upsert(
+    { rate_sheet_id: activeSheetId, person_kind: kind, person_id: personId, rate_sheet_item_id: itemId },
+    { onConflict: 'rate_sheet_id,person_kind,person_id' });
+  // Never let the screen claim a rate that did not save -- it is what the
+  // customer gets billed.
+  if (error) { delete bag[key]; alert('That classification did not save: ' + error.message); renderWelders(); renderHelpers(); }
 }
 
 // ---------- Jobs ----------
@@ -354,14 +457,13 @@ function renderWelders() {
   document.getElementById('welderCount').textContent = weldersList.length;
   table.innerHTML = weldersList.map(p => `
     <div class="p-row welders-row-grid" data-profile-id="${p.id}">
-      <div>
-        <input class="cell-in strong welder-name" value="${escAttr(p.full_name)}" placeholder="Name">
-      </div>
-      <div class="c rate"><span class="rd">$</span><input class="cell-in num welder-pay" value="${escAttr(p.pay_rate)}"></div>
-      <div class="c rate"><span class="rd">$</span><input class="cell-in num welder-bill" value="${escAttr(p.bill_rate)}"></div>
-      <span class="c margin-cell">$${(num(p.bill_rate) - num(p.pay_rate)).toFixed(0)}</span>
-      <span class="c">${p.role === 'admin' ? '<span class="admin-tag">Admin</span>' : ''}</span>
-      <span class="c"><button type="button" class="pw-btn" data-action="toggle-password">${passwordEditId === p.id ? 'Cancel' : 'Set password'}</button></span>
+      ${jf('Name', `<input class="cell-in strong welder-name" value="${escAttr(p.full_name)}" placeholder="Name">`)}
+      ${jf('Pay / hr', `<div class="c rate"><span class="rd">$</span><input class="cell-in num welder-pay" value="${escAttr(p.pay_rate)}"></div>`)}
+      ${jf('Bill / hr', `<div class="c rate"><span class="rd">$</span><input class="cell-in num welder-bill" value="${escAttr(p.bill_rate)}"></div>`)}
+      ${jf('Margin / hr', `<span class="c margin-cell">$${(num(p.bill_rate) - num(p.pay_rate)).toFixed(0)}</span>`)}
+      ${jf(classLabel(), classCell('welder', p.id))}
+      ${jf('Admin', `<span class="c">${p.role === 'admin' ? '<span class="admin-tag">Admin</span>' : ''}</span>`)}
+      ${jf('Password', `<span class="c"><button type="button" class="pw-btn" data-action="toggle-password">${passwordEditId === p.id ? 'Cancel' : 'Set password'}</button></span>`)}
     </div>
     ${passwordEditId === p.id ? `
       <div class="pw-panel" data-profile-id="${p.id}">
@@ -425,6 +527,29 @@ document.getElementById('weldersTable').addEventListener('click', async (e) => {
   }
 });
 
+/* Saving a classification. Change rather than blur: a select is done the moment
+   it closes, and the two crew tables listen for blur only, which a select never
+   fires the way a text box does. */
+document.getElementById('weldersTable').addEventListener('change', async (e) => {
+  if (!e.target.classList.contains('rate-class')) return;
+  const row = e.target.closest('[data-profile-id]');
+  if (row) await saveRateClass('welder', row.dataset.profileId, e.target.value);
+});
+document.getElementById('helpersTable').addEventListener('change', async (e) => {
+  if (!e.target.classList.contains('rate-class')) return;
+  const row = e.target.closest('[data-helper-id]');
+  if (row) await saveRateClass('helper', row.dataset.helperId, e.target.value);
+});
+
+// Switching sheet redraws both tables against the new one.
+document.addEventListener('change', (e) => {
+  if (!e.target || e.target.id !== 'rsPick') return;
+  activeSheetId = e.target.value || null;
+  renderRateBar();
+  renderWelders();
+  renderHelpers();
+});
+
 async function loadWelders() {
   const { data } = await sb.from('profiles').select('*').order('full_name');
   weldersList = data || [];
@@ -455,12 +580,13 @@ function renderHelpers() {
   document.getElementById('helperCount').textContent = helpersList.length;
   table.innerHTML = helpersList.map(h => `
     <div class="p-row helpers-row-grid${h.active ? '' : ' off'}" data-helper-id="${h.id}">
-      <input class="cell-in strong helper-name" value="${escAttr(h.name)}" placeholder="Name">
-      <div class="c rate"><span class="rd">$</span><input class="cell-in num helper-pay" value="${escAttr(h.pay_rate)}"></div>
-      <div class="c rate"><span class="rd">$</span><input class="cell-in num helper-bill" value="${escAttr(h.bill_rate)}"></div>
-      <span class="c margin-cell">$${(num(h.bill_rate) - num(h.pay_rate)).toFixed(0)}</span>
-      <div class="c"><button type="button" class="toggle2${h.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>
-      <button type="button" class="row-x" data-action="delete-helper">&times;</button>
+      ${jf('Name', `<input class="cell-in strong helper-name" value="${escAttr(h.name)}" placeholder="Name">`)}
+      ${jf('Pay / hr', `<div class="c rate"><span class="rd">$</span><input class="cell-in num helper-pay" value="${escAttr(h.pay_rate)}"></div>`)}
+      ${jf('Bill / hr', `<div class="c rate"><span class="rd">$</span><input class="cell-in num helper-bill" value="${escAttr(h.bill_rate)}"></div>`)}
+      ${jf('Margin / hr', `<span class="c margin-cell">$${(num(h.bill_rate) - num(h.pay_rate)).toFixed(0)}</span>`)}
+      ${jf(classLabel(), classCell('helper', h.id))}
+      ${jf('Active', `<div class="c"><button type="button" class="toggle2${h.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>`, 'jt-sw')}
+      ${jf('Delete', `<button type="button" class="row-x" data-action="delete-helper">&times;</button>`, 'jt-del')}
     </div>
   `).join('');
 }
@@ -588,6 +714,9 @@ function wireCompanyInfo() {
 
   wireCompanyInfo();
   wireOneDrive();
+  // Rate sheets first: the crew rows draw a classification cell from them, so
+  // loading them alongside would race and render an empty dropdown half the time.
+  await loadRateSheets();
   await Promise.all([loadJobs(), loadWelders(), loadHelpers(), loadCompanyInfo(), loadOneDrive()]);
 })();
 

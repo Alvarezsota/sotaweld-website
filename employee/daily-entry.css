@@ -207,3 +207,62 @@
 @media (max-width: 760px) {
   .de-date-input { font-size: 16px; }
 }
+
+/* ---------------------------------------------------------------------------
+   EQUIPMENT, on customers who bill for it
+   ---------------------------------------------------------------------------
+   Drawn only when the job's customer has a rate sheet with equipment on it, so
+   a welder on any other job sees the screen he saw yesterday. */
+.equip-wrap {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--steel-600);
+}
+.equip-head {
+  display: block;
+  font-size: 11px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--molten-2);
+  margin-bottom: 8px;
+}
+.equip-block {
+  margin-bottom: 10px; padding: 12px;
+  border-radius: 12px;
+  background: var(--steel-800);
+  border: 1px dashed var(--steel-600);
+}
+.equip-top { display: flex; gap: 8px; align-items: center; }
+.equip-top .equip-select { flex: 1 1 auto; min-width: 0; }
+.remove-equip {
+  width: 40px; height: 40px; flex-shrink: 0; border-radius: 10px;
+  background: var(--steel-700); border: 1px solid var(--line); color: var(--danger);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px;
+}
+.equip-fields {
+  display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 10px;
+}
+.equip-f { display: flex; flex-direction: column; gap: 4px; flex: 1 1 120px; min-width: 0; }
+.equip-l {
+  font-size: 11px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--dim);
+}
+/* What the line comes to, said before it is sent rather than after the customer
+   queries it. Ten hours against a $275 trencher is $2,750, and that is worth
+   seeing on the ticket. */
+.equip-total {
+  flex: 0 0 auto; align-self: center;
+  font-weight: 800; font-variant-numeric: tabular-nums;
+  color: var(--ok); font-size: 15px; padding-bottom: 10px;
+}
+.add-equip {
+  width: 100%; margin-top: 2px; padding: 12px;
+  background: none; border: 1px dashed var(--steel-600); border-radius: 12px;
+  color: var(--molten); font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer;
+}
+.add-equip:hover { border-color: var(--molten); }
+
+@media (max-width: 760px) {
+  /* The dropdown carries a name and a price and needs the whole line for it. */
+  .equip-fields { gap: 8px; }
+  .equip-f { flex: 1 1 100%; }
+  .equip-total { align-self: flex-start; padding: 4px 0 0; }
+}

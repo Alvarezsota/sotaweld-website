@@ -173,7 +173,7 @@ document.getElementById('nextWeek').addEventListener('click', () => {
     profile ? profile.full_name : currentUser.email;
   if (profile && profile.role === 'admin') {
     document.getElementById('adminBadge').style.display = 'inline-block';
-    document.getElementById('adminNavLinks').style.display = 'inline';
+    document.getElementById('adminNavLinks').style.display = '';
   }
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {

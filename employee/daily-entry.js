@@ -64,6 +64,17 @@ function logForName() {
 let jobs = [];
 let helpers = [];
 let bidItemsByJob = {};   // job_id -> [{id, description, unit}] from bid_items_public
+/* Equipment a customer bills for in its own right.
+ *
+ * Only some customers do. A sheet belongs to a QuickBooks customer, so the
+ * picker appears on a ticket for one of their jobs and nowhere else -- a welder
+ * on any other job sees exactly the screen he saw yesterday.
+ *
+ * The rate is on the option text. "Excavator Large" and "Excavator Large -
+ * $113.00/hr" are the same choice, but only one of them can be checked against
+ * the sheet the customer signed without going and finding the sheet. */
+let rateSheetByCustomer = {};   // qb_customer_id -> { id, name, ... }
+let equipBySheet = {};          // sheet id -> priced equipment items
 let entries = [];
 let gasFlag = '';
 let extFlag = '';
@@ -172,12 +183,15 @@ async function loadWeekPanel() {
 
   let helperRows = [];
   let partRows = [];
+  let equipRows = [];
   if (weekEntries.length) {
-    const [{ data: hRows }, { data: pRows }] = await Promise.all([
+    const [{ data: hRows }, { data: eRows }, { data: pRows }] = await Promise.all([
       sb.from('daily_entry_helpers').select('*').in('daily_entry_id', weekEntries.map(e => e.id)),
+      sb.from('daily_entry_equipment').select('*').in('daily_entry_id', weekEntries.map(e => e.id)),
       sb.from('daily_entry_parts').select('*').in('daily_entry_id', weekEntries.map(e => e.id))
     ]);
     helperRows = hRows || [];
+    equipRows = eRows || [];
     partRows = pRows || [];
   }
 
@@ -187,6 +201,7 @@ async function loadWeekPanel() {
     const dayEntries = weekEntries.filter(e => e.entry_date === dateStr).map(e => ({
       row: e,
       helpers: helperRows.filter(h => h.daily_entry_id === e.id),
+      equipment: equipRows.filter(q => q.daily_entry_id === e.id),
       parts: partRows.filter(p => p.daily_entry_id === e.id)
     }));
     weekPanelDays.push({ dateStr, dayEntries });
@@ -300,6 +315,8 @@ function startEditEntry(entryId) {
     // How many child rows are on this ticket in the database right now. Saving
     // clears them and re-inserts; if the clear removes fewer than this, we must
     // not insert or the helper/part lines get duplicated.
+    equipment: (found.equipment || []).map(r => ({ uid: uid(), itemId: r.rate_sheet_item_id, amount: Number(r.amount), qty: Number(r.quantity) })),
+    savedEquipCount: (found.equipment || []).length,
     savedHelperCount: found.helpers.length,
     savedPartCount: found.parts.length
   };
@@ -375,6 +392,20 @@ async function saveEditEntry(entryId) {
     if (helperRows.length) {
       const { error: heErr } = await sb.from('daily_entry_helpers').insert(helperRows);
       if (heErr) throw heErr;
+    }
+
+    const { data: delEquip, error: deqErr } = await sb.from('daily_entry_equipment')
+      .delete().eq('daily_entry_id', entryId).select('id');
+    if (deqErr) throw deqErr;
+    if ((delEquip || []).length < (editState.savedEquipCount || 0)) throw new Error('CHILD_DELETE_BLOCKED');
+
+    const equipRowsOut = (editState.equipment || [])
+      .filter(r => r.itemId && Number(r.amount) > 0)
+      .map(r => ({ daily_entry_id: entryId, rate_sheet_item_id: r.itemId,
+                   amount: Number(r.amount), quantity: Number(r.qty) || 1 }));
+    if (equipRowsOut.length) {
+      const { error: eqErr } = await sb.from('daily_entry_equipment').insert(equipRowsOut);
+      if (eqErr) throw eqErr;
     }
 
     const { data: delParts, error: dpErr } = await sb.from('daily_entry_parts')
@@ -603,7 +634,7 @@ function esc(str) {
 function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
 
 function newEntry() {
-  const entry = { uid: uid(), jobId: '', oneOffName: '', forJobId: '', bidItemId: '', description: '', hours: 10, perDiem: true, stainless: false, helpersOnly: false, helpers: [], parts: [newPart()] };
+  const entry = { uid: uid(), jobId: '', oneOffName: '', forJobId: '', bidItemId: '', description: '', hours: 10, perDiem: true, stainless: false, helpersOnly: false, helpers: [], parts: [newPart()], equipment: [] };
   // Logging for a helper: nobody's hours on the card are the office man's, so
   // his are zeroed and the helper's line is already there with his name on it.
   if (loggingForHelper()) {
@@ -708,6 +739,80 @@ function dupBannerHtml(entry, kind) {
     + selectedDateLabel() + '. You do not need to send it again.</span>'
     + '<span>If the hours were wrong, open <b>This week</b> below and hit <b>Edit</b> on it.</span>';
 }
+/* ---------- Equipment, on customers who bill for it ---------- */
+function equipUnitWord(unit) {
+  return unit === 'hourly' ? 'Hours' : unit === 'day' ? 'Days' : 'Days';
+}
+function equipRateLabel(it) {
+  const per = it.unit === 'hourly' ? '/hr'
+            : it.unit === 'day' ? '/day'
+            : it.unit === 'each_per_day' ? ' each/day'
+            : ' each';
+  const money = Number(it.rate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${it.description} \u2014 $${money}${per}`;
+}
+/* Which sheet, if any, applies to the job on this card. Yard work billed to
+   another job follows that job, the same way its hours do. */
+function sheetForEntry(entry) {
+  const jid = isYard(entry.jobId) && entry.forJobId ? entry.forJobId : entry.jobId;
+  const job = jobs.find((j) => j.id === jid);
+  if (!job || !job.qb_customer_id) return null;
+  return rateSheetByCustomer[String(job.qb_customer_id)] || null;
+}
+function equipItemsFor(entry) {
+  const sheet = sheetForEntry(entry);
+  return sheet ? (equipBySheet[sheet.id] || []) : [];
+}
+function newEquipRow() {
+  return { uid: uid(), itemId: '', amount: '', qty: 1 };
+}
+function equipBlockHtml(entry, r) {
+  const items = equipItemsFor(entry);
+  const chosen = items.find((i) => i.id === r.itemId);
+  const unit = chosen ? chosen.unit : 'hourly';
+  const byEach = unit === 'each' || unit === 'each_per_day';
+  const groups = [...new Set(items.map((i) => i.category))];
+  return `
+    <div class="equip-block" data-equip-uid="${r.uid}">
+      <div class="equip-top">
+        <select class="input equip-select">
+          <option value="">Pick equipment\u2026</option>
+          ${groups.map((g) => `<optgroup label="${escAttr(g)}">${
+            items.filter((i) => i.category === g)
+                 .map((i) => `<option value="${escAttr(i.id)}"${i.id === r.itemId ? ' selected' : ''}>${esc(equipRateLabel(i))}</option>`)
+                 .join('')}</optgroup>`).join('')}
+        </select>
+        <button type="button" class="remove-equip" data-action="remove-equip">&times;</button>
+      </div>
+      ${r.itemId ? `
+        <div class="equip-fields">
+          <label class="equip-f">
+            <span class="equip-l">${esc(byEach ? 'Days' : equipUnitWord(unit))}</span>
+            <input type="number" step="0.5" min="0" inputmode="decimal"
+                   class="input equip-amount" value="${escAttr(r.amount)}" placeholder="0">
+          </label>
+          ${byEach ? `
+          <label class="equip-f">
+            <span class="equip-l">How many</span>
+            <input type="number" step="1" min="0" inputmode="numeric"
+                   class="input equip-qty" value="${escAttr(r.qty)}" placeholder="1">
+          </label>` : ''}
+          <span class="equip-total">${equipLineText(chosen, r)}</span>
+        </div>` : ''}
+    </div>`;
+}
+/* What this line comes to, said out loud on the card. A man who has just typed
+   ten hours against a $275 trencher should see $2,750 before he sends it, not
+   after the customer queries it. */
+function equipLineText(item, r) {
+  if (!item) return '';
+  const amt = Number(r.amount) || 0;
+  const qty = (item.unit === 'each' || item.unit === 'each_per_day') ? (Number(r.qty) || 0) : 1;
+  const total = item.unit === 'each' ? Number(item.rate) * qty : Number(item.rate) * amt * qty;
+  if (!total) return '';
+  return '$' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function newHelperRow() {
   return { uid: uid(), helperId: '', hours: 10, perDiem: true };
 }
@@ -877,6 +982,12 @@ function editCardHtml(entry) {
         : entry.helpersOnly ? '<span class="oneoff-note ho-note">You are not on this ticket — it is the helpers\' day only. The office will see you turned it in.</span>' : ''}
       ${entry.helpers.map(h => helperBlockHtml(h)).join('')}
       ${loggingForHelper() ? '' : '<button type="button" class="add-helper" data-action="add-helper">+ Add helper</button>'}
+      ${equipItemsFor(entry).length ? `
+        <div class="equip-wrap">
+          <span class="equip-head">Equipment on ${esc((sheetForEntry(entry) || {}).name || 'this job')}</span>
+          ${(entry.equipment || []).map(r => equipBlockHtml(entry, r)).join('')}
+          <button type="button" class="add-equip" data-action="add-equip">+ Add equipment</button>
+        </div>` : ''}
       <div class="edit-card-footer">
         <button type="button" class="btn2 btn2-line small" data-action="delete-entry">Delete ticket</button>
         <button type="button" class="btn2 btn2-solid small" data-action="save-edit">Save changes</button>
@@ -944,6 +1055,12 @@ function entryCardHtml(entry, idx) {
         : entry.helpersOnly ? '<span class="oneoff-note ho-note">You are not on this ticket — it is the helpers\' day only. The office will see you turned it in.</span>' : ''}
       ${entry.helpers.map(h => helperBlockHtml(h)).join('')}
       ${loggingForHelper() ? '' : '<button type="button" class="add-helper" data-action="add-helper">+ Add helper</button>'}
+      ${equipItemsFor(entry).length ? `
+        <div class="equip-wrap">
+          <span class="equip-head">Equipment on ${esc((sheetForEntry(entry) || {}).name || 'this job')}</span>
+          ${(entry.equipment || []).map(r => equipBlockHtml(entry, r)).join('')}
+          <button type="button" class="add-equip" data-action="add-equip">+ Add equipment</button>
+        </div>` : ''}
     </div>`;
 }
 
@@ -1016,6 +1133,18 @@ entriesContainer.addEventListener('click', (e) => {
   }
   if (e.target.closest('[data-action="add-part"]')) {
     entry.parts.push(newPart());
+    render();
+    return;
+  }
+  if (e.target.closest('[data-action="add-equip"]')) {
+    (entry.equipment ||= []).push(newEquipRow());
+    render();
+    return;
+  }
+  const removeEquipBtn = e.target.closest('[data-action="remove-equip"]');
+  if (removeEquipBtn) {
+    const el = e.target.closest('[data-equip-uid]');
+    entry.equipment = (entry.equipment || []).filter(x => x.uid !== el.dataset.equipUid);
     render();
     return;
   }
@@ -1104,6 +1233,19 @@ entriesContainer.addEventListener('change', (e) => {
     updateSubmitState();
     return;
   }
+  const equipEl = e.target.closest('[data-equip-uid]');
+  if (equipEl && e.target.classList.contains('equip-select')) {
+    const r = (entry.equipment || []).find(x => x.uid === equipEl.dataset.equipUid);
+    if (r) {
+      r.itemId = e.target.value;
+      // A daily machine and an hourly one do not take the same number, so the
+      // amount does not carry across a change of machine.
+      r.amount = '';
+      r.qty = 1;
+    }
+    render();
+    return;
+  }
 });
 
 entriesContainer.addEventListener('input', (e) => {
@@ -1121,6 +1263,12 @@ entriesContainer.addEventListener('input', (e) => {
     entry.oneOffName = e.target.value;
     updateSubmitState();
     return;
+  }
+  const equipEl = e.target.closest('[data-equip-uid]');
+  if (equipEl) {
+    const r = (entry.equipment || []).find(x => x.uid === equipEl.dataset.equipUid);
+    if (r && e.target.classList.contains('equip-amount')) { r.amount = e.target.value; updateEquipTotal(entry, r); return; }
+    if (r && e.target.classList.contains('equip-qty'))    { r.qty = e.target.value;    updateEquipTotal(entry, r); return; }
   }
   const partEl = e.target.closest('[data-part-uid]');
   if (partEl) {
@@ -1142,6 +1290,14 @@ entriesContainer.addEventListener('input', (e) => {
     }
   }
 });
+
+/* Redrawn in place rather than through render(), which would tear the field out
+   from under the man's thumb mid-number. */
+function updateEquipTotal(entry, r) {
+  const item = equipItemsFor(entry).find(i => i.id === r.itemId);
+  const el = entriesContainer.querySelector(`[data-equip-uid="${r.uid}"] .equip-total`);
+  if (el) el.textContent = equipLineText(item, r);
+}
 
 function updatePartTotals(entry) {
   entry.parts.forEach(p => {
@@ -1341,6 +1497,17 @@ async function handleSubmit() {
         if (heError) throw heError;
       }
 
+      // Equipment that ran that day. Only ever present on a customer who bills
+      // for it, so on every other job this is an empty list and no write.
+      const equipRows = (entry.equipment || [])
+        .filter(r => r.itemId && Number(r.amount) > 0)
+        .map(r => ({ daily_entry_id: deData.id, rate_sheet_item_id: r.itemId,
+                     amount: Number(r.amount), quantity: Number(r.qty) || 1 }));
+      if (equipRows.length) {
+        const { error: eqError } = await sb.from('daily_entry_equipment').insert(equipRows);
+        if (eqError) throw eqError;
+      }
+
       if (flat && !helpersOnly) {
         const partRows = entry.parts
           .filter(p => p.name.trim() && Number(p.qty) > 0 && Number(p.rate) > 0)
@@ -1461,7 +1628,7 @@ async function requireAuth() {
   document.getElementById('userName').textContent = currentProfile ? currentProfile.full_name : currentUser.email;
   if (currentProfile && currentProfile.role === 'admin') {
     document.getElementById('adminBadge').style.display = 'inline-block';
-    document.getElementById('adminNavLinks').style.display = 'inline';
+    document.getElementById('adminNavLinks').style.display = '';
   }
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {
@@ -1475,14 +1642,26 @@ async function requireAuth() {
 
   // The welder list is only fetched for an admin - a welder has no picker to
   // fill, and no business holding a roster he cannot use.
-  const [{ data: jobsData }, { data: helpersData }, { data: bidData }, { data: weldersData }] = await Promise.all([
+  const [{ data: jobsData }, { data: helpersData }, { data: bidData }, { data: weldersData },
+         { data: sheetData }, { data: equipData }] = await Promise.all([
     sb.from('jobs').select('*').eq('active', true).order('name'),
     sb.from('helpers_public').select('*').eq('active', true).order('name'),
     sb.from('bid_items_public').select('*').order('sort_order'),
     isAdmin()
       ? sb.from('welders_public').select('id, full_name').order('full_name')
       : Promise.resolve({ data: [] }),
+    sb.from('rate_sheets').select('*').eq('active', true),
+    sb.from('rate_sheet_items').select('*').eq('kind', 'equipment').eq('active', true).order('sort_order'),
   ]);
+
+  // Keyed by customer, because that is what a ticket can reach: the job knows
+  // its QuickBooks customer, and the sheet belongs to one.
+  rateSheetByCustomer = {};
+  (sheetData || []).forEach((sh) => {
+    if (sh.qb_customer_id) rateSheetByCustomer[String(sh.qb_customer_id)] = sh;
+  });
+  equipBySheet = {};
+  (equipData || []).forEach((i) => { (equipBySheet[i.rate_sheet_id] ||= []).push(i); });
   weldersList = weldersData || [];
   jobs = jobsData || [];
   helpers = helpersData || [];

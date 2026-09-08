@@ -1116,7 +1116,7 @@ async function requireAuth() {
   document.getElementById('userName').textContent = currentProfile ? currentProfile.full_name : currentUser.email;
   if (currentProfile && currentProfile.role === 'admin') {
     document.getElementById('adminBadge').style.display = 'inline-block';
-    document.getElementById('adminNavLinks').style.display = 'inline';
+    document.getElementById('adminNavLinks').style.display = '';
   }
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {

@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sota-build" content="20260908c">
+<meta name="sota-build" content="20260908d">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>Setup | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260908c">
-<link rel="stylesheet" href="admin-setup.css?v=20260908c">
+<link rel="stylesheet" href="dark-theme.css?v=20260908d">
+<link rel="stylesheet" href="admin-setup.css?v=20260908d">
 </head>
 <body>
 
@@ -136,12 +136,22 @@
           </div>
         </div>
 
+        <!-- Customers with their own rate sheet bill each man by a named
+             classification rather than one welder rate. Which one he is, is set
+             here once by the office and not chosen in the field. Hidden
+             entirely until a rate sheet exists. -->
+        <div class="rs-bar" id="rsBar" hidden>
+          <label class="rs-bar-label" for="rsPick">Rate sheet</label>
+          <select id="rsPick" class="input rs-pick"></select>
+          <span class="rs-bar-note" id="rsNote"></span>
+        </div>
+
         <p class="pg-note">Adding a welder emails them a link to pick their own password. They show up
            here as soon as they are added; they can sign in once they have set it.
            For a welder who is only being billed against, set the password yourself instead —
            nothing is emailed, and you simply do not pass it on.</p>
         <div class="p-head">
-          <span>Name</span><span class="c">Pay / hr</span><span class="c">Bill / hr</span><span class="c">Margin / hr</span><span class="c">Admin</span><span></span>
+          <span>Name</span><span class="c">Pay / hr</span><span class="c">Bill / hr</span><span class="c">Margin / hr</span><span class="rs-col">Classification</span><span class="c">Admin</span><span></span>
         </div>
         <div id="weldersTable"></div>
       </div>
@@ -152,7 +162,7 @@
           <button class="btn2 btn2-solid small" id="addHelperBtn">+ Add helper</button>
         </div>
         <div class="p-head">
-          <span>Name</span><span class="c">Pay / hr</span><span class="c">Bill / hr</span><span class="c">Margin / hr</span><span class="c">Active</span><span></span>
+          <span>Name</span><span class="c">Pay / hr</span><span class="c">Bill / hr</span><span class="c">Margin / hr</span><span class="rs-col">Classification</span><span class="c">Active</span><span></span>
         </div>
         <div id="helpersTable"></div>
       </div>
@@ -161,8 +171,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260908c"></script>
-<script src="admin-setup.js?v=20260908c"></script>
+<script src="supabase-client.js?v=20260908d"></script>
+<script src="admin-setup.js?v=20260908d"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

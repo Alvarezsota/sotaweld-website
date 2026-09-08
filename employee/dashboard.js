@@ -376,7 +376,7 @@ function escapeHtml(str) {
   const isAdmin = currentProfile && currentProfile.role === 'admin';
   if (isAdmin) {
     document.getElementById('adminBadge').style.display = 'inline-block';
-    document.getElementById('adminNavLinks').style.display = 'inline';
+    document.getElementById('adminNavLinks').style.display = '';
     document.getElementById('postAnnouncementWrap').style.display = 'inline-block';
     document.getElementById('quoteRequestsCard').style.display = 'block';
     document.getElementById('deskQuotesCard').style.display = 'block';

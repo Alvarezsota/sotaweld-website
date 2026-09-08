@@ -39,6 +39,18 @@ a { color: inherit; }
 .et-wordmark { font-weight: 800; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
 .et-links { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
+/* The office tabs live inside one <span> so a page can show or hide the lot in
+   one go. That span was being revealed as display:inline, which made it a
+   single flex item holding seven links as inline text -- and inline boxes do
+   not reserve room for the padding on a link, so on a phone the wrapped rows
+   sat on top of each other. Six pairs of tabs literally overlapped at 390px.
+
+   display:contents drops the span itself and hands its seven links straight to
+   the flex row above, where they wrap and space like every other tab. The
+   pages clear the inline style rather than set one, so this stays the only
+   place that decides. */
+#adminNavLinks { display: contents; }
+
 /* Each tab is drawn as its own object rather than as a word in a row of words.
    Six pixels of gap between two unbordered labels reads as one long line of
    text, and the eye has to find the word breaks before it can find the link.

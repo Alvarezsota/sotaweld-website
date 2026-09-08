@@ -45,9 +45,9 @@
 .pg-note { font-size: 12px; color: var(--dim2); margin: 6px 0 12px; }
 .pg-note a { color: var(--arc); }
 
-.p-head, .p-row { display: grid; grid-template-columns: 2.2fr 1fr 1fr 1fr .8fr; align-items: center; gap: 8px; }
-.helpers-row-grid { grid-template-columns: 2.2fr 1fr 1fr 1fr .8fr 20px; }
-.welders-row-grid { grid-template-columns: 2.2fr 1fr 1fr 1fr .8fr 110px; }
+.p-head, .p-row { display: grid; grid-template-columns: 2.2fr .8fr .8fr .8fr 1.9fr .8fr; align-items: center; gap: 8px; }
+.helpers-row-grid { grid-template-columns: 2.2fr .8fr .8fr .8fr 1.9fr .8fr 20px; }
+.welders-row-grid { grid-template-columns: 2.2fr .8fr .8fr .8fr 1.9fr .7fr 110px; }
 .p-head { padding: 6px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); font-weight: 700; }
 .p-row { background: var(--steel-850); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: 7px; }
 .rate { gap: 0; }
@@ -286,3 +286,33 @@ select.cell-in option { background: var(--steel-800); color: var(--text); }
 select.cell-in:disabled { cursor: default; background-image: none; }
 
 .toggle2:disabled { opacity: .35; cursor: not-allowed; }
+
+/* ---------------------------------------------------------------------------
+   RATE SHEET: which classification a man bills as
+   ---------------------------------------------------------------------------
+   Only drawn once a customer has a rate sheet of their own, so for a shop with
+   none of them the People tab is exactly as it was. */
+.rs-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--steel-850); border: 1px solid var(--line);
+  border-left: 3px solid var(--molten);
+  border-radius: 12px; padding: 12px 15px; margin: 0 0 14px;
+}
+.rs-bar[hidden] { display: none; }
+.rs-bar-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--dim);
+}
+.rs-pick { width: auto; min-width: 230px; max-width: 100%; padding: 10px 12px; font-size: 14px; }
+.rs-bar-note { font-size: 12px; color: var(--dim2); font-weight: 500; }
+
+/* The dropdown carries the price, so it needs room for it. It is the widest
+   thing in the row on purpose. */
+.rs-col { min-width: 0; }
+.rs-col .cell-in { width: 100%; }
+.rs-none { color: var(--dim2); text-align: center; display: block; }
+
+@media (max-width: 760px) {
+  .rs-bar { flex-direction: column; align-items: stretch; gap: 8px; }
+  .rs-pick { width: 100%; min-width: 0; font-size: 16px; }
+}
