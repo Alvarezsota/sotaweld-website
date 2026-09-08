@@ -165,3 +165,25 @@
   color: #9db2ff;
 }
 .week-entry-bid::before { content: "\2022 "; opacity: .7; }
+
+/* Admin: whose day is being logged. */
+.de-logfor { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.de-logfor[hidden] { display: none; }
+.de-logfor-select { flex: 1 1 auto; min-width: 0; max-width: 320px; }
+
+/* On somebody else's behalf. Amber and unmissable: an entry filed against the
+   wrong man is his pay and his production, and nothing later in the week says
+   it was typed by mistake. */
+.de-onbehalf {
+  margin-top: 10px;
+  padding: 10px 13px;
+  border: 1px solid #7a4a1b;
+  border-left: 4px solid var(--molten);
+  border-radius: 9px;
+  background: var(--gold-soft);
+  color: #f0c078;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.de-onbehalf[hidden] { display: none; }

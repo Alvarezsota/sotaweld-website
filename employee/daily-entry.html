@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sota-build" content="20260906b">
+<meta name="sota-build" content="20260906c">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>Log Today's Work | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260906b">
-<link rel="stylesheet" href="daily-entry.css?v=20260906b">
+<link rel="stylesheet" href="dark-theme.css?v=20260906c">
+<link rel="stylesheet" href="daily-entry.css?v=20260906c">
 </head>
 <body>
 
@@ -47,6 +47,19 @@
     <div class="de-date-line">
       <span class="de-date-label">Date</span>
       <input type="date" id="dateInput" class="input de-date-input">
+    </div>
+
+    <!-- Admin only. Hidden for a welder, who can only ever log his own day. -->
+    <div class="de-logfor" id="logForRow" hidden>
+      <label class="de-date-label" for="logForSelect">Logging for</label>
+      <select id="logForSelect" class="input de-logfor-select"></select>
+    </div>
+
+    <!-- Loud on purpose. Typing a day onto the wrong man's payroll is the one
+         mistake this screen can now make that it could not before. -->
+    <div class="de-onbehalf" id="onBehalfBanner" hidden>
+      Logging for <b id="onBehalfName">a welder</b> &mdash; these hours go on
+      his ticket and his pay, not yours.
     </div>
 
     <button type="button" class="week-toggle-btn" id="weekToggleBtn">
@@ -129,8 +142,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260906b"></script>
-<script src="daily-entry.js?v=20260906b"></script>
+<script src="supabase-client.js?v=20260906c"></script>
+<script src="daily-entry.js?v=20260906c"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

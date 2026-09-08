@@ -1,5 +1,46 @@
 let currentUser = null;
 let currentProfile = null;
+
+/* Whose day is being logged.
+ *
+ * Null means the man signed in, which is every welder and the office most of
+ * the time. An admin can set it to somebody else: a man loses his phone, quits
+ * mid-week, or simply never filed Thursday, and the hours still have to go on
+ * the books under his name. Payroll and the invoice both read welder_id, so an
+ * entry logged on his behalf has to BE his - not the office's with a note.
+ *
+ * The database already allowed this: daily_entries lets an admin insert, update
+ * and read anybody's row. Only this page insisted on the man himself. */
+let logForWelderId = null;
+let weldersList = [];
+
+function logForId() { return logForWelderId || currentUser.id; }
+
+/* How far back the date picker will go.
+ *
+ * A welder logs his own week and no further: Monday to today. Letting him reach
+ * back past a week that has already been approved and invoiced is how a week
+ * that was signed off changes underneath it.
+ *
+ * An admin reaches back eight weeks, because catching up a day nobody filed is
+ * exactly his job and it is rarely still the same week. Neither can log the
+ * future - nobody has worked tomorrow yet. */
+const ADMIN_BACKDATE_WEEKS = 8;
+function earliestDate() {
+  const monday = getMonday(new Date());
+  return isAdmin() ? ymd(addDays(monday, -7 * ADMIN_BACKDATE_WEEKS)) : ymd(monday);
+}
+function applyDateLimits() {
+  dateInput.min = earliestDate();
+  dateInput.max = todayIso();
+}
+function isAdmin() { return !!(currentProfile && currentProfile.role === 'admin'); }
+function loggingForSomeoneElse() { return !!logForWelderId && logForWelderId !== currentUser.id; }
+function logForName() {
+  if (!loggingForSomeoneElse()) return currentProfile ? currentProfile.full_name : 'you';
+  const w = weldersList.find((x) => x.id === logForWelderId);
+  return w ? w.full_name : 'that welder';
+}
 let jobs = [];
 let helpers = [];
 let bidItemsByJob = {};   // job_id -> [{id, description, unit}] from bid_items_public
@@ -75,7 +116,7 @@ async function loadWeekPanel() {
 
   const [rowsRes, jwRes] = await Promise.all([
     sb.from('daily_entries').select('*')
-      .or(`welder_id.eq.${currentUser.id},supervisor_id.eq.${currentUser.id}`)
+      .or(`welder_id.eq.${logForId()},supervisor_id.eq.${logForId()}`)
       .gte('entry_date', start).lte('entry_date', end).order('entry_date'),
     sb.from('job_weeks').select('*').eq('week_start', start)
   ]);
@@ -231,7 +272,7 @@ async function saveEditEntry(entryId) {
     if (sig && editState.entryDate) {
       const { data: sameDay, error: sdErr } = await sb.from('daily_entries')
         .select('id,welder_id,job_id,one_off_name,hours,description')
-        .or(`welder_id.eq.${currentUser.id},supervisor_id.eq.${currentUser.id}`)
+        .or(`welder_id.eq.${logForId()},supervisor_id.eq.${logForId()}`)
         .eq('entry_date', editState.entryDate)
         .neq('id', entryId);
       if (sdErr) throw sdErr;
@@ -249,8 +290,8 @@ async function saveEditEntry(entryId) {
 
     const helpersOnly = !!editState.helpersOnly;
     const { error: upErr } = await sb.from('daily_entries').update({
-      welder_id: helpersOnly ? null : currentUser.id,
-      supervisor_id: helpersOnly ? currentUser.id : null,
+      welder_id: helpersOnly ? null : logForId(),
+      supervisor_id: helpersOnly ? logForId() : null,
       job_id: other ? null : editState.jobId,
       one_off_name: other ? editState.oneOffName.trim() : null,
       for_job_id: yard ? editState.forJobId : null,
@@ -556,7 +597,7 @@ async function loadLoggedForDate() {
   if (!d || !currentUser) { updateSubmitState(); return; }
   const { data } = await sb.from('daily_entries')
     .select('id,welder_id,job_id,one_off_name,hours,description')
-    .or(`welder_id.eq.${currentUser.id},supervisor_id.eq.${currentUser.id}`)
+    .or(`welder_id.eq.${logForId()},supervisor_id.eq.${logForId()}`)
     .eq('entry_date', d);
   if (dateInput.value !== d) return;  // they changed the date while this was in flight
   loggedForDate = data || [];
@@ -845,7 +886,12 @@ function updateSubmitState() {
 
   let missing = '';
   if (!dateInput.value) missing = 'Pick a date.';
-  else if (dateInput.value < dateInput.min || dateInput.value > dateInput.max) missing = 'Pick a date within this work week.';
+  else if (dateInput.value > dateInput.max) missing = 'That day has not happened yet.';
+  else if (dateInput.value < dateInput.min) {
+    missing = isAdmin()
+      ? `Pick a date within the last ${ADMIN_BACKDATE_WEEKS} weeks.`
+      : 'Pick a date within this work week.';
+  }
   else {
     for (const e of entries) {
       if (!e.jobId) { missing = 'Pick a jobsite for every entry.'; break; }
@@ -1041,6 +1087,56 @@ dateInput.addEventListener('change', () => {
   loadLoggedForDate();
 });
 
+/* Filling and wiring the "Logging for" picker. Admin only - it is not rendered
+   at all for a welder, so there is nothing for him to find. */
+function renderLogForPicker() {
+  const row = document.getElementById('logForRow');
+  const sel = document.getElementById('logForSelect');
+  if (!row || !sel) return;
+  if (!isAdmin()) { row.hidden = true; return; }
+  row.hidden = false;
+
+  const me = currentProfile ? currentProfile.full_name : 'Me';
+  sel.innerHTML = `<option value="">${esc(me)} (me)</option>`
+    + weldersList
+        .filter((w) => w.id !== currentUser.id)
+        .map((w) => `<option value="${escAttr(w.id)}"${w.id === logForWelderId ? ' selected' : ''}>${esc(w.full_name)}</option>`)
+        .join('');
+  updateOnBehalfBanner();
+}
+
+function updateOnBehalfBanner() {
+  const box = document.getElementById('onBehalfBanner');
+  if (!box) return;
+  const on = loggingForSomeoneElse();
+  box.hidden = !on;
+  if (!on) return;
+  const el = document.getElementById('onBehalfName');
+  if (el) el.textContent = logForName();
+}
+
+/* Switching welder reloads everything the page is showing, because all of it -
+   the day's tickets, the week panel, what counts as already turned in - was
+   read for whoever was selected a moment ago. Leaving any of it on screen
+   against a new name is how one man's day gets saved onto another's. */
+document.addEventListener('change', async (e) => {
+  if (!e.target || e.target.id !== 'logForSelect') return;
+  logForWelderId = e.target.value || null;
+  updateOnBehalfBanner();
+
+  entries = [newEntry()];
+  render();
+  await loadLoggedForDate();
+  // The week panel too, if it is open - and it must be re-read next time it is
+  // opened even if it is closed now, or it shows the previous man's week.
+  weekPanelLoaded = false;
+  if (weekPanel.style.display !== 'none') {
+    weekPanelLoaded = true;
+    await loadWeekPanel();
+  }
+  updateSubmitState();
+});
+
 document.querySelectorAll('#gasOpts .gear-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     gasFlag = btn.dataset.val;
@@ -1086,7 +1182,7 @@ async function handleSubmit() {
     // this day was already turned in from another device or on a double-tap.
     const { data: freshRows, error: freshErr } = await sb.from('daily_entries')
       .select('id,welder_id,job_id,one_off_name,hours,description')
-      .or(`welder_id.eq.${currentUser.id},supervisor_id.eq.${currentUser.id}`)
+      .or(`welder_id.eq.${logForId()},supervisor_id.eq.${logForId()}`)
       .eq('entry_date', entryDate);
     if (freshErr) throw freshErr;
     loggedForDate = freshRows || [];
@@ -1117,8 +1213,8 @@ async function handleSubmit() {
       // is only so the ticket stays visible to the man who turned it in.
       const helpersOnly = !!entry.helpersOnly;
       const { data: deData, error: deError } = await sb.from('daily_entries').insert({
-        welder_id: helpersOnly ? null : currentUser.id,
-        supervisor_id: helpersOnly ? currentUser.id : null,
+        welder_id: helpersOnly ? null : logForId(),
+        supervisor_id: helpersOnly ? logForId() : null,
         entry_date: entryDate,
         job_id: other ? null : entry.jobId,
         one_off_name: other ? entry.oneOffName.trim() : null,
@@ -1154,7 +1250,8 @@ async function handleSubmit() {
 
     if (gasFlag || extFlag || needGloves || needShields) {
       await sb.from('safety_flags').insert({
-        welder_id: currentUser.id,
+        // His gear request, not the office's, even when the office typed it.
+        welder_id: logForId(),
         entry_date: entryDate,
         gas_flag: gasFlag || null,
         ext_flag: extFlag || null,
@@ -1233,8 +1330,7 @@ document.getElementById('logAnotherBtn').addEventListener('click', () => {
   document.querySelectorAll('.glove-size-btn').forEach(b => b.classList.remove('sel'));
   submitBtn.textContent = "Submit work";
   dateInput.value = todayIso();
-  dateInput.max = todayIso();
-  dateInput.min = ymd(getMonday(new Date()));
+  applyDateLimits();
   document.getElementById('successScreen').style.display = 'none';
   document.getElementById('entryScreen').style.display = 'block';
   render();
@@ -1268,15 +1364,22 @@ async function requireAuth() {
     window.location.href = 'login.html';
   });
 
+  // After the profile, because how far back the picker reaches depends on it.
   dateInput.value = todayIso();
-  dateInput.max = todayIso();
-  dateInput.min = ymd(getMonday(new Date()));
+  applyDateLimits();
 
-  const [{ data: jobsData }, { data: helpersData }, { data: bidData }] = await Promise.all([
+  // The welder list is only fetched for an admin - a welder has no picker to
+  // fill, and no business holding a roster he cannot use.
+  const [{ data: jobsData }, { data: helpersData }, { data: bidData }, { data: weldersData }] = await Promise.all([
     sb.from('jobs').select('*').eq('active', true).order('name'),
     sb.from('helpers_public').select('*').eq('active', true).order('name'),
-    sb.from('bid_items_public').select('*').order('sort_order')
+    sb.from('bid_items_public').select('*').order('sort_order'),
+    isAdmin()
+      ? sb.from('welders_public').select('id, full_name').order('full_name')
+      : Promise.resolve({ data: [] }),
   ]);
+  weldersList = weldersData || [];
+  renderLogForPicker();
   jobs = jobsData || [];
   helpers = helpersData || [];
   bidItemsByJob = {};
