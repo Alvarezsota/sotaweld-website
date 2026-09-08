@@ -35,7 +35,7 @@
 // says in words that the work was billed as a bid amount. Hours that answer the
 // question are worth more than money columns that raise a new one.
 
-import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from 'https://esm.sh/pdf-lib@1.17.1';
+import { PDFDocument, PDFFont, PDFPage, StandardFonts, degrees, rgb } from 'https://esm.sh/pdf-lib@1.17.1';
 
 // ---------- looks ----------
 // The same ink, accent and rules as the pay statement, so a customer holding
@@ -45,6 +45,9 @@ const ACCENT = rgb(0.706, 0.329, 0.118);
 const GREY = rgb(0.471, 0.443, 0.424);
 const LINE = rgb(0.906, 0.898, 0.894);
 const SOFT = rgb(0.980, 0.976, 0.969);
+// Red, and only ever used for the final-invoice watermark. Nothing else on
+// this sheet is red, so the mark cannot be mistaken for part of the table.
+const STAMP = rgb(0.722, 0.106, 0.106);
 
 const PAGE_W = 612, PAGE_H = 792, MARGIN = 54;
 const CONTENT = PAGE_W - MARGIN * 2;
@@ -70,6 +73,13 @@ const dayLabel = (iso: string) => {
   return `${DOW[dt.getUTCDay()]}, ${usDate(iso)}`;
 };
 const spanLabel = (start: string, end: string) => `${usDate(start)} to ${usDate(end)}`;
+// An invoice held open across weeks covers more than a week, and a sheet that
+// lists 09-04 under "Week of 08-17 to 08-23" is wrong about itself. Any span of
+// seven days or less is still a week and still says so.
+const heldOpen = (start: string, end: string) =>
+  (Date.parse(end + 'T00:00:00Z') - Date.parse(start + 'T00:00:00Z')) / 86400000 > 6;
+const periodLabel = (start: string, end: string) =>
+  `${heldOpen(start, end) ? 'Work of' : 'Week of'} ${spanLabel(start, end)}`;
 
 // pdf-lib throws on a character the standard fonts cannot encode rather than
 // skipping it, and job descriptions are typed on a phone. Lifted whole from the
@@ -116,6 +126,9 @@ export type BackupPayload = {
   company_rep?: string | null;
   billing_type: string; week_start: string; week_end: string;
   invoice_no: string | null; bid_number: string | null;
+  // Last invoice for this job. Prints a line on the QuickBooks invoice and,
+  // from here, a watermark on every page of this sheet.
+  final_invoice?: boolean;
   invoice_total: number; labor_amount: number;
   welder_hours: number; helper_hours: number;
   per_diem_person_days: number; per_diem_amount: number;
@@ -124,7 +137,8 @@ export type BackupPayload = {
 
 export function backupFileName(p: BackupPayload) {
   const who = (p.job_name || 'job').replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
-  return `Crew time backup - ${who} - week of ${usDate(p.week_start)}`
+  return `Crew time backup - ${who} - `
+    + `${heldOpen(p.week_start, p.week_end) ? 'work of' : 'week of'} ${usDate(p.week_start)}`
     + (p.invoice_no ? ` - invoice ${p.invoice_no}` : '') + '.pdf';
 }
 
@@ -191,7 +205,7 @@ export async function buildInvoiceBackup(
   text(fit(p.job_name || 'Job', CONTENT - 150, 19, bold), MARGIN, y, 19, bold);
   // Written out in full, the span says exactly what the line under the customer
   // used to say. One of the two had to go.
-  right(`Week of ${spanLabel(p.week_start, p.week_end)}`, MARGIN + CONTENT, y + 2, 10, reg, GREY);
+  right(periodLabel(p.week_start, p.week_end), MARGIN + CONTENT, y + 2, 10, reg, GREY);
   y -= 15;
   const route = [p.customer_name || p.bill_to, p.operator ? `on ${p.operator}` : null]
     .filter(Boolean).join('  \u00B7  ');
@@ -443,10 +457,41 @@ export async function buildInvoiceBackup(
        MARGIN + CONTENT - 240, y, 11, bold);
   right(money(p.invoice_total), MARGIN + CONTENT - 10, y, 13, bold, ACCENT);
 
+  // ---- FINAL, across every page ----
+  //
+  // Drawn before the footer and after everything else, so it sits under nothing
+  // and over the table. Light enough to read the figures straight through it --
+  // it is a mark on the paper, not a thing covering the numbers.
+  //
+  // On every page for the same reason the footer is: this sheet gets printed and
+  // split, and a page that has come away from its cover still has to say the job
+  // is closed out. That is the whole message -- nothing more is coming, you can
+  // close the file -- and it is worth nothing if it only reaches page one.
+  if (p.final_invoice) {
+    const mark = 'FINAL INVOICE';
+    const size = 72;
+    const w = bold.widthOfTextAtSize(mark, size);
+    // drawText rotates about the text's own origin, so the origin is set back
+    // along the 45 degree line by half the width to land the middle of the
+    // words in the middle of the page.
+    const half = (w / 2) * Math.SQRT1_2;
+    pages.forEach((pg) => {
+      pg.drawText(mark, {
+        x: PAGE_W / 2 - half,
+        y: PAGE_H / 2 - half,
+        size, font: bold, color: STAMP,
+        rotate: degrees(45),
+        opacity: 0.13,
+      });
+    });
+  }
+
   // ---- footer, on every page ----
   // Attached to an invoice, this sheet gets printed, split and passed around, so
   // each page has to say on its own what it belongs to.
-  const stamp = `${p.job_name} \u00B7 week of ${usDate(p.week_start)} to ${usDate(p.week_end)}`
+  const stamp = `${p.job_name} \u00B7 `
+    + `${heldOpen(p.week_start, p.week_end) ? 'work of' : 'week of'} `
+    + `${usDate(p.week_start)} to ${usDate(p.week_end)}`
     + (p.invoice_no ? ` \u00B7 invoice #${p.invoice_no}` : '');
   pages.forEach((pg, i) => {
     pg.drawLine({ start: { x: MARGIN, y: FOOT - 8 }, end: { x: MARGIN + CONTENT, y: FOOT - 8 },
