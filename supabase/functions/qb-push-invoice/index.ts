@@ -817,13 +817,19 @@ Deno.serve(async (req) => {
         // so a customer with no row keeps whatever QuickBooks does on its own
         // rather than having the current default frozen onto every invoice.
         //
-        // These three are the writable ones. AllowOnlinePayment and
-        // AllowOnlinePayPalPayment are derived by QuickBooks from them, so
-        // clearing these clears the Pay Now button and everything under it.
+        // ALL FIVE, NOT THREE. This said three and claimed QuickBooks derived
+        // AllowOnlinePayment and AllowOnlinePayPalPayment from them. It does
+        // not. Invoice 3011 went to BT Constructors -- a customer set to check
+        // only -- with card, ACH and IPN all false and PayPal still true, and
+        // Pay Now still on the face of it. The proof was sitting next to it:
+        // 2997, the same customer, cleared by hand in the QuickBooks screen,
+        // has all five false. Setting all five reproduces that exactly.
         if (bill.allow_online_payment === false) {
           settle.AllowOnlineCreditCardPayment = false;
           settle.AllowOnlineACHPayment = false;
           settle.AllowIPNPayment = false;
+          settle.AllowOnlinePayPalPayment = false;
+          settle.AllowOnlinePayment = false;
         }
         // Stamped rather than inherited. QuickBooks does inherit the term from
         // the customer record, and does today, but that is a default somebody
