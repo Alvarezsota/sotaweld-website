@@ -1,0 +1,17 @@
+-- The crew sheet does not understand a rate sheet yet, so it says so.
+--
+-- invoice_backup_payload prices every line at the job's own welder rate. A
+-- rate-sheet job has no such rate, so the sheet would draw a crew at $0 an hour
+-- and total nothing, then get stapled to an invoice for ten thousand dollars.
+--
+-- That exact shape has already happened here once: invoice 2987 went out with a
+-- $1,660 crew sheet behind a $2,340 bill. It is the one thing this document
+-- must never do, because it is the half the customer reads to check the half
+-- they are paying.
+--
+-- So until the sheet can draw classifications and the overtime split, it
+-- refuses. buildBackupForJobWeek turns that into "the crew sheet could not be
+-- attached", which the push logs and reports without failing the invoice: the
+-- bill still goes, with no sheet rather than a wrong one.
+--
+-- Safe to re-run.

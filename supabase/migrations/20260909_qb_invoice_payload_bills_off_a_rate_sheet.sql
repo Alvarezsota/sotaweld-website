@@ -1,0 +1,34 @@
+-- The QuickBooks invoice for a customer billed off their own rate sheet.
+--
+-- Guarded replaces into qb_invoice_payload rather than a rewrite, so anything
+-- else living in that function survives untouched. Every anchor is checked
+-- before any is applied and the whole thing refuses rather than half-applying.
+--
+-- WHAT COMES OUT
+--
+--   Labour, two lines per classification -- straight time, then its overtime at
+--   the multiplier -- so the customer sees the premium apart from the base and
+--   can check both against the sheet they signed.
+--   Equipment, one line each, priced in its own unit.
+--   Per diem at the SHEET's rate, not the rate on the job row. Electric
+--   Hydrogen is $125 where everyone else is $100.
+--
+-- TWO THINGS THAT WOULD HAVE BITTEN
+--
+--   The old "nothing billable" refusal reads total_billed, which is computed
+--   from the job's own welder rate. A rate-sheet job has no such rate, so that
+--   number is nought and every one of these invoices would have been refused
+--   before the sheet was ever consulted.
+--
+--   The job's own per diem block had to be shut off, or per diem goes on the
+--   invoice twice at two different rates.
+--
+-- Hours with nobody's rate against them are never quietly left off: the payload
+-- refuses and names the man, because hours dropped from an invoice are money
+-- gone with nothing to show it went.
+--
+-- Verified against every approved and synced week in the book: no existing
+-- invoice moved, and expected_total still equals lines_total on all of them.
+--
+-- Safe to re-run. See the applied migration in Supabase for the body; this file
+-- records why. The guard refuses if qb_invoice_payload has drifted.
