@@ -1,4 +1,6 @@
-// Hands back the letterhead invoice for one Parts and Services invoice as a PDF.
+// Hands back a document on our letterhead: an invoice, or the quote it came
+// from. Both, because they are the same letterhead drawn by the same code and
+// splitting them into two functions would only be two places to keep in step.
 //
 // QuickBooks emails its own invoice and that stays the bill of record. It shows
 // "Welding Services  1  $4,418.80" and the customer cannot check a thing from
@@ -16,7 +18,7 @@
 // carries a customer's prices, which is not a welder's to pull.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { buildPartsInvoicePdf } from '../_shared/invoice-pdf-data.ts';
+import { buildPartsInvoicePdf, buildQuotePdfFor } from '../_shared/invoice-pdf-data.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -51,10 +53,18 @@ Deno.serve(async (req) => {
     if (me?.role !== 'admin') return json({ ok: false, error: 'admins only' }, 403);
 
     const body = await req.json().catch(() => ({}));
-    const id = body.parts_invoice_id ?? null;
-    if (!id) return json({ ok: false, error: 'parts_invoice_id is required' }, 400);
+    const invoiceId = body.parts_invoice_id ?? null;
+    const quoteId = body.quote_id ?? null;
+    if (!invoiceId && !quoteId) {
+      return json({ ok: false, error: 'parts_invoice_id or quote_id is required' }, 400);
+    }
+    if (invoiceId && quoteId) {
+      return json({ ok: false, error: 'ask for one or the other, not both' }, 400);
+    }
 
-    const out = await buildPartsInvoicePdf(db as never, String(id));
+    const out = quoteId
+      ? await buildQuotePdfFor(db as never, String(quoteId))
+      : await buildPartsInvoicePdf(db as never, String(invoiceId));
     if (!out.ok) return json({ ok: false, error: out.error }, 422);
 
     return new Response(out.pdf, {

@@ -288,6 +288,53 @@ window.SOTA_QD_CONVERT = {
   }
 };
 
+/* ---------------- the quote as a PDF ----------------
+   The same letterhead the invoice is drawn on, off the same function. Like the
+   convert, anything still pending is flushed first: the server draws from the
+   rows, so a quote the tables have not caught up with would come back as it was
+   a minute ago rather than as it is on screen. */
+const QUOTE_PDF_URL = `${SUPABASE_URL}/functions/v1/qb-invoice-pdf`;
+
+window.SOTA_QD_PDF = {
+  download: async function (doc) {
+    const profile = await adminReady;
+    if (!profile) throw new Error('not an admin');
+
+    clearTimeout(syncTimer);
+    const state = window.SOTAQuoteDesk ? window.SOTAQuoteDesk.getState() : null;
+    if (state) await syncQuotesToTables(state);
+
+    const { data: row, error: findErr } = await sb.from('desk_quotes')
+      .select('id').eq('doc_id', doc.id).maybeSingle();
+    if (findErr) throw new Error(findErr.message);
+    if (!row) throw new Error('That quote has not saved yet. Try again in a moment.');
+
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) throw new Error('signed out -- sign in again');
+
+    const res = await fetch(QUOTE_PDF_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ quote_id: row.id }),
+    });
+    if (!res.ok) {
+      const why = await res.json().catch(() => ({}));
+      throw new Error(why.error || `the quote could not be drawn (${res.status})`);
+    }
+
+    // Handed over as a blob rather than navigated to: a plain link would drop
+    // the Authorization header and come back a 401.
+    const blob = await res.blob();
+    const name = (res.headers.get('content-disposition') || '')
+      .match(/filename="([^"]+)"/)?.[1] || `quote-${doc.number || 'draft'}.pdf`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+};
+
 /* ---------------- numbering ----------------
    Two series, neither of them the module's to invent.
 

@@ -908,7 +908,23 @@
       return;
     }
 
-    if (name === "print") { buildPrint(d); window.print(); return; }
+    if (name === "print") {
+      // A quote gets the real document off the server -- the same letterhead the
+      // invoice is drawn on, with the acceptance block on it. The browser print
+      // below is what an invoice still uses, and the fallback if the page did
+      // not install the hook.
+      var pdf = window.SOTA_QD_PDF;
+      if (d.kind === "quote" && pdf && typeof pdf.download === "function") {
+        busy(btn, "Drawing...");
+        pdf.download(d).then(function () { busy(btn, false); },
+          function (err) {
+            busy(btn, false);
+            toast(err && err.message ? err.message : "That quote could not be drawn");
+          });
+        return;
+      }
+      buildPrint(d); window.print(); return;
+    }
 
     if (name === "quickbooks") {
       var qb = window.SOTA_QD_QUICKBOOKS;

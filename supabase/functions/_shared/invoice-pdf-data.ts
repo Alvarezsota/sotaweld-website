@@ -12,7 +12,8 @@
 // already moved on from, and went out saying $1,660 against a $2,340 invoice.
 // A document that restates the bill has to be drawn from the bill.
 
-import { buildInvoicePdf, type CompanyBlock, type InvoicePayload } from './invoice-pdf.ts';
+import { buildInvoicePdf, type CompanyBlock, type InvoicePayload, type QuoteSection } from './invoice-pdf.ts';
+import { buildQuotePdf, quotePdfFileName } from './quote-pdf.ts';
 
 type Db = {
   rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
@@ -159,5 +160,110 @@ export async function buildPartsInvoicePdf(
     };
   } catch (err) {
     return { ok: false, error: `the invoice could not be drawn: ${(err as Error).message}` };
+  }
+}
+
+/**
+ * The quote, drawn from its own rows.
+ *
+ * Sections come out in the rate card's order and carry the quote's lump-sum
+ * switches, so the document shows exactly what was decided when it was written:
+ * a section quoted as one figure prints as one figure. A line belonging to no
+ * section falls into a plain one at the end rather than being dropped -- a
+ * priced line that does not appear is worse than an untidy heading.
+ */
+export async function buildQuotePdfFor(db: Db, quoteId: string): Promise<PdfResult> {
+  const { data: q, error } = await db.from('desk_quotes')
+    .select('id, quote_no, quote_date, valid_days, valid_through, net_days, po_number, '
+          + 'customer_name, customer_email, job_name, scope, reference_part, lump')
+    .eq('id', quoteId).maybeSingle();
+  if (error) return { ok: false, error: `could not read the quote: ${(error as { message?: string }).message ?? error}` };
+  if (!q) return { ok: false, error: 'that quote could not be found' };
+
+  const [{ data: lineRows }, { data: groupRows }, { data: settingRows }] = await Promise.all([
+    db.from('desk_quote_lines')
+      .select('sort_order, description, quantity, unit, unit_price, rate_group')
+      .eq('quote_id', quoteId).order('sort_order'),
+    db.from('desk_rate_groups').select('id, label, sort_order').order('sort_order'),
+    db.from('app_settings').select('key, value')
+      .in('key', ['company_name', 'company_address', 'company_phone',
+                  'quote_pdf_basis', 'quote_pdf_terms']),
+  ]);
+
+  const setting: Record<string, string> = {};
+  (settingRows as { key: string; value: string }[] | null ?? [])
+    .forEach((r) => { setting[r.key] = r.value; });
+
+  const groups = (groupRows as { id: string; label: string }[] | null ?? []);
+  const lines = (lineRows as Array<Record<string, unknown>> | null ?? []);
+  const lump = (q.lump && typeof q.lump === 'object') ? q.lump as Record<string, unknown> : {};
+
+  const sections: QuoteSection[] = [];
+  for (const g of groups) {
+    const mine = lines.filter((l) => l.rate_group === g.id);
+    if (!mine.length) continue;
+    sections.push({
+      label: g.label,
+      lump: lump[g.id] === true,
+      lines: mine.map((l) => ({
+        description: String(l.description ?? ''),
+        quantity: l.quantity, unit: (l.unit as string) ?? undefined,
+        unit_price: l.unit_price,
+      })),
+    });
+  }
+  const loose = lines.filter((l) => !groups.some((g) => g.id === l.rate_group));
+  if (loose.length) {
+    sections.push({
+      label: 'Other',
+      lump: false,
+      lines: loose.map((l) => ({
+        description: String(l.description ?? ''),
+        quantity: l.quantity, unit: (l.unit as string) ?? undefined,
+        unit_price: l.unit_price,
+      })),
+    });
+  }
+
+  // valid_through if it was set outright, otherwise the date plus the days.
+  let validThrough: string | null = (q.valid_through as string) ?? null;
+  if (!validThrough && q.quote_date && q.valid_days != null) {
+    const d = new Date(String(q.quote_date) + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + Number(q.valid_days));
+    validThrough = d.toISOString().slice(0, 10);
+  }
+
+  try {
+    const [archivo, inter, interBold, logo] = await Promise.all([
+      asset(FONTS.archivo, true), asset(FONTS.inter, true),
+      asset(FONTS.interBold, true), asset(LOGO_URL, false),
+    ]);
+    const pdf = await buildQuotePdf({
+      quote_no: (q.quote_no as string) ?? null,
+      quote_date: String(q.quote_date ?? ''),
+      valid_through: validThrough,
+      net_days: q.net_days == null ? null : Number(q.net_days),
+      po_number: (q.po_number as string) ?? null,
+      customer_name: (q.customer_name as string) ?? null,
+      bill_email: (q.customer_email as string) ?? null,
+      reference_part: (q.reference_part as string) ?? null,
+      job_name: (q.job_name as string) ?? null,
+      scope: (q.scope as string) ?? null,
+      basis: setting.quote_pdf_basis ?? null,
+      terms: setting.quote_pdf_terms ?? null,
+      sections,
+    }, {
+      company_name: setting.company_name ?? '',
+      company_address: setting.company_address ?? '',
+      company_phone: setting.company_phone ?? '',
+    }, { archivo: archivo!, inter: inter!, interBold: interBold!, logo });
+
+    return {
+      ok: true,
+      pdf,
+      filename: quotePdfFileName(String(q.quote_no ?? ''), String(q.customer_name ?? '')),
+    };
+  } catch (err) {
+    return { ok: false, error: `the quote could not be drawn: ${(err as Error).message}` };
   }
 }
