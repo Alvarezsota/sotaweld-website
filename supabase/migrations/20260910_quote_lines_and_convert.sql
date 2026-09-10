@@ -59,3 +59,33 @@
 --   a quote whose lines all come to zero is refused
 --   finishing the invoice numbers it AND the number reaches the quote
 --   the two real quotes' line totals match the blob exactly: $1,020 and $250
+
+-- ---------------------------------------------------------------------------
+-- KEEPING THE SHOP/FIELD GROUPING AND THE LUMP-SUM SWITCHES
+-- ---------------------------------------------------------------------------
+-- Applied as: quote_rate_groups_and_lump_sums, backfill_quote_groups_and_lump,
+--             convert_respects_lump_sums
+--
+-- Gilbert kept the grouping rather than flattening the table, so a line is not
+-- just a description and a price -- it belongs to a section, and a section can
+-- be quoted as ONE figure instead of itemised. desk_rate_groups and desk_rates
+-- lift that card out of the blob; desk_quote_lines gained rate_group and
+-- rate_id; desk_quotes gained a `lump` jsonb in the shape the desk already
+-- uses, so the editor needs no translation.
+--
+-- Convert mirrors how the quote was PRESENTED, not just what it added to. A
+-- lump section is a deliberate decision about what the customer is shown: they
+-- agreed to one figure for "Shop fabrication & laser", not to six hours at
+-- $215. Itemising it on the invoice hands them a breakdown that was withheld on
+-- purpose, and it cannot be taken back once sent. So:
+--
+--   lump section     -> ONE invoice line at the section total, carrying the
+--                       QuickBooks item off the biggest line in it
+--   itemised section -> its lines cross unchanged
+--
+-- Checked on a mixed quote, rolled back: shop rolled up to a single $1,540 line
+-- with no breakdown, field and materials itemised beneath it, and the invoice
+-- totalled $3,415 against a $3,415 quote.
+--
+-- To bill a section itemised after quoting it as a lump, clear that section's
+-- switch on the quote before converting.
