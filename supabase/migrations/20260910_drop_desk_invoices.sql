@@ -1,0 +1,55 @@
+-- DROPPING desk_invoices AND desk_invoice_lines
+-- ===========================================================================
+-- Applied as: drop_desk_invoices
+--
+-- What was in them, written down here because this was the last chance. Both
+-- are on QuickBooks and both moved into parts_invoices under the same ids,
+-- checked before the drop:
+--
+--   3003  MasTec Industrial   2026-08-31  $1,020.00  QuickBooks invoice 2191
+--         from quote SOTA-08-31-2026-01, 2 lines
+--         id a799ee2d-eae9-4beb-8bb4-5b77ff680473
+--   3005  Tino's Machining    2026-08-31  $  250.00  QuickBooks invoice 2193
+--         from quote SOTA-08-31-2026-02, 1 line
+--         id 5243fcbe-6cdf-458a-b34a-0771deb6c042
+--
+-- ---------------------------------------------------------------------------
+-- release_invoice_no HAD TO BE CHANGED FIRST
+-- ---------------------------------------------------------------------------
+-- It is called from the portal and it read all three invoice tables before
+-- handing a number back to the counter. That check is the only thing between a
+-- released number and an invoice that still carries it, so dropping the table
+-- under it would have broken the release button -- quietly, and only at the
+-- moment somebody used it.
+--
+-- It could lose the desk branch without losing the protection, because both
+-- desk invoices moved into parts_invoices keeping their invoice_no. Checked
+-- after: releasing 3003 and 3005 is still refused, now naming a parts invoice,
+-- and a number nobody holds still falls through to the counter check.
+--
+-- desk_invoice_payload went with the tables; nothing else read them.
+--
+-- ---------------------------------------------------------------------------
+-- THE PORTAL WAS STILL REACHING FOR THEM
+-- ---------------------------------------------------------------------------
+-- Three live paths in the browser would have failed on a table that no longer
+-- exists, and none of them would have said why:
+--
+--   upsertDeskInvoice        wrote a converted quote into desk_invoices
+--   SOTA_QD_QUICKBOOKS.send  pushed that row
+--   SOTA_QD_DELETE.remove    looked it up to decide whether a number was free
+--
+-- The first two are gone: converting writes a Parts and Services invoice and
+-- that page owns the push. Deleting now asks desk_quotes whether the quote
+-- became an invoice, and refuses if it did -- deleting a quote that became a
+-- pushed invoice would leave a QuickBooks invoice with no record of where it
+-- came from. QuickBooks first, here second, the same order as everything else.
+--
+-- invoice-preview could also still ask the push for a desk invoice. That way in
+-- is closed rather than left to be found.
+--
+-- One dead branch remains and is deliberately left alone: qb-push-invoice still
+-- carries a "desk" kind pointing at desk_invoice_payload. Nothing can reach it
+-- now that the browser cannot ask for it, and cutting it out means redeploying
+-- the function that pushes his invoices. It goes the next time that function
+-- has to be deployed for a reason of its own.

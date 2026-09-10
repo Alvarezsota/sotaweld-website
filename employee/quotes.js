@@ -392,81 +392,13 @@ function deskWarn(msg) {
 }
 
 
-/* ---------------- QuickBooks ----------------
-   Converting a quote writes an invoice row as well as the desk's own copy. The
-   desk's JSON is its working state; the row is what the books see, and it is
-   what the push reads. The browser never sends figures to QuickBooks -- it
-   names a row, and the database works out the money, exactly as a job week and
-   a parts invoice already do.
-
-   The row is written once per document. Converting the same quote twice, or
-   re-saving an invoice, updates the row it already has rather than raising a
-   second one. */
-
-async function upsertDeskInvoice(doc, state) {
-  const profile = await adminReady;
-  if (!profile) return null;
-
-  const customer = (state.customers || []).find(c => c.id === doc.customerId) || {};
-  const rates = state.rates || [];
-  const rateOf = id => rates.find(r => r.id === id) || null;
-
-  const { data: existing } = await sb.from('desk_invoices')
-    .select('id, qb_invoice_id').eq('doc_id', doc.id).maybeSingle();
-
-  // Already in QuickBooks: leave it exactly as it was sent.
-  if (existing && existing.qb_invoice_id) return existing.id;
-
-  const head = {
-    doc_id:         doc.id,
-    invoice_no:     doc.number || null,
-    quote_no:       doc.fromQuoteNumber || null,
-    invoice_date:   doc.date,
-    due_date:       doc.dueDate || null,
-    customer_name:  customer.company || '',
-    customer_email: customer.email || '',
-    qb_customer_id: customer.qbCustomerId || null,
-    job_name:       doc.jobName || '',
-    po_number:      customer.usesJobNameAsPo ? (doc.jobName || '') : (doc.poNumber || ''),
-    memo:           doc.scope || '',
-    status:         doc.status || 'open',
-    created_by:     profile.id
-  };
-
-  let invoiceId = existing ? existing.id : null;
-
-  if (invoiceId) {
-    const { error } = await sb.from('desk_invoices').update(head).eq('id', invoiceId);
-    if (error) throw new Error(error.message);
-  } else {
-    const { data, error } = await sb.from('desk_invoices').insert(head).select('id').single();
-    if (error) throw new Error(error.message);
-    invoiceId = data.id;
-  }
-
-  // Lines are replaced wholesale: the desk owns them until the push happens,
-  // and a half-updated set would bill the wrong thing.
-  await sb.from('desk_invoice_lines').delete().eq('invoice_id', invoiceId);
-
-  const lines = (doc.lines || []).map((l, i) => {
-    const r = rateOf(l.rateId);
-    return {
-      invoice_id:  invoiceId,
-      description: [r ? r.label : '', l.desc].filter(Boolean).join(' - '),
-      quantity:    Number(l.qty) || 0,
-      unit_price:  Number(l.rate) || 0,
-      qb_item_id:  r && r.qbo ? String(r.qbo) : null,
-      sort_order:  i
-    };
-  }).filter(l => l.quantity * l.unit_price !== 0);
-
-  if (lines.length) {
-    const { error } = await sb.from('desk_invoice_lines').insert(lines);
-    if (error) throw new Error(error.message);
-  }
-
-  return invoiceId;
-}
+/* ---------------- what used to live here ----------------
+   upsertDeskInvoice wrote a converted quote into desk_invoices so the desk's
+   own Send to QuickBooks button had a row to push. Both the button and the
+   table are gone: convert_quote_to_invoice writes a Parts and Services invoice
+   in one transaction, and that page owns the push from there -- including
+   attaching the letterhead PDF. Two ways to put the same work on their books
+   was one too many. */
 
 /* ---------------- the dashboard's copy ----------------
    There used to be a second writer here: every save mirrored a cut-down row
@@ -512,21 +444,21 @@ window.SOTA_QD_DELETE = {
     const profile = await adminReady;
     if (!profile) throw new Error('Admins only.');
 
-    const { data: mirror, error: lookErr } = await sb.from('desk_invoices')
-      .select('id, qb_invoice_id').eq('doc_id', doc.id).maybeSingle();
+    // A quote that became an invoice keeps the invoice. Deleting the quote here
+    // would leave a Parts and Services invoice with nothing pointing at it, and
+    // if it has been pushed, a QuickBooks invoice with no record of where it
+    // came from. QuickBooks first, here second -- the same order as everything
+    // else that touches their books.
+    const { data: q, error: lookErr } = await sb.from('desk_quotes')
+      .select('id, invoiced_no, invoiced_parts_invoice_id').eq('doc_id', doc.id).maybeSingle();
     if (lookErr) throw new Error(lookErr.message);
 
-    if (mirror && mirror.qb_invoice_id) {
-      throw new Error('This is on QuickBooks invoice ' + mirror.qb_invoice_id
-        + '. Delete it in QuickBooks first, then delete it here.');
+    if (q && q.invoiced_parts_invoice_id) {
+      throw new Error('This became invoice ' + (q.invoiced_no || 'a draft')
+        + ' on Parts and Services. Delete that invoice first, then delete this.');
     }
 
-    if (mirror) {
-      await sb.from('desk_invoice_lines').delete().eq('invoice_id', mirror.id);
-      const { error } = await sb.from('desk_invoices').delete().eq('id', mirror.id);
-      if (error) throw new Error(error.message);
-    }
-
+    // The lines go with it: desk_quote_lines cascades on the quote row.
     await sb.from('desk_quotes').delete().eq('doc_id', doc.id);
 
     // Quote numbers are dated and counted within their day; handing one back
@@ -541,25 +473,16 @@ window.SOTA_QD_DELETE = {
   }
 };
 
-/* The desk asks for this when its Send to QuickBooks button is pressed. The
-   preview and the push itself are InvoicePreview's -- the same ones Approvals
-   and Parts Invoice use, so there is one QuickBooks path, not three. */
+/* The desk's own Send to QuickBooks button is retired.
+   ---------------------------------------------------------------------------
+   It wrote a desk_invoices row and pushed that. desk_invoices is gone. The hook
+   is kept so the button says something useful rather than failing on a table
+   that is not there. */
 window.SOTA_QD_QUICKBOOKS = {
-  send: async function (doc, state) {
+  send: async function (doc) {
     if (doc.kind !== 'invoice') throw new Error('Convert the quote to an invoice first.');
-
-    const invoiceId = await upsertDeskInvoice(doc, state);
-    if (!invoiceId) throw new Error('Could not prepare the invoice.');
-
-    const { data: row } = await sb.from('desk_invoices')
-      .select('qb_invoice_id').eq('id', invoiceId).maybeSingle();
-
-    InvoicePreview.open({
-      deskInvoiceId: invoiceId,
-      name: (doc.number ? 'Invoice ' + doc.number : 'This invoice'),
-      qbInvoiceId: row ? row.qb_invoice_id : null,
-      onPushed: () => { /* the desk keeps its own copy; nothing to reload here */ }
-    });
+    throw new Error('Invoices are pushed from the Parts and Services tab now. '
+      + 'Convert the quote and finish it there.');
   }
 };
 
