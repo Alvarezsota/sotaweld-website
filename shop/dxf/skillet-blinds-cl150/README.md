@@ -3,31 +3,56 @@
 Flat-pattern DXF cutting profiles for T-handle skillet blinds (line blanks) in
 2", 3", 4", 6", 8" and 10", for ASME B16.5 Class 150 flanges.
 
-## Disc OD rule
+## The two shop rules these are built on
 
-    disc OD = bolt circle diameter - bolt diameter
+**1. Disc OD = bolt circle diameter − bolt diameter.**
+The blank seats against the *inside of the bolt shanks*, so the bolts capture
+and centre it. That is bolt **diameter**, not bolt **hole** diameter — the blank
+rests on the bolts themselves, not the edges of the holes.
 
-The blank seats against the **inside of the bolt shanks**, so the bolts capture
-and centre it. Note that is bolt *diameter*, not bolt *hole* diameter — the
-blank rests on the bolts themselves, not on the edges of the holes. Every OD
-below is that rule, and matches the shop's numbers exactly.
+**2. The crossbar starts 2" past the edge of the flange.**
+The stem runs from the disc out past the flange edge, then a further 2" of bare
+stem, and only then does the T begin. The whole crossbar sits clear of the
+flange with room to get a hand on it with the joint bolted up.
 
-| NPS | Bolt circle | Bolts | Disc OD | Overall length | Stem | Crossbar | Bar depth | Tag hole |
-|---|---|---|---|---|---|---|---|---|
-| 2" | 4.75 | 4 x 5/8" | **4-1/8** | 4.500 | 1.25 | 3.75 | 1.00 | 0.500 |
-| 3" | 6.00 | 4 x 5/8" | **5-3/8** | 5.250 | 1.50 | 4.50 | 1.25 | 0.500 |
-| 4" | 7.50 | 8 x 5/8" | **6-7/8** | 6.000 | 1.50 | 4.50 | 1.25 | 0.500 |
-| 6" | 9.50 | 8 x 3/4" | **8-3/4** | 7.250 | 2.00 | 6.00 | 1.50 | 0.625 |
-| 8" | 11.75 | 8 x 3/4" | **11** | 8.500 | 2.00 | 6.00 | 1.50 | 0.625 |
-| 10" | 14.25 | 12 x 7/8" | **13-3/8** | 10.000 | 2.50 | 7.50 | 1.75 | 0.750 |
+| NPS | Disc OD | Flange r | Crossbar starts | Total length | Stem | Crossbar | Bar depth |
+|---|---|---|---|---|---|---|---|
+| 2" | **4-1/8** | 3.000 | 5.000 | 8.062 | 1.250 | 4.00 | 1.00 |
+| 3" | **5-3/8** | 3.750 | 5.750 | 9.688 | 1.500 | 4.50 | 1.25 |
+| 4" | **6-7/8** | 4.500 | 6.500 | 11.188 | 1.375 | 4.50 | 1.25 |
+| 6" | **8-3/4** | 5.500 | 7.500 | 13.375 | 2.000 | 6.00 | 1.50 |
+| 8" | **11** | 6.750 | 8.750 | 15.750 | 2.000 | 6.00 | 1.50 |
+| 10" | **13-3/8** | 8.000 | 10.000 | 18.438 | 2.000 | 7.00 | 1.75 |
 
-## T-handle dimensions are DEFAULTS
+## Bolt clearance — the stem passes BETWEEN the bolts
 
-The handle numbers above are placeholders chosen to be proportional, **not**
-shop-confirmed. Stem width, crossbar length, crossbar depth and projection past
-the flange OD all live in the `HANDLE` dict at the top of
-`generate_skillet_blinds.py` — edit and re-run to change them. The disc ODs are
-confirmed; only the handle is provisional.
+No bolt passes through the handle. The stem is installed **centred between two
+adjacent bolts** and is sized to clear the bolt shanks on both sides. Every size
+holds at least 3/8" per side:
+
+| NPS | Bolts | Bolt pitch offset | Stem | Clear to bolt, per side | Widest stem allowed |
+|---|---|---|---|---|---|
+| 2" | 4 x 5/8" | 1.679 | 1.250 | **0.742** | 1.984 |
+| 3" | 4 x 5/8" | 2.121 | 1.500 | **1.059** | 2.868 |
+| 4" | 8 x 5/8" | 1.435 | 1.375 | **0.435** | 1.495 |
+| 6" | 8 x 3/4" | 1.818 | 2.000 | **0.443** | 2.135 |
+| 8" | 8 x 3/4" | 2.248 | 2.000 | **0.873** | 2.997 |
+| 10" | 12 x 7/8" | 1.844 | 2.000 | **0.407** | 2.063 |
+
+
+*Bolt pitch offset* is the perpendicular distance from the stem centreline to
+the nearest bolt centre, `(BC/2) x sin(pi/n)`. Clearance is that, less the bolt
+radius, less half the stem width.
+
+The generator **refuses to build** a stem that violates this — widen one past
+the limit in the last column and it raises rather than emitting a part that
+fouls a bolt. That check is in `bolt_clearance()` / `check_stem()`.
+
+### Installing
+
+Orient the blank so the stem comes out through a **bolt gap**, not over a bolt.
+On the 4-bolt sizes (2" and 3") that means the handle exits at 45° to the bolt
+pairs; on the 8- and 12-bolt sizes there are more gaps to choose from.
 
 ## Before you cut
 
@@ -44,8 +69,8 @@ confirmed; only the handle is provisional.
 ## Plate thickness
 
 See the thickness table in `../README.md` — same basis (ASME B31.3 §304.5.3),
-and it is driven by the gasket ID, so it does not change with the disc OD used
-here. Confirm design pressure and temperature before committing plate.
+driven by the gasket ID, so it does not change with the disc OD used here.
+Confirm design pressure and temperature before committing plate.
 
 ## Regenerating
 
@@ -53,5 +78,9 @@ here. Confirm design pressure and temperature before committing plate.
 python3 generate_skillet_blinds.py [output_dir]
 ```
 
-Plain Python 3, no dependencies. `FLANGE` holds the B16.5 Class 150 data that
-drives the ODs; `HANDLE` holds the T-handle dimensions.
+Plain Python 3, no dependencies.
+
+- `FLANGE` — B16.5 Class 150 data driving disc OD and handle reach
+- `HANDLE` — stem width, crossbar length, crossbar depth, tag hole
+- `FLANGE_GAP` — bare stem past the flange edge before the crossbar (2.00")
+- `MIN_BOLT_CLEAR` — minimum stem-to-bolt gap per side (0.375")
