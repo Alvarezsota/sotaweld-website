@@ -276,6 +276,11 @@ body.inv-open { overflow: hidden; }
 .inv-cc-h { font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 3px; }
 .inv-cc-h small { font-weight: 400; font-size: 12px; color: var(--dim2); }
 .inv-cc-opts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+/* The payment terms picker, in the same card as the copy-to list. Full width so
+   the wording is never clipped on a phone -- the whole point of the box is that
+   "Due on receipt" and "Net 30" can be told apart at a glance. */
+.inv-terms { margin-top: 10px; width: 100%; max-width: 320px; }
 .inv-cc-opt { display: flex; align-items: flex-start; gap: 7px; padding: 7px 10px;
   border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font-size: 13px; }
 .inv-cc-opt:hover { border-color: var(--steel-600); }

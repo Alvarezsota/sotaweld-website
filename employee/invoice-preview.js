@@ -80,6 +80,9 @@ const InvoicePreview = (function () {
      A customer with nobody on the roster gets the add box and no list. That is
      the normal state for a customer nobody has set up yet, not an error. */
 
+  let terms = [];
+  let termId = '';
+
   async function loadCc(customerId, customerName) {
     cc = null;
     if (!customerId) return;
@@ -89,8 +92,17 @@ const InvoicePreview = (function () {
       const environment = (cust && cust.environment) || 'production';
 
       const { data: row } = await sb.from('qb_customer_billing')
-        .select('cc_roster, cc_emails')
+        .select('cc_roster, cc_emails, qb_term_id, qb_term_name')
         .eq('qb_customer_id', String(customerId)).eq('qb_environment', environment).maybeSingle();
+
+      // Payment terms live on the same row as who gets copied, because both are
+      // the same question about the same customer. Set once here and every
+      // invoice for them carries it -- QuickBooks works the due date out from it,
+      // and the letterhead PDF prints it.
+      const { data: termRows } = await sb.from('qb_terms')
+        .select('id, name, due_days').eq('active', true).order('sort_order');
+      terms = Array.isArray(termRows) ? termRows : [];
+      termId = (row && row.qb_term_id) ? String(row.qb_term_id) : '';
 
       const roster = Array.isArray(row && row.cc_roster) ? row.cc_roster : [];
       const sending = Array.isArray(row && row.cc_emails) ? row.cc_emails : [];
@@ -105,6 +117,25 @@ const InvoicePreview = (function () {
       cc = null;                     // never let this stop an invoice being looked at
       console.error('cc roster:', err);
     }
+  }
+
+  /* One dropdown, and it saves the moment it changes -- there is no Save button
+     on this sheet, and a terms box that quietly forgot itself would be worse
+     than no terms box at all. */
+  function termsHtml() {
+    if (!cc || !terms.length) return '';
+    const opts = ['<option value="">Not set</option>']
+      .concat(terms.map(t =>
+        `<option value="${esc(t.id)}"${String(t.id) === termId ? ' selected' : ''}>${esc(t.name)}</option>`))
+      .join('');
+    return `
+      <div class="inv-cc">
+        <div class="inv-cc-h">Payment terms for ${esc(cc.customerName)}
+          <small>Set once. Every invoice for them uses it from now on, and it prints on the invoice.</small>
+        </div>
+        <select class="input inv-terms" id="invTerms">${opts}</select>
+        <p class="inv-cc-note" id="termsNote"></p>
+      </div>`;
   }
 
   function ccHtml() {
@@ -291,6 +322,7 @@ const InvoicePreview = (function () {
           <ul>${blockers.map(b => `<li>${esc(b.message)}</li>`).join('')}</ul>
         </div>` : ''}
 
+      ${termsHtml()}
       ${ccHtml()}
 
       <div class="inv-actions">
@@ -313,6 +345,35 @@ const InvoicePreview = (function () {
 
     const pushBtn = document.getElementById('invPushBtn');
     if (pushBtn) pushBtn.addEventListener('click', push);
+
+    const termsEl = document.getElementById('invTerms');
+    if (termsEl) termsEl.addEventListener('change', async () => {
+      const was = termId;
+      const picked = termsEl.value;
+      const hit = terms.find(t => String(t.id) === picked) || null;
+      termId = picked;
+      const note = document.getElementById('termsNote');
+      const { error } = await sb.from('qb_customer_billing').upsert({
+        qb_customer_id: cc.customerId,
+        qb_environment: cc.environment,
+        qb_customer_name: cc.customerName,
+        qb_term_id: picked || null,
+        qb_term_name: hit ? hit.name : null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'qb_customer_id,qb_environment' });
+      if (error) {
+        termId = was;
+        termsEl.value = was;
+        if (note) { note.textContent = 'Could not save that: ' + error.message; note.className = 'inv-cc-note inv-err'; }
+        return;
+      }
+      if (note) {
+        note.textContent = hit
+          ? `Saved. ${cc.customerName} is ${hit.name} from now on.`
+          : `Saved. No terms set for ${cc.customerName}.`;
+        note.className = 'inv-cc-note inv-ok';
+      }
+    });
 
     const addBtn = document.getElementById('ccAddBtn');
     if (addBtn) addBtn.addEventListener('click', addCc);
