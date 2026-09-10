@@ -132,3 +132,13 @@
    worth looking at before it goes out. */
 .pi-drop-warn { color: var(--molten); }
 .pi-drop-err  { color: var(--danger); }
+
+/* An attachment that did not land is the one thing on this row that needs doing
+   something about, so it gets its own block rather than a clause on the end. */
+.pi-row-warn {
+  margin-top: 8px; padding: 8px 10px; border-radius: 8px;
+  background: rgba(168, 124, 116, .14); border: 1px solid rgba(168, 124, 116, .5);
+  font-size: 12.5px; line-height: 1.45; display: flex; flex-wrap: wrap;
+  align-items: center; gap: 8px;
+}
+.pi-row-why { flex: 1 0 100%; font-size: 11.5px; color: var(--dim2); }

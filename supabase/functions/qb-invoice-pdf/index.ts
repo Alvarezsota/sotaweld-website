@@ -7,18 +7,18 @@
 // it. This is the document that shows the work: every line, the quantity, the
 // unit, the price and what it came to, under the scope, the basis and the terms.
 //
-// Sits apart from the push on purpose. The push owns the QuickBooks token, and
-// a second function refreshing that same row would race it -- Intuit rotates the
-// refresh token on every use, so the loser of that race disconnects the portal.
-// Nothing here touches QuickBooks at all: it reads the invoice out of Postgres
-// and draws it. Attaching to the QuickBooks invoice so the customer receives it
-// belongs in qb-push-invoice, where the token already lives.
+// Sits apart from the push on purpose. The push owns REFRESHING the QuickBooks
+// token, and Intuit rotates the refresh token on every use, so a second
+// function refreshing the same row would race it and the loser disconnects the
+// portal. This one only ever READS the token; when it is close to expiry it
+// asks the push to run its own sync_invoice_no, which refreshes as a side
+// effect of work the portal does on every page load anyway. One refresher.
 //
 // Admin only, the same as the crew sheet, and for the same reason: an invoice
 // carries a customer's prices, which is not a welder's to pull.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { buildPartsInvoicePdf, buildQuotePdfFor } from '../_shared/invoice-pdf-data.ts';
+import { attachInvoicePdf, buildPartsInvoicePdf, buildQuotePdfFor } from '../_shared/invoice-pdf-data.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -60,6 +60,19 @@ Deno.serve(async (req) => {
     }
     if (invoiceId && quoteId) {
       return json({ ok: false, error: 'ask for one or the other, not both' }, 400);
+    }
+
+    // attach: draw it and put it on the QuickBooks invoice so it goes out with
+    // the bill, rather than handing the bytes back for somebody to remember.
+    if (body.attach === true) {
+      if (!invoiceId) return json({ ok: false, error: 'attaching needs a parts_invoice_id' }, 400);
+      const done = await attachInvoicePdf(
+        db as never, String(invoiceId),
+        `${SUPABASE_URL}/functions/v1/qb-push-invoice`, auth,
+      );
+      return done.ok
+        ? json({ ok: true, attached: true, filename: done.filename })
+        : json({ ok: false, attached: false, error: done.error }, 422);
     }
 
     const out = quoteId

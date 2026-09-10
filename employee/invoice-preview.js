@@ -25,6 +25,7 @@
 const InvoicePreview = (function () {
   const PUSH_URL = PUSH_FN_URL;
   const BACKUP_URL = `${SUPABASE_URL}/functions/v1/qb-invoice-backup`;
+  const INVOICE_PDF_FN = `${SUPABASE_URL}/functions/v1/qb-invoice-pdf`;
 
   let current = null;   // what is open: the ids, the payload, the callback
   let cc = null;        // { environment, roster: [{name,email}], chosen: Set }
@@ -471,6 +472,44 @@ const InvoicePreview = (function () {
         }
       }
       if (btn) btn.remove();
+
+      // The letterhead invoice rides along with the bill. A parts invoice only:
+      // a week already carries the crew time sheet, which is the document that
+      // answers the question for that kind of work.
+      //
+      // Done here rather than inside the push because the push owns refreshing
+      // the QuickBooks token and nothing else may. The invoice is already on
+      // their books by now, so a drawing that fails is said out loud and left
+      // to be retried -- never turned into a failed push.
+      if (current.partsInvoiceId && json.qb_invoice_id) {
+        try {
+          const res = await fetch(INVOICE_PDF_FN, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${(await sb.auth.getSession()).data.session.access_token}`,
+            },
+            body: JSON.stringify({ parts_invoice_id: current.partsInvoiceId, attach: true }),
+          });
+          const out = await res.json().catch(() => ({}));
+          if (statusEl) {
+            const extra = out.ok
+              ? '<span class="inv-ok"> The invoice on our letterhead is attached to it and will go out with it.</span>'
+              : `<span class="inv-attach-warn"><b>The letterhead invoice did not attach.</b>
+                   The bill is fine and nothing needs pushing again. Use <b>Invoice PDF</b> on
+                   Parts and Services to try again, and do not send it until you have.
+                   <span class="inv-attach-why">${esc(out.error || 'reason unknown')}</span></span>`;
+            statusEl.innerHTML += extra;
+          }
+        } catch (err) {
+          if (statusEl) {
+            statusEl.innerHTML +=
+              `<span class="inv-attach-warn"><b>The letterhead invoice did not attach.</b>
+                 The bill is fine. <span class="inv-attach-why">${esc(err.message)}</span></span>`;
+          }
+        }
+      }
+
       if (typeof current.onPushed === 'function') await current.onPushed();
     } catch (err) {
       if (statusEl) {

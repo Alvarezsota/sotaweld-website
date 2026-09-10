@@ -181,6 +181,11 @@ function renderList() {
           <div class="pi-row-cust">${esc(inv.qb_customer_name)}</div>
           <div class="pi-row-meta">${esc(dateLabel(inv.invoice_date))}
             · ${count} line${count === 1 ? '' : 's'}${inv.po_number ? ' · PO ' + esc(inv.po_number) : ''}</div>
+          ${inv.qb_invoice_id && inv.invoice_pdf_error ? `
+            <div class="pi-row-warn">The letterhead invoice is not attached in QuickBooks.
+              Do not send it until it is.
+              <button class="btn2 btn2-line small" data-attach="${escAttr(inv.id)}">Attach it</button>
+              <span class="pi-row-why">${esc(inv.invoice_pdf_error)}</span></div>` : ''}
         </div>
         <div class="pi-row-side">
           <div class="pi-row-total">${money(total)}</div>
@@ -769,8 +774,34 @@ async function downloadInvoicePdf(btn) {
   }
 }
 
+/* Putting the letterhead invoice on the QuickBooks invoice after an attach that
+   did not land. It normally happens by itself the moment the push succeeds; this
+   is the way back when it did not. */
+async function attachInvoicePdf(btn) {
+  const id = btn.dataset.attach;
+  const was = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Attaching...';
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) throw new Error('signed out -- sign in again');
+    const res = await fetch(INVOICE_PDF_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ parts_invoice_id: id, attach: true }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) throw new Error(out.error || `it did not attach (${res.status})`);
+    await loadAll();
+  } catch (err) {
+    alert(err.message || String(err));
+    btn.disabled = false;
+    btn.textContent = was;
+  }
+}
+
 document.addEventListener('click', async (e) => {
-  const btn = e.target.closest('[data-action], [data-edit], [data-preview], [data-pdf]');
+  const btn = e.target.closest('[data-action], [data-edit], [data-preview], [data-pdf], [data-attach]');
   if (!btn) return;
 
   if (btn.dataset.preview) {
@@ -784,6 +815,7 @@ document.addEventListener('click', async (e) => {
     return;
   }
   if (btn.dataset.pdf) { downloadInvoicePdf(btn); return; }
+  if (btn.dataset.attach) { attachInvoicePdf(btn); return; }
   if (btn.dataset.edit) { startEdit(btn.dataset.edit); return; }
 
   const action = btn.dataset.action;

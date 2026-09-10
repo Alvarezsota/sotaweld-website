@@ -50,6 +50,167 @@ async function asset(url: string, required: boolean): Promise<Uint8Array | null>
   }
 }
 
+/* ---------------------------------------------------------------------------
+   PUTTING IT ON THE QUICKBOOKS INVOICE
+   ---------------------------------------------------------------------------
+
+   The token is READ, never refreshed. qb-push-invoice owns refreshing it, and
+   Intuit hands out a new refresh token every time one is used -- two functions
+   refreshing the same row means the loser of that race disconnects the portal
+   from QuickBooks. So when the access token is close to expiry this asks the
+   push function to do its own sync_invoice_no, which refreshes as a side effect
+   of work it does on every page load anyway, and then reads the fresh token.
+   One refresher, no race.
+
+   That call carries the CALLER'S authorization header, not the service key. The
+   push checks for a signed-in admin and a service key is not a user, so it
+   would answer 401 and the token would never be refreshed.
+
+   attachToInvoice is a copy of the one in invoice-backup-data.ts rather than an
+   import: that module drags in the whole 24kB crew-sheet drawing with it, which
+   this function has no use for. Forty lines duplicated against thirty kilobytes
+   of dead weight in every cold start. */
+
+type Tokens = {
+  access_token: string; refresh_token: string; expires_at: string;
+  realm_id: string; environment: string;
+};
+
+const API_BASE = (env: string) =>
+  env === 'sandbox' ? 'https://sandbox-quickbooks.api.intuit.com'
+                    : 'https://quickbooks.api.intuit.com';
+
+async function liveTokenReadOnly(db: Db, pushUrl: string, callerAuth: string): Promise<Tokens> {
+  const read = async () => {
+    const { data } = await db.from('qb_oauth_tokens').select('*').eq('id', 1).maybeSingle();
+    return data as Tokens | null;
+  };
+  let t = await read();
+  if (!t) throw new Error('QuickBooks is not connected. Reconnect the portal to QuickBooks.');
+
+  // Two minutes of headroom: an upload that starts valid and expires mid-flight
+  // is the same as never having had a token.
+  if (new Date(t.expires_at).getTime() - Date.now() > 120_000) return t;
+
+  try {
+    await fetch(pushUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: callerAuth },
+      body: JSON.stringify({ action: 'sync_invoice_no' }),
+    });
+  } catch { /* fall through and try what we have */ }
+
+  t = await read();
+  if (!t) throw new Error('QuickBooks is not connected. Reconnect the portal to QuickBooks.');
+  return t;
+}
+
+async function attachToInvoice(opts: {
+  apiBase: string; realmId: string; accessToken: string;
+  invoiceId: string; pdf: Uint8Array; filename: string;
+}): Promise<{ ok: true; attachable_id: string | null } | { ok: false; error: string }> {
+  // IncludeOnSend is what makes it ride along: when the invoice is sent from
+  // QuickBooks, this goes with it.
+  const meta = {
+    AttachableRef: [{ EntityRef: { type: 'Invoice', value: opts.invoiceId }, IncludeOnSend: true }],
+    FileName: opts.filename,
+    ContentType: 'application/pdf',
+  };
+  const form = new FormData();
+  form.append('file_metadata_01',
+    new Blob([JSON.stringify(meta)], { type: 'application/json' }), 'metadata.json');
+  form.append('file_content_01',
+    new Blob([opts.pdf], { type: 'application/pdf' }), opts.filename);
+
+  let res: Response;
+  try {
+    res = await fetch(`${opts.apiBase}/v3/company/${opts.realmId}/upload?minorversion=75`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${opts.accessToken}`, Accept: 'application/json' },
+      body: form,
+    });
+  } catch (err) {
+    return { ok: false, error: `the upload did not reach QuickBooks: ${(err as Error).message}` };
+  }
+
+  const out = await res.json().catch(() => ({}));
+  // QuickBooks answers an upload with a list and reports a per-part fault inside
+  // a 200. Reading only the status code would call a rejected attachment a
+  // success.
+  const entry = out?.AttachableResponse?.[0];
+  const fault = entry?.Fault?.Error?.[0] ?? out?.Fault?.Error?.[0];
+  if (!res.ok || fault || !entry?.Attachable?.Id) {
+    const detail = fault
+      ? `${fault.code ?? '?'} ${fault.Message ?? ''} ${fault.Detail ?? ''}`.trim()
+      : JSON.stringify(out).slice(0, 400);
+    return { ok: false, error: detail.slice(0, 500) || `upload failed (${res.status})` };
+  }
+  return { ok: true, attachable_id: String(entry.Attachable.Id) };
+}
+
+/**
+ * Draws the invoice and puts it on the QuickBooks invoice, so the customer gets
+ * it with the bill instead of it sitting here waiting to be remembered.
+ *
+ * The outcome is written onto the row either way. Best effort with no record is
+ * just "sometimes missing and nobody knows".
+ */
+export async function attachInvoicePdf(
+  db: Db, partsInvoiceId: string, pushUrl: string, callerAuth: string,
+): Promise<{ ok: true; filename: string } | { ok: false; error: string }> {
+  const { data: row } = await db.from('parts_invoices')
+    .select('qb_invoice_id, qb_customer_id').eq('id', partsInvoiceId).maybeSingle();
+  const inv = row as { qb_invoice_id?: string | null; qb_customer_id?: string } | null;
+  if (!inv) return { ok: false, error: 'that invoice could not be found' };
+  if (!inv.qb_invoice_id) {
+    return { ok: false, error: 'that invoice is not on QuickBooks yet, so there is nothing to attach it to' };
+  }
+
+  const note = async (err: string | null) => {
+    await db.from('parts_invoices').update({
+      invoice_pdf_attached_at: err ? null : new Date().toISOString(),
+      invoice_pdf_error: err,
+    }).eq('id', partsInvoiceId);
+  };
+
+  let t: Tokens;
+  try {
+    t = await liveTokenReadOnly(db, pushUrl, callerAuth);
+  } catch (err) {
+    const msg = (err as Error).message;
+    await note(msg);
+    return { ok: false, error: msg };
+  }
+
+  // Terms, due date and the billing address off the invoice QuickBooks actually
+  // has, so the document that rides along cannot contradict the one it is
+  // stapled to.
+  let facts: QbInvoiceFacts = {};
+  let termName: string | null = null;
+  try {
+    const r = await fetch(
+      `${API_BASE(t.environment)}/v3/company/${t.realm_id}/invoice/${inv.qb_invoice_id}?minorversion=75`,
+      { headers: { Authorization: `Bearer ${t.access_token}`, Accept: 'application/json' } });
+    const j = await r.json().catch(() => ({}));
+    if (j?.Invoice) {
+      facts = j.Invoice as QbInvoiceFacts;
+      termName = facts.SalesTermRef?.name ?? null;
+    }
+  } catch { /* draw it from our own rows instead */ }
+
+  const drawn = await buildPartsInvoicePdf(db, partsInvoiceId, facts, termName);
+  if (!drawn.ok) { await note(drawn.error); return { ok: false, error: drawn.error }; }
+
+  const put = await attachToInvoice({
+    apiBase: API_BASE(t.environment), realmId: t.realm_id, accessToken: t.access_token,
+    invoiceId: String(inv.qb_invoice_id), pdf: drawn.pdf, filename: drawn.filename,
+  });
+  if (!put.ok) { await note(put.error); return { ok: false, error: put.error }; }
+
+  await note(null);
+  return { ok: true, filename: drawn.filename };
+}
+
 export type QbInvoiceFacts = {
   DueDate?: string;
   SalesTermRef?: { value?: string; name?: string };
