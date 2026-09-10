@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8.9400 4.3200" width="375.5" height="181.4">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<g fill="none" stroke="#111111" stroke-width="0.0200">
+<path d="M 3.7986 1.3912 A 1.8100 1.8100 0 1 0 3.7986 2.9288"/>
+<path d="M 3.7986 1.3912 A 0.2500 0.2500 0 0 0 4.0249 1.5350"/>
+<line x1="4.0249" y1="1.5350" x2="4.9151" y2="1.5350"/>
+<path d="M 4.9151 1.5350 A 0.2500 0.2500 0 0 0 5.1414 1.3912"/>
+<path d="M 5.1414 2.9288 A 1.8100 1.8100 0 1 0 5.1414 1.3912"/>
+<path d="M 5.1414 2.9288 A 0.2500 0.2500 0 0 0 4.9151 2.7850"/>
+<line x1="4.9151" y1="2.7850" x2="4.0249" y2="2.7850"/>
+<path d="M 4.0249 2.7850 A 0.2500 0.2500 0 0 0 3.7986 2.9288"/>
+<circle cx="6.7800" cy="2.1600" r="1.0335"/>
+<text x="2.1600" y="2.1600" font-size="0.2122" fill="#c0392b" stroke="none" text-anchor="middle" dominant-baseline="central" font-family="monospace">NPS 2" CL150 FIG-8</text>
+<text x="4.4700" y="2.1600" font-size="0.1729" fill="#c0392b" stroke="none" text-anchor="middle" dominant-baseline="central" font-family="monospace">2" 150</text>
+</g>
+</svg>
