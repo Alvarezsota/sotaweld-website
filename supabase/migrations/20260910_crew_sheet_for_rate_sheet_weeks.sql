@@ -1,0 +1,72 @@
+-- THE CREW SHEET FOR A RATE-SHEET WEEK
+-- ===========================================================================
+-- Applied as: crew_sheet_for_a_rate_sheet_week,
+--             crew_sheet_stops_refusing_rate_sheet_weeks_v3,
+--             crew_sheet_rate_line_separator,
+--             crew_sheet_unclassified_line_reads_plainly
+--
+-- It used to refuse these outright, and it was right to. The sheet priced every
+-- line off the job's welder rate, which a rate-sheet customer does not have, so
+-- it would have drawn a crew at nought an hour behind a real invoice -- the
+-- invoice 2987 failure, a backup document that disagrees with the bill it is
+-- stapled to. The refusal is now a hand-off to rate_sheet_backup_payload, which
+-- prices off the same rates the invoice bills off.
+--
+-- ---------------------------------------------------------------------------
+-- STRAIGHT TIME AND OVERTIME ARE SEPARATE LINES
+-- ---------------------------------------------------------------------------
+-- A man crossing forty hours mid-week has some hours at his classification rate
+-- and the rest at time and a half. Rather than teach the drawing about it, the
+-- day that straddles the line becomes two rows, one at each rate, each saying
+-- which it is. The existing sheet renders that unchanged -- which is why NOTHING
+-- had to be redeployed: no edge function, no PDF code, no touching the function
+-- that pushes his invoices.
+--
+-- The running total is taken across all of that customer's jobs for the week,
+-- the same way the invoice does it, then filtered to this one. Counting it per
+-- job would give a man forty straight hours on each of two jobs.
+--
+-- ---------------------------------------------------------------------------
+-- WHERE THE TOTAL COMES FROM
+-- ---------------------------------------------------------------------------
+-- rate_sheet_week_lines, never v_week_job_invoice. That view prices off
+-- bill_rate and reads zero for these customers, so taking the total from it
+-- would put nought on a sheet attached to a real invoice. This is the same
+-- mistake as 2987 wearing different clothes.
+--
+-- ---------------------------------------------------------------------------
+-- A MAN WITH NO CLASSIFICATION
+-- ---------------------------------------------------------------------------
+-- His hours appear, with no rate and the words in place of one. He cannot reach
+-- a customer this way: qb_invoice_payload refuses to build an invoice at all
+-- while anyone on the week is unclassified, naming the man. So the only person
+-- who ever sees that line is Gilbert, pulling the sheet early to read it -- and
+-- for him it is the most useful line on the page.
+--
+-- ---------------------------------------------------------------------------
+-- CHECKED ON A SCRATCH ELECTRIC HYDROGEN WEEK, ROLLED BACK
+-- ---------------------------------------------------------------------------
+--   Combo Welder at $94.80, six 9-hour days = 54 hours
+--   40 straight at 94.80          $3,792.00
+--   14 overtime at 142.20         $1,990.80
+--   per diem, 3 days at $125        $375.00
+--                                 ---------
+--   sheet total                   $6,157.80   and the invoice total agrees
+--
+--   The Friday that crosses forty splits into two rows on the same day, 4 hours
+--   straight and 5 overtime. Saturday is entirely overtime.
+--   An unclassified man shows his hours at no rate and says so.
+--
+-- And the weeks that have nothing to do with rate sheets still draw exactly as
+-- they did: 3010, 3008 and 3011 all unchanged, and the held-open 2987 still
+-- draws $2,340 on its parent week with the child correctly carrying no sheet
+-- of its own.
+--
+-- ---------------------------------------------------------------------------
+-- TWO FAILED PATCHES BEFORE THIS ONE, BOTH OF WHICH CHANGED NOTHING
+-- ---------------------------------------------------------------------------
+-- The guard did its job twice. The first anchor was copied from a listing with
+-- the whitespace normalised out and so matched nothing. The second passed a
+-- block full of brackets and full stops to regexp_matches, which read them as a
+-- pattern. The check is a literal position() search now, which is what it should
+-- have been from the start.
