@@ -316,7 +316,7 @@ function renderEditor() {
       <div class="pi-field pi-notes">
         <label class="field-label" for="piNotes">Note on the invoice <span class="pi-opt">(optional)</span></label>
         <input class="input" type="text" id="piNotes" value="${escAttr(editing.notes)}"
-               placeholder="Parts cut${editing.po_number ? ' - PO ' + esc(editing.po_number) : ''}">
+               placeholder="Parts and Services${editing.po_number ? ' - PO ' + esc(editing.po_number) : ''}">
       </div>
 
       <div class="pi-editor-actions">
