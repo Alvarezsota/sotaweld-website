@@ -1,0 +1,61 @@
+-- QUOTES BECOME REAL ROWS, AND A QUOTE CAN BECOME AN INVOICE
+-- ===========================================================================
+--
+-- Until now the quote desk kept everything -- every quote, every line, the
+-- customer list and the rate card -- as ONE json document in quote_desk_state.
+-- desk_quotes was a flattened summary written alongside it, which is why it
+-- carried a single `total` and no lines at all. One bad write to that row loses
+-- every quote ever made, and nothing can be queried, backed up or joined.
+--
+-- Applied in four steps, each its own migration in the project history:
+--   quote_lines_and_quote_fields
+--   backfill_quote_lines_from_the_blob
+--   backfill_quote_customer_ids
+--   convert_quote_to_invoice
+--   quote_number_carry_fires_on_any_update
+--
+-- This file is the record of them. See the project's migration list for the
+-- applied statements; what follows is the shape and the reasoning.
+--
+-- ---------------------------------------------------------------------------
+-- WHY THE INVOICE IS CREATED AS A DRAFT WITH NO NUMBER
+-- ---------------------------------------------------------------------------
+-- The change request asked for the number to be taken at convert. It is not.
+-- tg_parts_invoices_number_when_ready already numbers a parts invoice when it
+-- stops being a draft, so a converted invoice numbers itself exactly the way
+-- every other one does -- at the moment it is finished. Numbering at convert
+-- would spend a real invoice number on a quote that gets abandoned, which is
+-- how two numbers were burnt on this system once already. The request's own
+-- acceptance criteria say the convert produces a draft; a numbered draft would
+-- have contradicted them.
+--
+-- ---------------------------------------------------------------------------
+-- WHY THE LINK IS AN ID AND NOT A NUMBER
+-- ---------------------------------------------------------------------------
+-- invoiced_no was to be the link, and it is a string that does not exist yet at
+-- convert time. desk_quotes.invoiced_parts_invoice_id is the durable join, and
+-- invoiced_no fills itself in when the invoice takes its number. Same reasoning
+-- as billed_on_job_week_id: store the join, do not recompute it.
+--
+-- ---------------------------------------------------------------------------
+-- A TRIGGER THAT NEVER FIRED
+-- ---------------------------------------------------------------------------
+-- The carry-back trigger was first declared "after update of invoice_no" and
+-- did nothing at all. "UPDATE OF column" keys off the columns named in the
+-- statement's SET clause, not off what actually changed, and the number is
+-- written by a BEFORE trigger while the statement only sets status. Finishing a
+-- converted invoice numbered it and left the quote saying nothing. It fires on
+-- any update now. Found by testing the path end to end, not by reading it.
+--
+-- ---------------------------------------------------------------------------
+-- WHAT WAS CHECKED, ON A SCRATCH QUOTE, ROLLED BACK
+-- ---------------------------------------------------------------------------
+--   three lines copied, total $1,875.00 against a $1,875.00 quote
+--   invoice lands as a draft, no number spent
+--   customer name resolved from QuickBooks rather than the quote's typing
+--   PO and scope carried across, notes read "Per quote SOTA-..."
+--   converting the same quote twice is refused, naming the invoice it became
+--   a quote with no QuickBooks customer is refused
+--   a quote whose lines all come to zero is refused
+--   finishing the invoice numbers it AND the number reaches the quote
+--   the two real quotes' line totals match the blob exactly: $1,020 and $250
