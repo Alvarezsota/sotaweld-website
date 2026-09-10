@@ -1,0 +1,42 @@
+-- RETIRING desk_invoices
+-- ===========================================================================
+-- Applied as: retire_desk_invoices_v2
+--
+-- desk_invoices was where a converted quote landed before Parts and Services
+-- existed. Nothing writes there any more, but two real invoices still lived in
+-- it -- MasTec 3003 and Tino's 3005, both on QuickBooks since 31 August -- and
+-- they were invisible to the page that is supposed to show every invoice.
+--
+-- They keep their original ids so the mapping stays obvious, and they end up
+-- marked synced carrying their QuickBooks id. That last part matters: a synced
+-- invoice arriving as a draft would eventually be pushed again and billed to
+-- those two customers a second time. The unique index on qb_invoice_id, added
+-- a few migrations back, refuses that outright.
+--
+-- ---------------------------------------------------------------------------
+-- WHY IT IS WRITTEN IN THREE STEPS
+-- ---------------------------------------------------------------------------
+-- The first attempt inserted them straight in as synced and was refused by
+-- tg_parts_invoice_lines_guard: lines cannot be added to an invoice that is
+-- already synced. That guard is right -- it is what stops a sent invoice being
+-- edited underneath the customer -- so the migration bends to it rather than
+-- being disabled. Land as a draft, give it its lines, then mark it synced.
+-- Nothing is turned off. The failed attempt rolled back whole; it was checked.
+--
+-- Every trigger on parts_invoices was read against this insert first:
+--   number_when_ready    returns early, the number is already set
+--   invoice_no watermark only moves the counter forward, never back
+--   locked_once_synced   is UPDATE-only, and draft -> synced is allowed
+--
+-- ---------------------------------------------------------------------------
+-- THE TABLES ARE KEPT, EMPTY OF PURPOSE BUT NOT DROPPED
+-- ---------------------------------------------------------------------------
+-- Dropping them is one command and irreversible, and there is nothing to gain
+-- from doing it before Gilbert has seen the two migrated invoices on the page.
+-- Until then a trigger refuses every insert and update, so nothing can drift
+-- back into them.
+--
+-- Checked after: both invoices carry their lines and their totals unchanged
+-- ($1,020 and $250), no synced invoice anywhere lacks a QuickBooks id, both
+-- quotes point at the invoice they became, a write to desk_invoices is refused,
+-- and the counter is still 3017.
