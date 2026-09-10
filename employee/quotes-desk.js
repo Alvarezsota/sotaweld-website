@@ -841,6 +841,32 @@
       if (!d.customerId || !d.lines.length) { toast("Finish the quote before invoicing"); return; }
       if (d.kind === "invoice") { toast("This is already " + docLabel(d)); return; }
 
+      // Converting is the database's job now: one transaction that writes the
+      // Parts and Services invoice, copies the lines and marks the quote, so a
+      // dropped signal halfway through cannot leave an orphan. The desk asks
+      // and is told what happened. The clone-a-document path below is what it
+      // did before Parts and Services existed and is only reached if the page
+      // did not install the hook.
+      var conv = window.SOTA_QD_CONVERT;
+      if (conv && typeof conv.toInvoice === "function") {
+        if (d.invoicedNo || d.invoicedInvoiceId) {
+          toast(docLabel(d) + " is already invoice " + (d.invoicedNo || "a draft"));
+          return;
+        }
+        busy(btn, "Converting...");
+        conv.toInvoice(d).then(function (res) {
+          busy(btn, false);
+          d.status = "invoiced";
+          d.invoicedInvoiceId = res && res.invoiceId ? res.invoiceId : null;
+          upsert(d); persist(); render();
+          toast(docLabel(d) + " is now a Parts and Services invoice. Open that tab to finish it.");
+        }, function (err) {
+          busy(btn, false);
+          toast(err && err.message ? err.message : "That quote could not be converted");
+        });
+        return;
+      }
+
       busy(btn, "Numbering...");
 
       // The quote keeps its own SOTA number and the invoice takes a fresh one

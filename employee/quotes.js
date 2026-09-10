@@ -40,14 +40,124 @@ const adminReady = (async () => {
   return profile;
 })();
 
-/* ---------------- storage ----------------
-   The module hands over its whole state and asks for it back the same way, so
-   that is exactly what is stored: one row, one JSON document. A write that
-   fails must not look like it worked -- the desk keeps what is on screen, and
-   the office is told the save did not land. */
+/* Quotes live in desk_quotes and desk_quote_lines now. The blob is still
+   written on every save, but it is no longer the truth -- it holds the desk's
+   working state (company details, the customer list, the open draft, and the
+   two legacy invoice documents from before converting went to Parts and
+   Services) and it doubles as a copy to fall back on.
+
+   The module knows none of this. It hands over its whole state and asks for it
+   back the same way; composing that from tables and taking it apart again
+   happens here. */
 
 let lastSavedJson = null;
 let saveInFlight = null;
+const syncedDocs = new Map();       // doc id -> the json last written to the tables
+let syncTimer = null;
+
+/* A doc as the desk wants it, out of a quote row and its lines. */
+function docFromRow(q, lines) {
+  return {
+    id: q.doc_id,
+    kind: 'quote',
+    number: q.quote_no || '',
+    date: q.quote_date,
+    status: q.status || 'draft',
+    jobName: q.job_name || '',
+    scope: q.scope || '',
+    notes: q.notes || '',
+    terms: Number(q.net_days == null ? 30 : q.net_days),
+    validDays: Number(q.valid_days == null ? 30 : q.valid_days),
+    customerId: q.desk_customer_id || '',
+    contactId: q.desk_contact_id || '',
+    lump: (q.lump && typeof q.lump === 'object') ? q.lump : { shop: false, field: false, other: false },
+    invoicedNo: q.invoiced_no || '',
+    invoicedInvoiceId: q.invoiced_parts_invoice_id || null,
+    lines: (lines || []).map((l) => ({
+      id: 'l_' + String(l.id).slice(0, 8),
+      rateId: l.rate_id || '',
+      group: l.rate_group || 'other',
+      desc: l.line_note || '',
+      qty: Number(l.quantity || 0),
+      rate: Number(l.unit_price || 0),
+    })),
+  };
+}
+
+/* And the other way, for writing back. */
+function rowFromDoc(d, state) {
+  const cust = (state.customers || []).find((c) => c.id === d.customerId) || {};
+  return {
+    doc_id: d.id,
+    quote_no: d.number || null,
+    quote_date: d.date,
+    customer_name: cust.company || '',
+    customer_email: cust.email || null,
+    qb_customer_id: cust.qbCustomerId || null,
+    desk_customer_id: d.customerId || null,
+    desk_contact_id: d.contactId || null,
+    job_name: d.jobName || '',
+    scope: d.scope || '',
+    notes: d.notes || '',
+    status: d.status || 'draft',
+    net_days: Number(d.terms == null ? 30 : d.terms),
+    valid_days: Number(d.validDays == null ? 30 : d.validDays),
+    lump: d.lump || {},
+    total: (d.lines || []).reduce((t, l) => t + Number(l.qty || 0) * Number(l.rate || 0), 0),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/* description is the whole line as it should read on an invoice; line_note is
+   only the typed half, which is what goes back in the editor's box. */
+function lineRowsFor(quoteId, d, rateOf) {
+  return (d.lines || []).map((l, i) => {
+    const r = rateOf(l.rateId);
+    const label = r ? r.label : '';
+    const note = (l.desc || '').trim();
+    return {
+      quote_id: quoteId,
+      sort_order: i + 1,
+      description: [label, note].filter(Boolean).join(' - ') || 'Line ' + (i + 1),
+      line_note: note || null,
+      quantity: Number(l.qty || 0),
+      unit: r ? r.unit : null,
+      unit_price: Number(l.rate || 0),
+      qb_item_id: r ? r.qbo : null,
+      rate_group: l.group || (r ? r.group : null),
+      rate_id: l.rateId || null,
+    };
+  });
+}
+
+/* Writes the quotes that actually changed. Lines are replaced wholesale rather
+   than diffed: a quote has a handful of them, and a half-applied diff is a
+   quote that silently disagrees with what is on screen. */
+async function syncQuotesToTables(state) {
+  const rates = state.rates || [];
+  const rateOf = (id) => rates.find((r) => r.id === id) || null;
+  const quotes = (state.docs || []).filter((d) => d && d.kind === 'quote');
+
+  for (const d of quotes) {
+    const json = JSON.stringify(d);
+    if (syncedDocs.get(d.id) === json) continue;
+
+    const { data: head, error: headErr } = await sb.from('desk_quotes')
+      .upsert(rowFromDoc(d, state), { onConflict: 'doc_id' })
+      .select('id').single();
+    if (headErr) { deskWarn('Quote not saved: ' + headErr.message); syncedDocs.delete(d.id); return; }
+
+    const { error: delErr } = await sb.from('desk_quote_lines').delete().eq('quote_id', head.id);
+    if (delErr) { deskWarn('Quote lines not saved: ' + delErr.message); syncedDocs.delete(d.id); return; }
+
+    const rows = lineRowsFor(head.id, d, rateOf);
+    if (rows.length) {
+      const { error: insErr } = await sb.from('desk_quote_lines').insert(rows);
+      if (insErr) { deskWarn('Quote lines not saved: ' + insErr.message); syncedDocs.delete(d.id); return; }
+    }
+    syncedDocs.set(d.id, json);
+  }
+}
 
 window.SOTA_QD_STORAGE = {
   load: async function () {
@@ -65,13 +175,55 @@ window.SOTA_QD_STORAGE = {
     }
 
     const hints = await numberingHints();
-    const state = data && data.state && Object.keys(data.state).length ? data.state : null;
+    const blob = (data && data.state && Object.keys(data.state).length) ? data.state : null;
 
-    // A desk with nothing saved yet still gets the hints, so the next numbers
-    // show from the very first quote rather than only after one is written.
-    if (!state) return { settings: hints };
+    const [{ data: rateRows }, { data: quoteRows }] = await Promise.all([
+      sb.from('desk_rates').select('id, label, unit, rate, group_id, qb_item_id, sort_order')
+        .eq('active', true).order('sort_order'),
+      sb.from('desk_quotes')
+        .select('id, doc_id, quote_no, quote_date, customer_name, job_name, scope, notes, '
+              + 'status, net_days, valid_days, lump, invoiced_no, invoiced_parts_invoice_id, '
+              + 'desk_customer_id, desk_contact_id')
+        .order('quote_date', { ascending: false }),
+    ]);
 
+    const state = blob || {};
     state.settings = Object.assign({}, state.settings, hints);
+
+    if (Array.isArray(rateRows) && rateRows.length) {
+      state.rates = rateRows.map((r) => ({
+        id: r.id, label: r.label, unit: r.unit,
+        rate: Number(r.rate), group: r.group_id, qbo: r.qb_item_id,
+      }));
+    }
+
+    // Only take the tables over the blob if they actually answered. A failed
+    // read must not blank the desk.
+    if (Array.isArray(quoteRows)) {
+      const ids = quoteRows.map((q) => q.id);
+      let lines = [];
+      if (ids.length) {
+        const { data: lineData } = await sb.from('desk_quote_lines')
+          .select('id, quote_id, sort_order, line_note, quantity, unit_price, rate_group, rate_id')
+          .in('quote_id', ids).order('sort_order');
+        lines = Array.isArray(lineData) ? lineData : [];
+      }
+      const byQuote = new Map();
+      lines.forEach((l) => {
+        if (!byQuote.has(l.quote_id)) byQuote.set(l.quote_id, []);
+        byQuote.get(l.quote_id).push(l);
+      });
+
+      const fromTables = quoteRows.map((q) => docFromRow(q, byQuote.get(q.id)));
+      fromTables.forEach((d) => syncedDocs.set(d.id, JSON.stringify(d)));
+
+      // The two invoice documents raised before converting went to Parts and
+      // Services stay as they are. They are on QuickBooks already and there is
+      // nothing to gain from moving them.
+      const legacyInvoices = (state.docs || []).filter((d) => d && d.kind !== 'quote');
+      state.docs = fromTables.concat(legacyInvoices);
+    }
+
     return state;
   },
 
@@ -95,7 +247,44 @@ window.SOTA_QD_STORAGE = {
         deskWarn('Quote not saved: ' + error.message);
       }
     });
+
+    // The tables are the truth, but they are several writes per quote and this
+    // runs on every keystroke. Let the typing settle, then write.
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      syncQuotesToTables(state).catch((err) => deskWarn('Quote not saved: ' + err.message));
+    }, 1200);
+
     return saveInFlight;
+  }
+};
+
+/* ---------------- converting ----------------
+   The desk asks; Postgres does it. convert_quote_to_invoice writes the Parts
+   and Services invoice, copies the lines and marks the quote in one
+   transaction, so there is no state where the invoice exists and the quote does
+   not know about it.
+
+   The quote has to be in the tables before it can be converted, and the desk
+   saves on a timer -- so anything still pending is flushed first. Converting a
+   quote the database has never seen would fail on a row that is not there. */
+window.SOTA_QD_CONVERT = {
+  toInvoice: async function (doc) {
+    const profile = await adminReady;
+    if (!profile) throw new Error('not an admin');
+
+    clearTimeout(syncTimer);
+    const state = window.SOTAQuoteDesk ? window.SOTAQuoteDesk.getState() : null;
+    if (state) await syncQuotesToTables(state);
+
+    const { data: row, error: findErr } = await sb.from('desk_quotes')
+      .select('id').eq('doc_id', doc.id).maybeSingle();
+    if (findErr) throw new Error(findErr.message);
+    if (!row) throw new Error('That quote has not saved yet. Try again in a moment.');
+
+    const { data, error } = await sb.rpc('convert_quote_to_invoice', { p_quote_id: row.id });
+    if (error) throw new Error(error.message);
+    return { invoiceId: data };
   }
 };
 
@@ -232,51 +421,22 @@ async function upsertDeskInvoice(doc, state) {
   return invoiceId;
 }
 
-/* ---------------- quotes on the backend ----------------
-   The desk keeps its documents in one JSON blob, which is fine for the desk
-   and useless to every other screen. A quote saved here is copied into
-   desk_quotes so the dashboard can show what has actually been quoted, beside
-   -- not mixed into -- the enquiries that came off the website.
+/* ---------------- the dashboard's copy ----------------
+   There used to be a second writer here: every save mirrored a cut-down row
+   into desk_quotes so the dashboard had something to show. desk_quotes is the
+   real thing now and the storage adapter above writes it in full, lines and
+   all, so a second writer putting a partial row on top of it is only a way for
+   the two to disagree. It is gone.
 
-   Best effort on purpose. The desk's own save already happened by the time
-   this runs, and a dashboard row that did not get written is not a reason to
-   tell him his quote did not save. It gets written on the next save. */
-async function mirrorDeskQuote(doc, state) {
-  const profile = await adminReady;
-  if (!profile) return;
-  if (doc.kind !== 'quote') return;
-  if (!doc.number) return;                 // unnumbered means unsaved
-
-  const customer = (state.customers || []).find(c => c.id === doc.customerId) || {};
-  const total = (doc.lines || []).reduce(
-    (sum, l) => sum + (Number(l.qty) || 0) * (Number(l.rate) || 0), 0);
-
-  const row = {
-    doc_id:        doc.id,
-    quote_no:      doc.number,
-    quote_date:    doc.date || null,
-    customer_name: customer.company || '',
-    job_name:      doc.jobName || '',
-    scope:         doc.scope || '',
-    total:         Math.round(total * 100) / 100,
-    status:        doc.status || 'draft',
-    valid_days:    Number(doc.validDays) || null,
-    created_by:    profile.id,
-  };
-
-  const { error } = await sb.from('desk_quotes').upsert(row, { onConflict: 'doc_id' });
-  if (error) console.warn('Quote not mirrored to the dashboard:', error.message);
-}
+   What is left is deleting, which the adapter has no reason to do. */
 
 window.SOTA_QD_BACKEND = {
-  /* Called after the desk has saved. Never throws: see above. */
-  saveQuote: async function (doc, state) {
-    try { await mirrorDeskQuote(doc, state); } catch (err) { console.warn(err); }
-  },
+  /* The adapter writes the quote and its lines. Nothing to mirror. */
+  saveQuote: async function () {},
 
-  /* A quote that became an invoice keeps its row and gains the invoice number,
-     so the dashboard can say which quotes turned into work rather than showing
-     them for ever as though still out. */
+  /* convert_quote_to_invoice marks the quote inside the same transaction that
+     writes the invoice, and the number lands on it by trigger when the invoice
+     is finished. Kept only for the pre-Parts-and-Services path in the desk. */
   markInvoiced: async function (quoteDocId, invoiceNo) {
     try {
       await sb.from('desk_quotes')
