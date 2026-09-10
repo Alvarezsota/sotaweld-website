@@ -1,5 +1,16 @@
 # Paddle Blinds — ASME B16.48 style, Class 150
 
+> ## ⚠ SUPERSEDED — DO NOT CUT FROM THIS SET
+>
+> These files use the ASME B16.48 raised-face OD for the disc, which is
+> **undersized** against this shop's practice, and they have round-end paddle
+> handles rather than T handles.
+>
+> The current set is `../skillet-blinds-cl150/` — T handle, disc OD taken as
+> bolt circle minus bolt diameter. Use that one.
+>
+> Kept only for the dimensional reference tables below.
+
 Flat-pattern DXF cutting profiles for line blanks in 1-1/2", 2", 3", 4", 6", 8"
 and 10", sized for **ASME B16.5 Class 150 raised-face flanges**.
 

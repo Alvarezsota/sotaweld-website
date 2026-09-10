@@ -30,7 +30,6 @@ CLASS = 150
 # ---------------------------------------------------------------------------
 FLANGE = {
     # nps:  (bolt circle, n bolts, bolt dia, flange OD, Sch 40 ID)
-    "1.5":  (3.875, 4, 0.500,  5.00,  1.610),
     "2":    (4.75,  4, 0.625,  6.00,  2.067),
     "3":    (6.00,  4, 0.625,  7.50,  3.068),
     "4":    (7.50,  8, 0.625,  9.00,  4.026),
@@ -48,7 +47,6 @@ FLANGE = {
 #   hole   tag hole in the stem
 # ---------------------------------------------------------------------------
 HANDLE = {
-    "1.5": dict(stem=1.25, bar_l=3.75, bar_d=1.00, proj=1.50, hole=0.500),
     "2":   dict(stem=1.25, bar_l=3.75, bar_d=1.00, proj=1.50, hole=0.500),
     "3":   dict(stem=1.50, bar_l=4.50, bar_d=1.25, proj=1.50, hole=0.500),
     "4":   dict(stem=1.50, bar_l=4.50, bar_d=1.25, proj=1.50, hole=0.500),
@@ -57,13 +55,10 @@ HANDLE = {
     "10":  dict(stem=2.50, bar_l=7.50, bar_d=1.75, proj=2.00, hole=0.750),
 }
 
-LABEL = {"1.5": '1-1/2"', "2": '2"', "3": '3"', "4": '4"',
-         "6": '6"', "8": '8"', "10": '10"'}
+LABEL = {"2": '2"', "3": '3"', "4": '4"', "6": '6"', "8": '8"', "10": '10"'}
 
-# The 1-1/2" is the one size where the stated OD does not follow the rule.
-# 4.125 is the 2" figure and will not enter a 1-1/2" flange (bolts leave 3.375),
-# so both are cut and the choice is Gilbert's.
-OVERRIDE = {"1.5": [(4.125, "as-specified"), (3.375, "per-rule")]}
+# Per-size OD overrides, if a size ever needs to depart from the rule.
+OVERRIDE = {}
 
 
 def disc_od(nps):
