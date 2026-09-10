@@ -31,6 +31,22 @@ export type InvoicePayload = {
   scope?: string | null; basis?: string | null; terms?: string | null;
   lines?: InvoiceLine[]; expected_total?: unknown; lines_total?: unknown;
 };
+export type QuoteSection = {
+  label: string;
+  lump: boolean;                 // quoted as one figure, breakdown withheld
+  lines: InvoiceLine[];
+};
+export type QuotePayload = {
+  quote_no?: string | null; quote_date?: string; valid_through?: string | null;
+  net_days?: number | null; po_number?: string | null;
+  customer_name?: string | null; bill_to_attn?: string | null;
+  bill_email?: string | null; bill_address?: string | null;
+  reference_part?: string | null; reference_process?: string | null;
+  job_name?: string | null;
+  scope?: string | null; basis?: string | null; terms?: string | null;
+  sections?: QuoteSection[];
+  total?: unknown;
+};
 export type CompanyBlock = Record<string, string>;
 export type PdfAssets = {
   archivo: Uint8Array; inter: Uint8Array; interBold: Uint8Array; logo: Uint8Array | null;
@@ -42,30 +58,30 @@ const hex = (h: string) => rgb(
   parseInt(h.slice(3, 5), 16) / 255,
   parseInt(h.slice(5, 7), 16) / 255);
 
-const INK   = hex('#0A0C0F');
-const SOFT  = hex('#464E59');
-const MUTE  = hex('#79828F');
-const RULE  = hex('#D8DDE3');
-const HAIR  = hex('#EDF0F3');
-const WASH  = hex('#F6F8FA');
-const GOLD  = hex('#E9A23B');
-const DEEP  = hex('#B7761C');
-const GWASH = hex('#FDF4E6');
-const WHITE = rgb(1, 1, 1);
+export const INK   = hex('#0A0C0F');
+export const SOFT  = hex('#464E59');
+export const MUTE  = hex('#79828F');
+export const RULE  = hex('#D8DDE3');
+export const HAIR  = hex('#EDF0F3');
+export const WASH  = hex('#F6F8FA');
+export const GOLD  = hex('#E9A23B');
+export const DEEP  = hex('#B7761C');
+export const GWASH = hex('#FDF4E6');
+export const WHITE = rgb(1, 1, 1);
 
-const PAGE_W = 612, PAGE_H = 792;
-const M_TOP = 36;            // 0.5in
-const M_X   = 43.2;          // 0.6in
-const CONTENT = PAGE_W - M_X * 2;
-const FOOT = 54;             // nothing is drawn below this
+export const PAGE_W = 612, PAGE_H = 792;
+export const M_TOP = 36;            // 0.5in
+export const M_X   = 43.2;          // 0.6in
+export const CONTENT = PAGE_W - M_X * 2;
+export const FOOT = 54;             // nothing is drawn below this
 
-const money = (n: unknown) => '$' + Number(n || 0).toLocaleString('en-US',
+export const money = (n: unknown) => '$' + Number(n || 0).toLocaleString('en-US',
   { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const qty = (n: unknown) => {
+export const qty = (n: unknown) => {
   const v = Number(n || 0);
   return Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100);
 };
-const usDate = (iso?: string | null) => {
+export const usDate = (iso?: string | null) => {
   if (!iso) return '';
   const [y, m, d] = String(iso).split('-');
   return `${m}-${d}-${y}`;
@@ -82,7 +98,7 @@ const FOLD: Record<string, string> = {
   '—': '-', '–': '-', '×': 'x', '·': '-', '•': '-', '…': '...',
   ' ': ' ',
 };
-function makeSafe(fonts: PDFFont[]) {
+export function makeSafe(fonts: PDFFont[]) {
   // pdf-lib does NOT throw on a glyph the font lacks -- widthOfTextAtSize
   // happily measures .notdef and the page gets a black box. Ask the embedded
   // fonts what they actually carry instead of probing them.
