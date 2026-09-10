@@ -74,6 +74,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { attachToInvoice, buildBackupForJobWeek } from "../_shared/invoice-backup-data.ts";
+import { buildPartsInvoicePdf } from "../_shared/invoice-pdf-data.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -797,14 +798,18 @@ Deno.serve(async (req) => {
     // row, same trip, because who an invoice goes to and how it gets paid are
     // the same question about the same customer.
     let settle: Record<string, unknown> = {};
+    // Kept out here because the letterhead PDF further down prints the terms and
+    // the row that knows them is read once, here.
+    let termName: string | null = null;
     try {
       const { data: bill } = await db
         .from("qb_customer_billing")
-        .select("to_email, cc_emails, bcc_emails, allow_online_payment, qb_term_id")
+        .select("to_email, cc_emails, bcc_emails, allow_online_payment, qb_term_id, qb_term_name")
         .eq("qb_customer_id", String(payload.customer.id))
         .eq("qb_environment", t.environment)
         .maybeSingle();
       if (bill) {
+        termName = (bill.qb_term_name as string | null) ?? null;
         const join = (v: unknown) =>
           Array.isArray(v) ? (v as string[]).map((s) => s.trim()).filter(Boolean).join(", ") : "";
         const cc = join(bill.cc_emails);
@@ -979,6 +984,45 @@ Deno.serve(async (req) => {
           job_week_id: jobWeekId, action: "attach_backup", status: "error",
           qb_invoice_id: String(inv.Id), intuit_tid: null,
           detail: String(backup.error ?? "unknown").slice(0, 780),
+        });
+      }
+    }
+
+    // ---- the invoice on our own letterhead -----------------------------------
+    // QuickBooks emails its own invoice and that stays the bill of record. This
+    // is the one that shows the work: every line, the quantity, the unit and
+    // what it came to, under the scope and the terms blocks. Parts and services
+    // only for now -- a week already carries the crew sheet.
+    //
+    // Drawn from the invoice that now exists, not from the row that produced
+    // it, so the terms and the due date on it are the ones QuickBooks settled
+    // on rather than anything this code assumed. Best effort, like the sheet:
+    // the invoice is already on their books and a drawing that failed is not a
+    // reason to report the push as failed.
+    if (isParts && partsInvoiceId) {
+      const doc = await buildPartsInvoicePdf(
+        db as never, partsInvoiceId,
+        inv as { DueDate?: string; SalesTermRef?: { value?: string; name?: string };
+                 BillAddr?: Record<string, unknown>; DocNumber?: string },
+        termName,
+      );
+      if (!doc.ok) {
+        backup = { ...backup, invoice_pdf: { attached: false, error: doc.error } };
+      } else {
+        const att = await attachToInvoice({
+          apiBase: API_BASE(t.environment), realmId: t.realm_id, accessToken: t.access_token,
+          invoiceId: String(inv.Id), pdf: doc.pdf, filename: doc.filename,
+        });
+        backup = { ...backup, invoice_pdf: att.ok
+          ? { attached: true, filename: doc.filename, attachable_id: att.attachable_id }
+          : { attached: false, filename: doc.filename, error: att.error } };
+      }
+      const pdfState = (backup as { invoice_pdf?: { attached?: boolean; error?: unknown } }).invoice_pdf;
+      if (!pdfState?.attached) {
+        await db.from("qb_push_log").insert({
+          job_week_id: null, action: "attach_invoice_pdf", status: "error",
+          qb_invoice_id: String(inv.Id), intuit_tid: null,
+          detail: String(pdfState?.error ?? "unknown").slice(0, 780),
         });
       }
     }

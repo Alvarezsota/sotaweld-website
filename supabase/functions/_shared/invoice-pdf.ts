@@ -23,7 +23,7 @@ export type InvoiceLine = {
 };
 export type InvoicePayload = {
   invoice_no?: string | null; transaction_date?: string; due_date?: string | null;
-  terms_days?: number; po_number?: string | null; quote_no?: string | null;
+  terms_label?: string | null; po_number?: string | null; quote_no?: string | null;
   customer_name?: string | null; bill_to_attn?: string | null;
   bill_email?: string | null; bill_address?: string | null; company_rep?: string | null;
   reference_part?: string | null; reference_process?: string | null;
@@ -68,11 +68,6 @@ const usDate = (iso?: string | null) => {
   if (!iso) return '';
   const [y, m, d] = String(iso).split('-');
   return `${m}-${d}-${y}`;
-};
-const addDays = (iso: string, n: number) => {
-  const d = new Date(iso + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
 };
 
 /* A customer's part description is whatever was typed on the ticket, and the
@@ -198,17 +193,22 @@ export async function buildInvoicePdf(
   /* ---------- page one ---------- */
   letterhead(false);
 
-  // meta strip: date, terms, PO
-  const termsDays = Number(p.terms_days ?? 30);
-  const dueOn = p.due_date || (p.transaction_date ? addDays(p.transaction_date, termsDays) : '');
+  // meta strip: date, terms, PO.
+  //
+  // Terms are NOT assumed. Most customers have none set, and some settle on
+  // pickup rather than on any number of days, so a printed "Net 30" would be a
+  // claim this document has no business making. Whatever QuickBooks put on the
+  // invoice is what appears; when it says nothing, so does this.
+  const termsLabel = String(p.terms_label ?? '').trim();
+  const dueOn = p.due_date || '';
   const metaH = 40;
   box(M_X, y - metaH, CONTENT, metaH, WASH);
   page.drawLine({ start: { x: M_X, y: y - metaH }, end: { x: M_X + CONTENT, y: y - metaH },
                   thickness: 1, color: RULE });
   const metaCells = [
     ['INVOICE DATE', usDate(p.transaction_date)],
-    ['TERMS', `Net ${termsDays}`],
-    ['DUE', usDate(dueOn)],
+    ['TERMS', termsLabel],
+    ['DUE', dueOn ? usDate(dueOn) : ''],
     ['YOUR PO', p.po_number || '--'],
   ];
   const mw = CONTENT / metaCells.length;
