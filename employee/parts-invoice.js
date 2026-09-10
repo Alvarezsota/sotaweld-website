@@ -163,7 +163,7 @@ function statusPill(inv) {
 function renderList() {
   const el = document.getElementById('invoiceList');
   if (!invoices.length) {
-    el.innerHTML = '<li class="empty-state2">No parts invoices yet. Start one with the button above.</li>';
+    el.innerHTML = '<li class="empty-state2">No parts and services invoices yet. Start one with the button above.</li>';
     return;
   }
 
@@ -261,7 +261,7 @@ function renderEditor() {
   wrap.innerHTML = `
     <div class="card pi-editor">
       <h2 class="card-h">
-        ${isNew ? 'New parts invoice' : `Invoice ${editing.invoice_no ? '#' + esc(editing.invoice_no) : 'draft'}`}
+        ${isNew ? 'New Parts and Services Invoice' : `Invoice ${editing.invoice_no ? '#' + esc(editing.invoice_no) : 'draft'}`}
         <button class="btn2 btn2-ghost small" data-action="close-editor">Close</button>
       </h2>
 
