@@ -259,16 +259,36 @@ export async function buildInvoicePdf(
   }
 
   /* ---------- the detail ---------- */
-  const COL = { desc: M_X, qty: M_X + 292, unit: M_X + 344, price: M_X + 428, amt: M_X + CONTENT };
-  const DESC_W = 282;
+  /* Columns are measured, not chosen. Picking offsets by eye put every unit
+     price on top of its own amount -- up to 9.8pt of overlap on invoice 2995 --
+     because a right-aligned figure grows leftwards and nothing was reserving
+     room for it. Each money column is sized to the widest figure it can hold,
+     laid out from the right edge, with a fixed gutter between. */
+  const GUT = 14;
+  const W_AMT   = bold.widthOfTextAtSize('$000,000.00', 9.5);
+  const W_PRICE = body.widthOfTextAtSize('$000,000.00', 9);
+  const W_UNIT  = body.widthOfTextAtSize('each', 9);
+  const W_QTY   = body.widthOfTextAtSize('00,000.00', 9);
+
+  const COL = {
+    desc:   M_X,
+    qtyR:   0,
+    unit:   0,
+    priceR: 0,
+    amtR:   M_X + CONTENT - 8,
+  };
+  COL.priceR = COL.amtR - W_AMT - GUT;
+  COL.unit   = COL.priceR - W_PRICE - GUT - W_UNIT;
+  COL.qtyR   = COL.unit - GUT;
+  const DESC_W = (COL.qtyR - W_QTY) - GUT - (M_X + 8);
 
   const tableHead = () => {
     box(M_X, y - 17, CONTENT, 17, INK);
     text('DESCRIPTION', COL.desc + 8, y - 12, 7.5, bold, WHITE, { characterSpacing: 0.7 });
-    right('QTY', COL.unit - 12, y - 12, 7.5, bold, WHITE);
+    right('QTY', COL.qtyR, y - 12, 7.5, bold, WHITE);
     text('UNIT', COL.unit, y - 12, 7.5, bold, WHITE, { characterSpacing: 0.7 });
-    right('UNIT PRICE', COL.price + 54, y - 12, 7.5, bold, WHITE);
-    right('AMOUNT', COL.amt - 8, y - 12, 7.5, bold, WHITE);
+    right('UNIT PRICE', COL.priceR, y - 12, 7.5, bold, WHITE);
+    right('AMOUNT', COL.amtR, y - 12, 7.5, bold, WHITE);
     y -= 17;
   };
   tableHead();
@@ -276,7 +296,7 @@ export async function buildInvoicePdf(
   const lines = Array.isArray(p.lines) ? p.lines : [];
   let zebra = false;
   lines.forEach((l) => {
-    const wrapped = wrap(l.description || '', DESC_W - 16, 9, body);
+    const wrapped = wrap(l.description || '', DESC_W, 9, body);
     const rowH = Math.max(20, wrapped.length * 11.5 + 9);
     if (y - rowH < FOOT + 120) {           // keep the table off the footer
       letterhead(true);
@@ -287,10 +307,10 @@ export async function buildInvoicePdf(
 
     let ty = y - 13;
     wrapped.forEach((w) => { text(w, COL.desc + 8, ty, 9, body, INK); ty -= 11.5; });
-    right(qty(l.quantity), COL.unit - 12, y - 13, 9, body, SOFT);
+    right(qty(l.quantity), COL.qtyR, y - 13, 9, body, SOFT);
     text(l.unit || 'ea', COL.unit, y - 13, 9, body, MUTE);
-    right(money(l.unit_price), COL.price + 54, y - 13, 9, body, SOFT);
-    right(money(l.amount), COL.amt - 8, y - 13, 9.5, bold, INK);
+    right(money(l.unit_price), COL.priceR, y - 13, 9, body, SOFT);
+    right(money(l.amount), COL.amtR, y - 13, 9.5, bold, INK);
 
     y -= rowH;
     page.drawLine({ start: { x: M_X, y }, end: { x: M_X + CONTENT, y }, thickness: 1, color: HAIR });
@@ -305,7 +325,7 @@ export async function buildInvoicePdf(
   text('TOTAL DUE', bandX + 14, y - 21, 9, bold, DEEP, { characterSpacing: 0.8 });
   // Right edge shared with the AMOUNT column above, so the grand total sits
   // under the column it is the sum of rather than 6pt inside it.
-  right(money(p.expected_total ?? p.lines_total), COL.amt - 8, y - 23, 15, display, INK);
+  right(money(p.expected_total ?? p.lines_total), COL.amtR, y - 23, 15, display, INK);
   y -= bandH + 24;
 
   /* ---------- the blocks the quote carries ---------- */
