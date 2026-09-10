@@ -186,6 +186,7 @@ function renderList() {
           <div class="pi-row-total">${money(total)}</div>
           <div class="pi-row-btns">
             <button class="btn2 btn2-line small" data-preview="${escAttr(inv.id)}">Preview</button>
+            <button class="btn2 btn2-ghost small" data-pdf="${escAttr(inv.id)}">Invoice PDF</button>
             ${inv.status === 'synced'
               ? ''
               : `<button class="btn2 btn2-ghost small" data-edit="${escAttr(inv.id)}">Edit</button>`}
@@ -347,6 +348,7 @@ function renderEditor() {
    that out.
 */
 const PARSE_URL = `${SUPABASE_URL}/functions/v1/parse-parts-pdf`;
+const INVOICE_PDF_URL = `${SUPABASE_URL}/functions/v1/qb-invoice-pdf`;
 
 function wireDropZone() {
   const zone = document.getElementById('piDrop');
@@ -718,8 +720,57 @@ document.addEventListener('input', (e) => {
   if (totalEl) totalEl.textContent = 'Total ' + money(invoiceTotal(editing.lines));
 });
 
+/* The invoice on our own letterhead: every line, the quantity, the unit and
+   what it came to, with the scope and the terms blocks underneath. QuickBooks
+   sends its own invoice and that stays the bill of record -- this is the one a
+   customer can actually check the work against.
+
+   The function answers with PDF bytes, so the response is turned into a blob
+   and handed to the browser rather than navigated to: a plain link would drop
+   the Authorization header and come back a 401. */
+async function downloadInvoicePdf(btn) {
+  const id = btn.dataset.pdf;
+  const was = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Drawing...';
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) throw new Error('signed out -- sign in again');
+    const res = await fetch(INVOICE_PDF_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ parts_invoice_id: id }),
+    });
+    if (!res.ok) {
+      const why = await res.json().catch(() => ({}));
+      throw new Error(why.error || `the invoice could not be drawn (${res.status})`);
+    }
+    const blob = await res.blob();
+    const name = (res.headers.get('content-disposition') || '')
+      .match(/filename="([^"]+)"/)?.[1] || `invoice-${id}.pdf`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Freed on the next tick rather than immediately: revoking while the click
+    // is still being handled cancels the download in Safari.
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch (err) {
+    alert(err.message || String(err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = was;
+  }
+}
+
 document.addEventListener('click', async (e) => {
-  const btn = e.target.closest('[data-action], [data-edit], [data-preview]');
+  const btn = e.target.closest('[data-action], [data-edit], [data-preview], [data-pdf]');
   if (!btn) return;
 
   if (btn.dataset.preview) {
@@ -732,6 +783,7 @@ document.addEventListener('click', async (e) => {
     });
     return;
   }
+  if (btn.dataset.pdf) { downloadInvoicePdf(btn); return; }
   if (btn.dataset.edit) { startEdit(btn.dataset.edit); return; }
 
   const action = btn.dataset.action;

@@ -1,8 +1,9 @@
 // The invoice as the customer sees it, on our letterhead.
 //
-// NOT WIRED UP YET. Committed so the work survives the container; nothing
-// imports this and no push touches it. Gilbert is looking at a sample first,
-// and the BASIS and TERMS wording is a draft he has not signed off.
+// Drawn by qb-invoice-pdf, which the office calls to pull the document. It is
+// not attached to the QuickBooks invoice yet, so the customer does not receive
+// it automatically -- that belongs in qb-push-invoice, where the QuickBooks
+// token already lives, and is a separate change.
 //
 // QuickBooks emails its own invoice and that one stays the bill of record.
 // This is the document that shows the WORK -- every line, the quantity, the
@@ -74,7 +75,7 @@ const usDate = (iso?: string | null) => {
  * Latin subset of Inter has no glyph for the eighths. Left alone, pdf-lib
  * either throws or lays down an empty box on a document going to a customer.
  * Anything the font cannot draw is turned into something it can. */
-const FOLD = {
+const FOLD: Record<string, string> = {
   '⅞': '7/8', '⅛': '1/8', '⅜': '3/8', '⅝': '5/8',
   '½': '1/2', '¼': '1/4', '¾': '3/4', '⅓': '1/3', '⅔': '2/3',
   '″': '"', '′': "'", '“': '"', '”': '"', '‘': "'", '’': "'",
@@ -95,7 +96,7 @@ function makeSafe(fonts: PDFFont[]) {
   const cache = new Map<string, string>();
   return (s: unknown) => String(s ?? '').split('').map((ch) => {
     if (ch === '\n') return ch;
-    if (cache.has(ch)) return cache.get(ch);
+    if (cache.has(ch)) return cache.get(ch)!;
     let out = drawable(ch) ? ch : (FOLD[ch] ?? '?');
     if (out !== ch) out = out.split('').filter(drawable).join('');
     cache.set(ch, out);
@@ -205,7 +206,7 @@ export async function buildInvoicePdf(
   box(M_X, y - metaH, CONTENT, metaH, WASH);
   page.drawLine({ start: { x: M_X, y: y - metaH }, end: { x: M_X + CONTENT, y: y - metaH },
                   thickness: 1, color: RULE });
-  const metaCells = [
+  const metaCells: [string, string][] = [
     ['INVOICE DATE', usDate(p.transaction_date)],
     ['TERMS', termsLabel],
     ['DUE', dueOn ? usDate(dueOn) : ''],
@@ -223,7 +224,7 @@ export async function buildInvoicePdf(
 
   /* ---------- bill to | reference ---------- */
   const colW = (CONTENT - 24) / 2;
-  const headingAt = (label, x, yy) => {
+  const headingAt = (label: string, x: number, yy: number) => {
     text(label, x, yy, 7.5, bold, DEEP, { characterSpacing: 0.8 });
     page.drawLine({ start: { x, y: yy - 5 }, end: { x: x + colW, y: yy - 5 },
                     thickness: 1, color: HAIR });
@@ -236,7 +237,7 @@ export async function buildInvoicePdf(
   [p.bill_to_attn, p.bill_email, ...(String(p.bill_address || '').split('\n'))]
     .filter(Boolean).forEach((l) => { text(l, M_X, ly, 9, body, SOFT); ly -= 11.5; });
 
-  const refLines = [];
+  const refLines: string[] = [];
   if (p.reference_part) refLines.push(`Part: ${p.reference_part}`);
   if (p.reference_process) refLines.push(`Process: ${p.reference_process}`);
   if (p.company_rep) refLines.push(`Your representative: ${p.company_rep}`);
