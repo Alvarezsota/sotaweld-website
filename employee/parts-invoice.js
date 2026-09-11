@@ -474,6 +474,14 @@ function applyParsed(out, filename) {
       unit_price: Number(l.unit_price) || 0,
       qb_item_id: '',
     }));
+    // Lines that arrive off a spreadsheet are never typed, so the change
+    // handler never sees them. Book them here or they all land on the default.
+    const booked = fresh.filter(l => bookLine(l)).length;
+    if (booked) {
+      notes.push(booked === fresh.length
+        ? 'every line booked to an item off its description'
+        : `${booked} of ${fresh.length} lines booked to an item off the description`);
+    }
     editing.lines = typed.length ? typed.concat(fresh) : fresh;
     if (typed.length) notes.push(`${fresh.length} line${fresh.length === 1 ? '' : 's'} added under what you already had`);
   } else {
@@ -494,6 +502,67 @@ function applyParsed(out, filename) {
   const head = `Filled in from ${filename}${price}. Check it before you finish the invoice`;
   dropSay(notes.length ? `${head} \u2014 ${notes.join('; ')}.` : head + '.',
           notes.length ? 'warn' : 'ok');
+}
+
+/* --- which item a line books to ------------------------------------------
+   Left alone, every line goes out under Welding Services, because that is the
+   fallback when nothing is picked. Laser work filed as welding is not wrong on
+   the invoice -- the customer only ever reads the description -- but it is
+   wrong on the P&L, and nobody notices for a year.
+
+   So the description is read and the item guessed. A guess, not a rule: it
+   only ever fills a box that is still empty, it shows on screen in the same
+   dropdown he could have used himself, and he can change it before the invoice
+   goes anywhere.
+
+   Matched on the item's NAME rather than its QuickBooks id. An id is a number
+   in somebody else's system; if one changes or an item is retired, the lookup
+   comes back empty and the line falls back to what it does today, which is the
+   behaviour we already live with rather than a wrong account.
+
+   Order matters: the first rule that matches wins, and several of these words
+   turn up in the same line. The two laser rules go first because a line that
+   names the laser is laser work whatever else it mentions -- a bracket cut and
+   bevelled ready to weld is still the laser's. "Welding truck" and "welder's
+   helper" are the truck and the helper, so those come above welding too.
+   Welding is matched WITHOUT a leading word boundary, because "reweld" is
+   welding and \bweld would walk straight past it onto the flange behind. */
+const ITEM_HINTS = [
+  ['Tube laser cutting',          /\btube laser\b|\bsch\s*\d|cut to length/],
+  ['Fiber laser - plate cutting', /\blaser\b|\bblind\b|\bplate\b|\bshim|\bbracket|\bgusset|\bsign\b/],
+  ['Helper - hourly',             /\bhelper\b/],
+  ['Truck & rig',                 /\btruck\b|\brig\b/],
+  ['Welder - hourly',             /weld/],
+  ['Setup & programming',         /\bprogram|\bset-?up\b|first article/],
+  ['Per diem - billed',           /\bper ?diem\b/],
+  ['Mileage',                     /\bmileage\b|\bmiles\b/],
+  ['Freight & delivery',          /\bhot ?shot\b|\bfreight\b|\bdelivery\b|\bhaul/],
+  ['Gas & consumables',           /\bconsumable|assist gas/],
+  ['Bench & fit-up',              /\bbench\b|\bfit-?up\b/],
+  ['Material',                    /\bflange\b|\bmtr\b|\bmaterial\b|\bheat\s+\w*\d/],
+];
+
+/** The item this description reads like, or '' when nothing fits. */
+function suggestItemId(description) {
+  const text = String(description || '').toLowerCase();
+  if (!text.trim()) return '';
+  for (const [name, when] of ITEM_HINTS) {
+    if (!when.test(text)) continue;
+    const hit = items.find(it => it.name === name);
+    if (hit) return hit.id;          // an item we do not have is not a guess
+  }
+  return '';
+}
+
+/** Fills a line's item when it has none. Answers with the item's name when it
+ *  filled one, so the caller can say so, and '' when it left things alone. */
+function bookLine(l) {
+  if (!l || (l.qb_item_id || '').trim()) return '';
+  const id = suggestItemId(l.description);
+  if (!id) return '';
+  l.qb_item_id = id;
+  const hit = items.find(it => it.id === id);
+  return hit ? hit.name : '';
 }
 
 function lineHtml(l, i) {
@@ -723,6 +792,28 @@ document.addEventListener('input', (e) => {
   if (amtEl) amtEl.textContent = money(lineAmount(l));
   const totalEl = document.querySelector('.pi-lines-total');
   if (totalEl) totalEl.textContent = 'Total ' + money(invoiceTotal(editing.lines));
+});
+
+/* The guess runs on change rather than input: on every keystroke it would be
+   guessing from half a word, and the dropdown would flicker under him while he
+   is still typing the line. On change he has finished the description and
+   moved on, which is the moment the answer is worth having. */
+document.addEventListener('change', (e) => {
+  if (!e.target.dataset || e.target.dataset.f !== 'description') return;
+  const lineEl = e.target.closest('[data-line-uid]');
+  if (!lineEl || !editing) return;
+  const l = editing.lines.find(x => x.uid === lineEl.dataset.lineUid);
+  if (!l) return;
+
+  const booked = bookLine(l);
+  if (!booked) return;
+
+  // Move the dropdown he can see, not a hidden field. Redrawing the whole row
+  // would take the cursor with it.
+  const sel = lineEl.querySelector('[data-f="qb_item_id"]');
+  if (sel) sel.value = l.qb_item_id;
+  say(`Line ${editing.lines.indexOf(l) + 1} books to ${booked}. `
+    + 'Change it under "Books to" if that is not where it belongs.', false);
 });
 
 /* The invoice on our own letterhead: every line, the quantity, the unit and
