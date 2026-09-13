@@ -1,0 +1,34 @@
+-- A welder could make himself an admin.
+--
+-- profiles carried an UPDATE policy, profiles_update_own, whose whole condition
+-- was `id = auth.uid()`. A policy with a USING clause and no WITH CHECK applies
+-- that same expression as the check, so the test was only ever "is this your
+-- own row" -- never "which column are you changing". Any of the seventeen
+-- people who can sign in could run one update against his own row and come out
+-- an admin, and an admin sees the pay rates, the customer prices and every
+-- invoice. He could also set his own pay_rate, which flows straight into a pay
+-- statement.
+--
+-- This was proved, not inferred: signed in as a real employee inside a
+-- transaction, `update profiles set role = 'admin' where id = <his own>` came
+-- back with his name and role admin. Rolled back. He is still an employee.
+--
+-- It also undercut the archiving added the same day -- an archived welder could
+-- switch his own `active` back on and walk back into every picker.
+--
+-- The fix is to drop the policy outright rather than narrow it, because nothing
+-- needs it. There is no "edit my profile" screen in the portal: every write to
+-- this table is an admin acting on somebody else's row from the Setup page
+-- (full_name, pay_rate, bill_rate, active), or a service-role edge function
+-- creating a welder, which bypasses RLS entirely. Setting a password goes to
+-- auth.users and never touches this table.
+--
+-- What a welder keeps is the thing he actually uses: profiles_select_own_or_admin
+-- still lets him READ his own row, which is what the dashboard, the daily log
+-- and the weld report all do to learn his name and whether he is an admin.
+--
+-- If self-service is ever wanted -- a man changing his own phone number, say --
+-- add a policy then, naming the columns it covers, rather than leaving an open
+-- one standing against the day somebody notices.
+
+drop policy if exists profiles_update_own on public.profiles;
