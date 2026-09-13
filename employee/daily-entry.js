@@ -937,6 +937,10 @@ function helperBlockHtml(h) {
           <option value="">Pick helper…</option>
           ${pickable(helpers, h.helperId).map(hp => `<option value="${hp.id}" ${h.helperId === hp.id ? 'selected' : ''}>${esc(hp.name)}${putAway(hp)}</option>`).join('')}
         </select>
+        <button type="button" class="psheet-btn helper-btn">
+          <span class="psheet-btn-name">${esc(named ? named.name + putAway(named) : 'Pick helper…')}</span>
+          <span class="psheet-btn-caret">&#9662;</span>
+        </button>
         <button type="button" class="remove-helper" data-action="remove-helper">&times;</button>
       </div>`}
       <div class="you-row">
@@ -1338,6 +1342,137 @@ dateInput.addEventListener('change', () => {
   loadLoggedForDate();
 });
 
+
+/* ---------------------------------------------------------------------------
+   PICKING A PERSON ON A PHONE
+   ---------------------------------------------------------------------------
+   A native <select> holding seventeen crew and thirteen helpers is a wheel on
+   an iPhone and a bare list on Android: thirty near-identical names, no way to
+   search, and nothing on screen to tell one welder from another. On the tailgate
+   of a truck that is unusable, and the cost of getting it wrong is a man's day
+   filed under somebody else's name.
+
+   So the <select> stays exactly where it is -- still the value, still the thing
+   the change handlers listen to, still what a screen reader and a keyboard get.
+   It is only hidden, and a button that opens this sheet is drawn in front of it.
+   Picking a row writes the value back to the select and fires its change event,
+   so every bit of logic behind it runs unchanged. Nothing here knows what a
+   ticket is.
+
+   Three things make it readable where the wheel was not:
+     - a search box, so thirty names become one or two by the third letter;
+     - the groups kept and shown as headings rather than flattened;
+     - a line under each name saying something that tells them apart -- who has
+       already turned hours in today, who is already on this ticket.
+   --------------------------------------------------------------------------- */
+
+let peopleSheetEl = null;
+
+/** Reads the rows straight out of the <select>, so it can never drift from it. */
+function rowsFromSelect(sel) {
+  const groups = [];
+  let loose = null;
+  Array.from(sel.children).forEach((node) => {
+    if (node.tagName === 'OPTGROUP') {
+      groups.push({
+        label: node.label,
+        rows: Array.from(node.children).map((o) => ({ value: o.value, name: o.textContent })),
+      });
+    } else if (node.tagName === 'OPTION') {
+      if (!loose) { loose = { label: '', rows: [] }; groups.push(loose); }
+      loose.rows.push({ value: node.value, name: node.textContent });
+    }
+  });
+  return groups;
+}
+
+function closePeopleSheet() {
+  if (!peopleSheetEl) return;
+  peopleSheetEl.remove();
+  peopleSheetEl = null;
+  document.body.classList.remove('sheet-open');
+}
+
+/**
+ * @param sel      the <select> this is standing in front of
+ * @param title    heading on the sheet
+ * @param noteFor  value -> a short line under the name, or '' for none
+ */
+function openPeopleSheet(sel, title, noteFor) {
+  closePeopleSheet();
+  const groups = rowsFromSelect(sel);
+  const current = sel.value;
+  const total = groups.reduce((n, g) => n + g.rows.length, 0);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'psheet-wrap';
+  wrap.innerHTML = `
+    <div class="psheet" role="dialog" aria-modal="true" aria-label="${escAttr(title)}">
+      <div class="psheet-head">
+        <span class="psheet-title">${esc(title)}</span>
+        <button type="button" class="psheet-x" data-ps="close" aria-label="Close">&times;</button>
+      </div>
+      ${total > 8 ? `<div class="psheet-search">
+        <input type="search" class="input psheet-q" placeholder="Type a name…" autocomplete="off" enterkeyhint="done">
+      </div>` : ''}
+      <div class="psheet-list" data-ps-list></div>
+    </div>`;
+  document.body.appendChild(wrap);
+  document.body.classList.add('sheet-open');
+  peopleSheetEl = wrap;
+
+  const list = wrap.querySelector('[data-ps-list]');
+  const draw = (q) => {
+    const needle = String(q || '').trim().toLowerCase();
+    let shown = 0;
+    list.innerHTML = groups.map((g) => {
+      const rows = g.rows.filter((r) => !needle || r.name.toLowerCase().includes(needle));
+      shown += rows.length;
+      if (!rows.length) return '';
+      return `${g.label ? `<div class="psheet-group">${esc(g.label)}</div>` : ''}
+        ${rows.map((r) => {
+          const note = noteFor ? noteFor(r.value) : '';
+          return `<button type="button" class="psheet-row${r.value === current ? ' on' : ''}" data-ps-pick="${escAttr(r.value)}">
+            <span class="psheet-name">${esc(r.name)}</span>
+            ${note ? `<span class="psheet-note">${esc(note)}</span>` : ''}
+            ${r.value === current ? '<span class="psheet-tick">&#10003;</span>' : ''}
+          </button>`;
+        }).join('')}`;
+    }).join('');
+    if (!shown) list.innerHTML = '<p class="psheet-empty">Nobody by that name.</p>';
+  };
+  draw('');
+
+  const q = wrap.querySelector('.psheet-q');
+  if (q) q.addEventListener('input', () => draw(q.value));
+
+  wrap.addEventListener('click', (e) => {
+    if (e.target === wrap || e.target.closest('[data-ps="close"]')) { closePeopleSheet(); return; }
+    const row = e.target.closest('[data-ps-pick]');
+    if (!row) return;
+    const picked = row.dataset.psPick;
+    closePeopleSheet();
+    // Everything downstream still listens to the select, not to this.
+    if (sel.value !== picked) {
+      sel.value = picked;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+  document.addEventListener('keydown', function esc2(e) {
+    if (e.key !== 'Escape') return;
+    document.removeEventListener('keydown', esc2);
+    closePeopleSheet();
+  });
+}
+
+/** The face of a hidden select: whatever is chosen, and a nudge to change it. */
+function sheetButtonHtml(cls, label) {
+  return `<button type="button" class="psheet-btn ${cls}">
+      <span class="psheet-btn-name">${esc(label)}</span>
+      <span class="psheet-btn-caret">&#9662;</span>
+    </button>`;
+}
+
 /* Filling and wiring the "Logging for" picker. Admin only - it is not rendered
    at all for a welder, so there is nothing for him to find. */
 function renderLogForPicker() {
@@ -1360,8 +1495,82 @@ function renderLogForPicker() {
   sel.innerHTML = `<option value="">${esc(me)} (me)</option>`
     + (crew ? `<optgroup label="Crew">${crew}</optgroup>` : '')
     + (hands ? `<optgroup label="Helpers">${hands}</optgroup>` : '');
+  syncLogForButton();
   updateOnBehalfBanner();
 }
+
+/* The button in front of the hidden select wears whatever the select says. */
+function syncLogForButton() {
+  const sel = document.getElementById('logForSelect');
+  const face = document.getElementById('logForBtnName');
+  if (!sel || !face) return;
+  const opt = sel.selectedOptions && sel.selectedOptions[0];
+  face.textContent = opt ? opt.textContent : 'Me';
+}
+
+/* Who has already turned hours in for the day on screen. Only an admin ever
+   opens this picker, and only an admin can read the whole crew's tickets, so
+   the question is safe to ask here and nowhere else. A failed read simply
+   means no notes -- never a picker that will not open. */
+let loggedTodayBy = null;      // welder_id -> hours, for loggedTodayFor
+let loggedTodayKey = '';
+
+async function loadLoggedToday() {
+  const d = dateInput.value;
+  loggedTodayKey = d;
+  loggedTodayBy = null;
+  if (!d || !isAdmin()) return;
+  try {
+    const { data } = await sb.from('daily_entries')
+      .select('welder_id, hours').eq('entry_date', d);
+    if (dateInput.value !== d) return;
+    const bag = {};
+    (data || []).forEach((r) => {
+      if (!r.welder_id) return;
+      bag[r.welder_id] = (bag[r.welder_id] || 0) + Number(r.hours || 0);
+    });
+    loggedTodayBy = bag;
+  } catch { /* no notes rather than no picker */ }
+}
+
+function loggedTodayFor(value) {
+  if (!loggedTodayBy || loggedTodayKey !== dateInput.value) return '';
+  if (!value || value.startsWith('helper:')) return '';   // helpers file no ticket of their own
+  const hrs = loggedTodayBy[value];
+  return hrs ? `already turned in ${hrs} hrs` : 'nothing turned in yet';
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.helper-btn');
+  if (!btn) return;
+  const block = btn.closest('[data-helper-uid]');
+  const sel = block && block.querySelector('.helper-select');
+  if (!sel) return;
+  // A helper row belongs either to a card being typed or to the one ticket open
+  // for editing in the week panel, and those are two different models. Find the
+  // right one, or the note is silently absent on half the page.
+  const card = btn.closest('[data-entry-uid]');
+  const uid = card && card.dataset.entryUid;
+  const entry = (editState && editState.uid === uid)
+    ? editState
+    : (uid ? entries.find(x => x.uid === uid) : null);
+  const thisRow = block.dataset.helperUid;
+  openPeopleSheet(sel, 'Which helper?', (value) => {
+    if (!value || !entry) return '';
+    // Already named further up this same ticket -- the one mistake worth
+    // catching here, because two lines for one man pays him twice.
+    const taken = entry.helpers.some(x => x.uid !== thisRow && x.helperId === value);
+    return taken ? 'already on this ticket' : '';
+  });
+});
+
+document.addEventListener('click', async (e) => {
+  if (!e.target.closest('#logForBtn')) return;
+  const sel = document.getElementById('logForSelect');
+  if (!sel) return;
+  await loadLoggedToday();
+  openPeopleSheet(sel, 'Whose day is this?', loggedTodayFor);
+});
 
 function updateOnBehalfBanner() {
   const box = document.getElementById('onBehalfBanner');
@@ -1401,6 +1610,7 @@ document.addEventListener('change', async (e) => {
     logForHelperId = null;
     logForWelderId = picked || null;
   }
+  syncLogForButton();
   updateOnBehalfBanner();
   applyHelperMode();
 
