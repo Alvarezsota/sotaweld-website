@@ -852,6 +852,25 @@ function bidPickerHtml(entry) {
     </div>`;
 }
 
+/* What belongs in a dropdown, out of a list that holds everything.
+ *
+ * The live ones, plus whatever this row already points at. That second half is
+ * the important half. Without it an archived job has no <option> of its own, so
+ * the select renders showing "Pick your job..." while the ticket underneath
+ * still says the job -- and the first stray touch reassigns it. On a yard
+ * ticket that was worse than cosmetic: isYard() read the job out of a list it
+ * had been dropped from, came back false, and the save wrote for_job_id null,
+ * cutting the thread that routes yard hours to the paying customer.
+ *
+ * An archived row says so, so nobody picks one off a stale ticket by accident.
+ */
+function pickable(list, currentId) {
+  return (list || []).filter(r => r.active !== false || r.id === currentId);
+}
+function putAway(row) {
+  return row && row.active === false ? ' (archived)' : '';
+}
+
 function isYard(jobId) {
   const j = jobs.find(x => x.id === jobId);
   return !!(j && j.is_yard);
@@ -916,7 +935,7 @@ function helperBlockHtml(h) {
       <div class="helper-top">
         <select class="input helper-select">
           <option value="">Pick helper…</option>
-          ${helpers.map(hp => `<option value="${hp.id}" ${h.helperId === hp.id ? 'selected' : ''}>${esc(hp.name)}</option>`).join('')}
+          ${pickable(helpers, h.helperId).map(hp => `<option value="${hp.id}" ${h.helperId === hp.id ? 'selected' : ''}>${esc(hp.name)}${putAway(hp)}</option>`).join('')}
         </select>
         <button type="button" class="remove-helper" data-action="remove-helper">&times;</button>
       </div>`}
@@ -940,7 +959,7 @@ function editCardHtml(entry) {
       <label class="field-label">Jobsite</label>
       <select class="input job-select">
         <option value="">Pick your job…</option>
-        ${jobs.map(j => `<option value="${j.id}" ${entry.jobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${j.is_yard ? ' (yard)' : ''}</option>`).join('')}
+        ${pickable(jobs, entry.jobId).map(j => `<option value="${j.id}" ${entry.jobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${j.is_yard ? ' (yard)' : ''}${putAway(j)}</option>`).join('')}
         <option value="other" ${other ? 'selected' : ''}>+ Other / one-off job…</option>
       </select>
       ${other ? `
@@ -953,7 +972,7 @@ function editCardHtml(entry) {
           <label class="field-label">Which job is this yard work for?</label>
           <select class="input for-job-select">
             <option value="">Pick the job it's for…</option>
-            ${jobs.filter(j => !j.is_yard).map(j => `<option value="${j.id}" ${entry.forJobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}</option>`).join('')}
+            ${pickable(jobs.filter(j => !j.is_yard), entry.forJobId).map(j => `<option value="${j.id}" ${entry.forJobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${putAway(j)}</option>`).join('')}
           </select>
         </div>` : ''}
       ${bidPickerHtml(entry)}
@@ -1010,7 +1029,7 @@ function entryCardHtml(entry, idx) {
       <label class="field-label">Jobsite</label>
       <select class="input job-select">
         <option value="">Pick your job…</option>
-        ${jobs.map(j => `<option value="${j.id}" ${entry.jobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${j.is_yard ? ' (yard)' : ''}</option>`).join('')}
+        ${pickable(jobs, entry.jobId).map(j => `<option value="${j.id}" ${entry.jobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${j.is_yard ? ' (yard)' : ''}${putAway(j)}</option>`).join('')}
         <option value="other" ${other ? 'selected' : ''}>+ Other / one-off job…</option>
       </select>
       ${other ? `
@@ -1024,7 +1043,7 @@ function entryCardHtml(entry, idx) {
           <label class="field-label">Which job is this yard work for?</label>
           <select class="input for-job-select">
             <option value="">Pick the job it's for…</option>
-            ${jobs.filter(j => !j.is_yard).map(j => `<option value="${j.id}" ${entry.forJobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}</option>`).join('')}
+            ${pickable(jobs.filter(j => !j.is_yard), entry.forJobId).map(j => `<option value="${j.id}" ${entry.forJobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${putAway(j)}</option>`).join('')}
           </select>
           <span class="oneoff-note">These hours land on that job's ticket — so your shop time bills to the right customer.</span>
         </div>` : ''}
@@ -1329,14 +1348,14 @@ function renderLogForPicker() {
   row.hidden = false;
 
   const me = currentProfile ? currentProfile.full_name : 'Me';
-  const crew = weldersList
+  const crew = pickable(weldersList, logForWelderId)
     .filter((w) => w.id !== currentUser.id)
-    .map((w) => `<option value="${escAttr(w.id)}"${w.id === logForWelderId ? ' selected' : ''}>${esc(w.full_name)}</option>`)
+    .map((w) => `<option value="${escAttr(w.id)}"${w.id === logForWelderId ? ' selected' : ''}>${esc(w.full_name)}${putAway(w)}</option>`)
     .join('');
   // Helpers carry a prefix on the value because their ids come out of a
   // different table than the crew's and must never be read as a welder's.
-  const hands = helpers
-    .map((h) => `<option value="helper:${escAttr(h.id)}"${h.id === logForHelperId ? ' selected' : ''}>${esc(h.name)}</option>`)
+  const hands = pickable(helpers, logForHelperId)
+    .map((h) => `<option value="helper:${escAttr(h.id)}"${h.id === logForHelperId ? ' selected' : ''}>${esc(h.name)}${putAway(h)}</option>`)
     .join('');
   sel.innerHTML = `<option value="">${esc(me)} (me)</option>`
     + (crew ? `<optgroup label="Crew">${crew}</optgroup>` : '')
@@ -1644,11 +1663,15 @@ async function requireAuth() {
   // fill, and no business holding a roster he cannot use.
   const [{ data: jobsData }, { data: helpersData }, { data: bidData }, { data: weldersData },
          { data: sheetData }, { data: equipData }] = await Promise.all([
-    sb.from('jobs').select('*').eq('active', true).order('name'),
-    sb.from('helpers_public').select('*').eq('active', true).order('name'),
+    // Everything, archived included. These arrays do two jobs that pull
+    // opposite ways: they NAME what is on a ticket, and they fill the pickers.
+    // Fetching only the live ones served the picker and quietly broke the
+    // naming -- see pickable() below for how the two are kept apart now.
+    sb.from('jobs').select('*').order('name'),
+    sb.from('helpers_public').select('*').order('name'),
     sb.from('bid_items_public').select('*').order('sort_order'),
     isAdmin()
-      ? sb.from('welders_public').select('id, full_name').order('full_name')
+      ? sb.from('welders_public').select('id, full_name, active').order('full_name')
       : Promise.resolve({ data: [] }),
     sb.from('rate_sheets').select('*').eq('active', true),
     sb.from('rate_sheet_items').select('*').eq('kind', 'equipment').eq('active', true).order('sort_order'),
@@ -1680,7 +1703,7 @@ async function requireAuth() {
   // draws the new man, and forcing one would wipe what is half typed.
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden) return;
-    const { data } = await sb.from('helpers_public').select('*').eq('active', true).order('name');
+    const { data } = await sb.from('helpers_public').select('*').order('name');
     if (data && data.length) { helpers = data; renderLogForPicker(); }
   });
 

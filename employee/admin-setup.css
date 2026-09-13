@@ -47,7 +47,12 @@
 
 .p-head, .p-row { display: grid; grid-template-columns: 2.2fr .8fr .8fr .8fr 1.9fr .8fr; align-items: center; gap: 8px; }
 .helpers-row-grid { grid-template-columns: 2.2fr .8fr .8fr .8fr 1.9fr .8fr 20px; }
-.welders-row-grid { grid-template-columns: 2.2fr .8fr .8fr .8fr 1.9fr .7fr 110px; }
+/* Name, Pay, Bill, Margin, Classification, Admin, Active, Password. The Active
+   column is what takes a man who no longer works here out of every picker. */
+.welders-row-grid { grid-template-columns: 2.2fr .8fr .8fr .8fr 1.9fr .7fr .8fr 110px; }
+/* The headers now carry the row grid class rather than falling back on the
+   six-column default above, so the labels sit over the fields they name. The
+   grid comes from the two rules above this line; nothing more is needed here. */
 .p-head { padding: 6px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); font-weight: 700; }
 .p-row { background: var(--steel-850); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: 7px; }
 .rate { gap: 0; }
@@ -315,4 +320,42 @@ select.cell-in:disabled { cursor: default; background-image: none; }
 @media (max-width: 760px) {
   .rs-bar { flex-direction: column; align-items: stretch; gap: 8px; }
   .rs-pick { width: 100%; min-width: 0; font-size: 16px; }
+}
+
+
+/* ---------- The folder finished work goes into ----------
+   Shut by default and counted on the outside, so a list of thirty-eight jobs
+   can become a list of nine without anything being thrown away. Deliberately
+   quiet: this is where things go to be forgotten, not something competing with
+   the live list above it for attention. */
+.arch { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+.arch-head {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: none; border: none; padding: 8px 4px; cursor: pointer;
+  color: var(--dim); font: inherit; font-size: 13px; font-weight: 600;
+  text-align: left; border-radius: 8px;
+}
+.arch-head:hover { color: var(--text); background: var(--steel-850); }
+.arch-caret { color: var(--dim2); font-size: 11px; width: 10px; }
+.arch-title { text-transform: uppercase; letter-spacing: .06em; font-size: 11px; }
+.arch-count {
+  background: var(--steel-700); color: var(--dim); border-radius: 99px;
+  padding: 1px 8px; font-size: 11px; font-weight: 700;
+}
+.arch-body { padding-top: 8px; }
+/* Rows in the folder read as put away, but stay legible -- they are still
+   editable in here, and a rate nobody can read is a rate nobody can correct. */
+.arch-body .jt-row, .arch-body .p-row { opacity: .72; }
+.arch-body .jt-row.off, .arch-body .p-row.off { opacity: .72; }
+.name-when { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.name-when .cell-in { flex: 1 1 auto; min-width: 0; }
+.arch-when {
+  flex: 0 0 auto; padding: 1px 7px; border-radius: 99px;
+  background: var(--steel-700); color: var(--dim2);
+  font-size: 10px; font-weight: 700; letter-spacing: .04em; white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .arch { margin-top: 10px; }
+  .arch-head { padding: 12px 4px; }
 }

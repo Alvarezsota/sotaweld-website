@@ -146,11 +146,71 @@ function jf(label, inner, cls) {
   return `<div class="jt-f${cls ? ' ' + cls : ''}" data-l="${escAttr(label)}">${inner}</div>`;
 }
 
-function renderJobs() {
-  const table = document.getElementById('jobsTable');
-  table.innerHTML = jobsList.map(j => `
+/* The folder finished work goes into.
+ *
+ * Archiving already worked -- the switch was there and the pickers already read
+ * only live rows. What was missing was the half that makes anyone willing to
+ * use it: somewhere to SEE what has been put away, and a way to bring it back.
+ * A row that dims in place inside a list of thirty-eight is not put away, it is
+ * still in the way, and a switch nobody can find the undo for does not get
+ * thrown.
+ *
+ * So the archived rows come out of the live list entirely and sit in a folder
+ * underneath, shut by default, counted on the outside so it is obvious whether
+ * there is anything in it. They keep their full row, which means everything
+ * stays editable in there -- a rate corrected on an old job still has to reach
+ * the week it was worked.
+ */
+const archiveOpen = { jobs: false, welders: false, helpers: false };
+
+function archiveFolderHtml(kind, rows, rowsHtml, noun) {
+  const box = document.getElementById(kind + 'Archive');
+  if (!box) return;
+  if (!rows.length) { box.innerHTML = ''; return; }
+  const open = archiveOpen[kind];
+  box.innerHTML = `
+    <div class="arch">
+      <button type="button" class="arch-head" data-arch="${kind}" aria-expanded="${open}">
+        <span class="arch-caret">${open ? '&#9662;' : '&#9656;'}</span>
+        <span class="arch-title">Archived ${noun}</span>
+        <span class="arch-count">${rows.length}</span>
+      </button>
+      ${open ? `<div class="arch-body">${rowsHtml}</div>` : ''}
+    </div>`;
+}
+
+/* The name field, with the date it was put away beside it when there is one.
+   Both go inside ONE element on purpose: the jf() wrapper around this is
+   display:contents on a wide screen, so anything returned here lands straight
+   in the row's grid, and two children would shift every column after them. */
+function nameCell(inputHtml, row) {
+  const when = archivedOn(row);
+  if (!when) return inputHtml;
+  return `<div class="name-when">${inputHtml}<span class="arch-when">put away ${esc(when)}</span></div>`;
+}
+
+/** "12 Sep", or nothing when the row was put away before the date was kept. */
+function archivedOn(row) {
+  if (!row || !row.archived_at) return '';
+  const d = new Date(row.archived_at);
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+document.addEventListener('click', (e) => {
+  const head = e.target.closest('[data-arch]');
+  if (!head) return;
+  const kind = head.dataset.arch;
+  archiveOpen[kind] = !archiveOpen[kind];
+  if (kind === 'jobs') renderJobs();
+  else if (kind === 'welders') renderWelders();
+  else renderHelpers();
+});
+
+function jobRowHtml(j) {
+  return `
     <div class="jt-row${j.active ? '' : ' off'}" data-job-id="${j.id}">
-      ${jf('Job', `<input class="cell-in strong job-name" value="${escAttr(j.name)}" placeholder="Job name">`)}
+      ${jf('Job', nameCell(`<input class="cell-in strong job-name" value="${escAttr(j.name)}" placeholder="Job name">`, j))}
       ${jf('Operator', `<input class="cell-in job-operator" value="${escAttr(j.operator || '')}" placeholder="Operator">`)}
       ${jf('Bills to', billToCell(j))}
       ${jf('Bid #', `<input class="cell-in bid job-bidnum" value="${escAttr(j.bid_number || '')}" placeholder="Bid #" title="Your bid or quote number for this job. Optional, works on any job, and prints on the invoice.">`)}
@@ -167,11 +227,19 @@ function renderJobs() {
         ${j.qb_customer_id ? '' : 'disabled'}><span class="tk2"></span></button></div>`, 'jt-sw')}
       ${jf('Lump sum', `<div class="c"><button type="button" class="toggle2${j.billing_type === 'flat' ? ' ton' : ''}" data-action="toggle-flat" title="Lump sum job — bid as a price instead of billed by the hour. Bill it off bid line items on the Summary page."><span class="tk2"></span></button></div>`, 'jt-sw')}
       ${jf('Track hours', `<div class="c"><button type="button" class="toggle2${j.track_hours ? ' ton' : ''}" data-action="toggle-hours" title="Track hours on this job's daily log"><span class="tk2"></span></button></div>`, 'jt-sw')}
-      ${jf('Active', `<div class="c"><button type="button" class="toggle2${j.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>`, 'jt-sw')}
+      ${jf(j.active ? 'Active' : 'Bring back', `<div class="c"><button type="button" class="toggle2${j.active ? ' ton' : ''}" data-action="toggle-active"
+        title="${j.active ? 'Archive this job when it is finished. It leaves the welders\u2019 picker and moves to the folder below; nothing already worked or billed changes.' : 'Put this job back in the welders\u2019 picker.'}"><span class="tk2"></span></button></div>`, 'jt-sw')}
       ${jf('Delete', `<button type="button" class="row-x" data-action="delete-job">&times;</button>`, 'jt-del')}
     </div>
     ${bidPanelHtml(j)}
-  `).join('');
+  `;
+}
+
+function renderJobs() {
+  const live = jobsList.filter(j => j.active);
+  const put = jobsList.filter(j => !j.active);
+  document.getElementById('jobsTable').innerHTML = live.map(jobRowHtml).join('');
+  archiveFolderHtml('jobs', put, put.map(jobRowHtml).join(''), 'jobs');
 }
 
 // ---------- Bid items ----------
@@ -282,7 +350,19 @@ function customerPatch(qbId) {
   return { qb_customer_id: String(c.id), qb_customer_name: c.display_name, bill_to: c.display_name };
 }
 
-document.getElementById('jobsTable').addEventListener('change', async (e) => {
+/* Rows live in two places now -- the live list and the folder underneath -- so
+   every handler has to be wired to both. A folder whose rows cannot be clicked
+   is a folder nothing ever comes back out of, and the edits matter in there
+   too: a rate corrected on a finished job still has to reach the week it was
+   worked. Capture is passed through because blur does not bubble. */
+function onList(id, type, fn, capture) {
+  const live = document.getElementById(id);
+  if (live) live.addEventListener(type, fn, capture);
+  const folder = document.getElementById(id.replace(/Table$/, 'Archive'));
+  if (folder) folder.addEventListener(type, fn, capture);
+}
+
+onList('jobsTable', 'change', async (e) => {
   if (!e.target.classList.contains('job-customer')) return;
   const row = e.target.closest('[data-job-id]');
   if (!row) return;
@@ -301,7 +381,7 @@ document.getElementById('jobsTable').addEventListener('change', async (e) => {
   renderJobs();          // drops the "not in QuickBooks" marker once it is fixed
 });
 
-document.getElementById('jobsTable').addEventListener('blur', async (e) => {
+onList('jobsTable', 'blur', async (e) => {
   const row = e.target.closest('[data-job-id]');
   if (!row) return;
   const id = row.dataset.jobId;
@@ -325,7 +405,7 @@ document.getElementById('jobsTable').addEventListener('blur', async (e) => {
 }, true);
 
 // Bid line edits save on blur, same feel as the job cells above.
-document.getElementById('jobsTable').addEventListener('blur', async (e) => {
+onList('jobsTable', 'blur', async (e) => {
   const line = e.target.closest('[data-bid-id]');
   if (!line) return;
   const id = line.dataset.bidId;
@@ -346,7 +426,7 @@ document.getElementById('jobsTable').addEventListener('blur', async (e) => {
   renderJobs();
 }, true);
 
-document.getElementById('jobsTable').addEventListener('click', async (e) => {
+onList('jobsTable', 'click', async (e) => {
   const openBid = e.target.closest('[data-action="open-bid"]');
   if (openBid) {
     openBidJobId = openBid.closest('[data-job-id]').dataset.jobId;
@@ -396,9 +476,24 @@ document.getElementById('jobsTable').addEventListener('click', async (e) => {
   if (!job) return;
 
   if (e.target.closest('[data-action="toggle-active"]')) {
-    job.active = !job.active;
+    // The row leaves the list and lands in the folder, so a write that quietly
+    // failed would look exactly like one that worked until the next reload.
+    // Move it, then put it back and say so if the write did not take. The row
+    // comes back from the update so archived_at arrives with it and the folder
+    // can date it without another trip.
+    const was = job.active;
+    job.active = !was;
     renderJobs();
-    await sb.from('jobs').update({ active: job.active }).eq('id', id);
+    const { data, error } = await sb.from('jobs')
+      .update({ active: job.active }).eq('id', id).select('active, archived_at').maybeSingle();
+    if (error || !data) {
+      job.active = was;
+      renderJobs();
+      alert('That job did not change.\n\n' + ((error && error.message) || 'Nothing was saved.'));
+      return;
+    }
+    job.archived_at = data.archived_at;
+    renderJobs();
     return;
   }
   if (e.target.closest('[data-action="toggle-billwith"]')) {
@@ -452,17 +547,19 @@ const ADMIN_CREATE_WELDER_URL = 'https://woqzbterwialanccprhp.supabase.co/functi
 const ONEDRIVE_START_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/onedrive-oauth-start';
 const ONEDRIVE_DISCONNECT_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/onedrive-disconnect';
 
-function renderWelders() {
-  const table = document.getElementById('weldersTable');
-  document.getElementById('welderCount').textContent = weldersList.length;
-  table.innerHTML = weldersList.map(p => `
-    <div class="p-row welders-row-grid" data-profile-id="${p.id}">
-      ${jf('Name', `<input class="cell-in strong welder-name" value="${escAttr(p.full_name)}" placeholder="Name">`)}
+function welderRowHtml(p) {
+  return `
+    <div class="p-row welders-row-grid${p.active === false ? ' off' : ''}" data-profile-id="${p.id}">
+      ${jf('Name', nameCell(`<input class="cell-in strong welder-name" value="${escAttr(p.full_name)}" placeholder="Name">`, p))}
       ${jf('Pay / hr', `<div class="c rate"><span class="rd">$</span><input class="cell-in num welder-pay" value="${escAttr(p.pay_rate)}"></div>`)}
       ${jf('Bill / hr', `<div class="c rate"><span class="rd">$</span><input class="cell-in num welder-bill" value="${escAttr(p.bill_rate)}"></div>`)}
       ${jf('Margin / hr', `<span class="c margin-cell">$${(num(p.bill_rate) - num(p.pay_rate)).toFixed(0)}</span>`)}
       ${jf(classLabel(), classCell('welder', p.id))}
       ${jf('Admin', `<span class="c">${p.role === 'admin' ? '<span class="admin-tag">Admin</span>' : ''}</span>`)}
+      ${jf(p.active === false ? 'Bring back' : 'Active', `<div class="c"><button type="button" class="toggle2${p.active === false ? '' : ' ton'}" data-action="toggle-welder-active"
+        title="${p.active === false
+          ? 'Put this welder back in the pickers.'
+          : 'Archive this welder when he no longer works here. He leaves every picker and moves to the folder below; his past tickets, reports and pay stay exactly as they are.'}"><span class="tk2"></span></button></div>`, 'jt-sw')}
       ${jf('Password', `<span class="c"><button type="button" class="pw-btn" data-action="toggle-password">${passwordEditId === p.id ? 'Cancel' : 'Set password'}</button></span>`)}
     </div>
     ${passwordEditId === p.id ? `
@@ -475,10 +572,42 @@ function renderWelders() {
         <p class="pw-note">They can log in with this right away — no email or link needed. Tell them the new password directly.</p>
         <p class="pw-status"></p>
       </div>` : ''}
-  `).join('');
+  `;
 }
 
-document.getElementById('weldersTable').addEventListener('click', async (e) => {
+function renderWelders() {
+  const live = weldersList.filter(p => p.active !== false);
+  const put = weldersList.filter(p => p.active === false);
+  document.getElementById('welderCount').textContent = live.length;
+  document.getElementById('weldersTable').innerHTML = live.map(welderRowHtml).join('');
+  archiveFolderHtml('welders', put, put.map(welderRowHtml).join(''), 'welders');
+}
+
+onList('weldersTable', 'click', async (e) => {
+  const archBtn = e.target.closest('[data-action="toggle-welder-active"]');
+  if (archBtn) {
+    const row = e.target.closest('[data-profile-id]');
+    const p = weldersList.find(x => x.id === row.dataset.profileId);
+    if (!p) return;
+    // Archiving takes a man out of the pickers. It does NOT close his account
+    // or touch a thing he has already worked -- his tickets, his weld reports
+    // and his pay stay where they are, and every one of them still names him.
+    const was = p.active !== false;
+    p.active = !was;
+    renderWelders();
+    const { data, error } = await sb.from('profiles')
+      .update({ active: p.active }).eq('id', p.id).select('active, archived_at').maybeSingle();
+    if (error || !data) {
+      p.active = was;
+      renderWelders();
+      alert('That welder did not change.\n\n' + ((error && error.message) || 'Nothing was saved.'));
+      return;
+    }
+    p.archived_at = data.archived_at;
+    renderWelders();
+    return;
+  }
+
   const toggleBtn = e.target.closest('[data-action="toggle-password"]');
   if (toggleBtn) {
     const row = e.target.closest('[data-profile-id]');
@@ -530,12 +659,12 @@ document.getElementById('weldersTable').addEventListener('click', async (e) => {
 /* Saving a classification. Change rather than blur: a select is done the moment
    it closes, and the two crew tables listen for blur only, which a select never
    fires the way a text box does. */
-document.getElementById('weldersTable').addEventListener('change', async (e) => {
+onList('weldersTable', 'change', async (e) => {
   if (!e.target.classList.contains('rate-class')) return;
   const row = e.target.closest('[data-profile-id]');
   if (row) await saveRateClass('welder', row.dataset.profileId, e.target.value);
 });
-document.getElementById('helpersTable').addEventListener('change', async (e) => {
+onList('helpersTable', 'change', async (e) => {
   if (!e.target.classList.contains('rate-class')) return;
   const row = e.target.closest('[data-helper-id]');
   if (row) await saveRateClass('helper', row.dataset.helperId, e.target.value);
@@ -556,7 +685,7 @@ async function loadWelders() {
   renderWelders();
 }
 
-document.getElementById('weldersTable').addEventListener('blur', async (e) => {
+onList('weldersTable', 'blur', async (e) => {
   const row = e.target.closest('[data-profile-id]');
   if (!row) return;
   const id = row.dataset.profileId;
@@ -575,20 +704,27 @@ document.getElementById('weldersTable').addEventListener('blur', async (e) => {
 }, true);
 
 // ---------- Helpers ----------
-function renderHelpers() {
-  const table = document.getElementById('helpersTable');
-  document.getElementById('helperCount').textContent = helpersList.length;
-  table.innerHTML = helpersList.map(h => `
+function helperRowHtml(h) {
+  return `
     <div class="p-row helpers-row-grid${h.active ? '' : ' off'}" data-helper-id="${h.id}">
-      ${jf('Name', `<input class="cell-in strong helper-name" value="${escAttr(h.name)}" placeholder="Name">`)}
+      ${jf('Name', nameCell(`<input class="cell-in strong helper-name" value="${escAttr(h.name)}" placeholder="Name">`, h))}
       ${jf('Pay / hr', `<div class="c rate"><span class="rd">$</span><input class="cell-in num helper-pay" value="${escAttr(h.pay_rate)}"></div>`)}
       ${jf('Bill / hr', `<div class="c rate"><span class="rd">$</span><input class="cell-in num helper-bill" value="${escAttr(h.bill_rate)}"></div>`)}
       ${jf('Margin / hr', `<span class="c margin-cell">$${(num(h.bill_rate) - num(h.pay_rate)).toFixed(0)}</span>`)}
       ${jf(classLabel(), classCell('helper', h.id))}
-      ${jf('Active', `<div class="c"><button type="button" class="toggle2${h.active ? ' ton' : ''}" data-action="toggle-active"><span class="tk2"></span></button></div>`, 'jt-sw')}
+      ${jf(h.active ? 'Active' : 'Bring back', `<div class="c"><button type="button" class="toggle2${h.active ? ' ton' : ''}" data-action="toggle-active"
+        title="${h.active ? 'Archive this helper when he no longer works here. He leaves every picker and moves to the folder below; his past hours and pay stay exactly as they are.' : 'Put this helper back in the pickers.'}"><span class="tk2"></span></button></div>`, 'jt-sw')}
       ${jf('Delete', `<button type="button" class="row-x" data-action="delete-helper">&times;</button>`, 'jt-del')}
     </div>
-  `).join('');
+  `;
+}
+
+function renderHelpers() {
+  const live = helpersList.filter(h => h.active);
+  const put = helpersList.filter(h => !h.active);
+  document.getElementById('helperCount').textContent = live.length;
+  document.getElementById('helpersTable').innerHTML = live.map(helperRowHtml).join('');
+  archiveFolderHtml('helpers', put, put.map(helperRowHtml).join(''), 'helpers');
 }
 
 async function loadHelpers() {
@@ -597,7 +733,7 @@ async function loadHelpers() {
   renderHelpers();
 }
 
-document.getElementById('helpersTable').addEventListener('blur', async (e) => {
+onList('helpersTable', 'blur', async (e) => {
   const row = e.target.closest('[data-helper-id]');
   if (!row) return;
   const id = row.dataset.helperId;
@@ -614,7 +750,7 @@ document.getElementById('helpersTable').addEventListener('blur', async (e) => {
   await sb.from('helpers').update(patch).eq('id', id);
 }, true);
 
-document.getElementById('helpersTable').addEventListener('click', async (e) => {
+onList('helpersTable', 'click', async (e) => {
   const row = e.target.closest('[data-helper-id]');
   if (!row) return;
   const id = row.dataset.helperId;
@@ -622,9 +758,19 @@ document.getElementById('helpersTable').addEventListener('click', async (e) => {
   if (!h) return;
 
   if (e.target.closest('[data-action="toggle-active"]')) {
-    h.active = !h.active;
+    const was = h.active;
+    h.active = !was;
     renderHelpers();
-    await sb.from('helpers').update({ active: h.active }).eq('id', id);
+    const { data, error } = await sb.from('helpers')
+      .update({ active: h.active }).eq('id', id).select('active, archived_at').maybeSingle();
+    if (error || !data) {
+      h.active = was;
+      renderHelpers();
+      alert('That helper did not change.\n\n' + ((error && error.message) || 'Nothing was saved.'));
+      return;
+    }
+    h.archived_at = data.archived_at;
+    renderHelpers();
     return;
   }
   if (e.target.closest('[data-action="delete-helper"]')) {

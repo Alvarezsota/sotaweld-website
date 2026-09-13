@@ -71,6 +71,28 @@ function esc(str) {
 function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
 function cssEscape(s) { return String(s).replace(/"/g, '\\"'); }
 
+/* What belongs in a dropdown, out of a list that holds everything.
+ *
+ * The lists carry archived rows so a report written weeks ago can still name
+ * its job and its helper. The pickers show only what is live, plus whatever
+ * this report already points at -- an archived job with no <option> of its own
+ * leaves the select reading "Pick your job..." over a report that has one, and
+ * one touch reassigns it. On a yard report that cost real money: isYard() read
+ * the job out of a list it had been dropped from, answered false, and the save
+ * wrote for_job_id null, which is the thread carrying those inches to the
+ * customer who is paying for them.
+ *
+ * This is the same shape as ensureHelperListed() below, which was written after
+ * two reports went in saying "worked alone". Same rule, applied everywhere
+ * rather than at the one place it was caught.
+ */
+function pickable(list, currentId) {
+  return (list || []).filter(r => r.active !== false || r.id === currentId);
+}
+function putAway(row) {
+  return row && row.active === false ? ' (archived)' : '';
+}
+
 function isYard(jobId) {
   const j = jobs.find(x => x.id === jobId);
   return !!(j && j.is_yard);
@@ -159,7 +181,7 @@ function forJobSlotHtml(entry) {
       <label class="field-label">Which job is this yard work for?</label>
       <select class="input for-job-select">
         <option value="">Pick the job it's for…</option>
-        ${jobs.filter(j => !j.is_yard).map(j => `<option value="${j.id}" ${entry.forJobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}</option>`).join('')}
+        ${pickable(jobs.filter(j => !j.is_yard), entry.forJobId).map(j => `<option value="${j.id}" ${entry.forJobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${putAway(j)}</option>`).join('')}
       </select>
       <span class="oneoff-note">These weld inches land on that job's log.</span>
     </div>`;
@@ -176,7 +198,7 @@ function entryCardHtml(entry) {
       <label class="field-label">Jobsite</label>
       <select class="input job-select">
         <option value="">Pick your job…</option>
-        ${jobs.map(j => `<option value="${j.id}" ${entry.jobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${j.is_yard ? ' (yard)' : ''}</option>`).join('')}
+        ${pickable(jobs, entry.jobId).map(j => `<option value="${j.id}" ${entry.jobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${j.is_yard ? ' (yard)' : ''}${putAway(j)}</option>`).join('')}
         <option value="other" ${other ? 'selected' : ''}>+ Other / one-off job…</option>
       </select>
       <div data-oneoff-slot>${oneOffSlotHtml(entry)}</div>
@@ -213,7 +235,7 @@ function entryCardHtml(entry) {
         <label class="field-label">Split with</label>
         <select class="input split-partner-select">
           <option value="">Pick the other welder…</option>
-          ${weldersList.filter(w => w.id !== currentUser.id).map(w => `<option value="${w.id}" ${entry.splitPartnerId === w.id ? 'selected' : ''}>${esc(w.full_name)}</option>`).join('')}
+          ${pickable(weldersList, entry.splitPartnerId).filter(w => w.id !== currentUser.id).map(w => `<option value="${w.id}" ${entry.splitPartnerId === w.id ? 'selected' : ''}>${esc(w.full_name)}${putAway(w)}</option>`).join('')}
         </select>
         <div data-split-body>${entry.splitLines.map(splitLineHtml).join('')}</div>
         <button type="button" class="add-part" data-action="add-split">+ Add split weld</button>
@@ -719,7 +741,7 @@ const helperHint = document.getElementById('helperHint');
 function fillHelperPicker() {
   const keep = helperPick.value;
   helperPick.innerHTML = '<option value="">Worked alone</option>'
-    + helpersList.map((h) => `<option value="${h.id}">${esc(h.name)}</option>`).join('');
+    + pickable(helpersList, keep).map((h) => `<option value="${h.id}">${esc(h.name)}${putAway(h)}</option>`).join('');
   if (keep) helperPick.value = keep;
 }
 
@@ -733,10 +755,10 @@ function fillHelperPicker() {
 async function ensureHelperListed(id) {
   if (!id || helpersList.some((h) => h.id === id)) return;
   try {
-    const { data } = await sb.from('helpers_public').select('id, name').eq('active', true).order('name');
+    const { data } = await sb.from('helpers_public').select('id, name, active').order('name');
     if (data && data.length) helpersList = data;
     if (!helpersList.some((h) => h.id === id)) {
-      const { data: one } = await sb.from('helpers_public').select('id, name').eq('id', id).maybeSingle();
+      const { data: one } = await sb.from('helpers_public').select('id, name, active').eq('id', id).maybeSingle();
       if (one) helpersList = helpersList.concat([one]).sort((a, b) => a.name.localeCompare(b.name));
     }
     fillHelperPicker();
@@ -1128,9 +1150,9 @@ async function requireAuth() {
   dateInput.max = todayIso();
 
   const [{ data: jobsData }, { data: weldersData }, { data: helpersData }, { data: targetsData }] = await Promise.all([
-    sb.from('jobs').select('*').eq('active', true).order('name'),
+    sb.from('jobs').select('*').order('name'),
     sb.from('welders_public').select('*').order('full_name'),
-    sb.from('helpers_public').select('id, name').eq('active', true).order('name'),
+    sb.from('helpers_public').select('id, name, active').order('name'),
     sb.from('customer_weld_targets').select('qb_customer_id, qb_customer_name, min_inches_per_day, baseline_hours')
   ]);
   jobs = jobsData || [];
@@ -1155,7 +1177,7 @@ async function requireAuth() {
   // list. fillHelperPicker keeps whoever is already selected.
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden) return;
-    const { data } = await sb.from('helpers_public').select('id, name').eq('active', true).order('name');
+    const { data } = await sb.from('helpers_public').select('id, name, active').order('name');
     if (data && data.length) { helpersList = data; fillHelperPicker(); }
   });
 
