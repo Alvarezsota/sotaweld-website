@@ -383,7 +383,19 @@
         '<div class="qd-panel-bd"><p class="qd-empty">Nothing saved yet. Build a quote and hit <strong>Save quote</strong>.</p></div>' +
       '</div>';
     }
-    var rows = S.docs.slice().reverse().map(function (doc) {
+    // Newest at the top. This used to be a bare .reverse(), which was right
+    // back when docs were only ever pushed onto the end of the list in the
+    // order they were made -- reversing that put the newest first. It stopped
+    // being right when the desk started loading quotes out of the tables,
+    // because those arrive newest-first already and the reverse flipped them
+    // upside down: a quote raised today landed underneath jobs finished weeks
+    // ago. Sorting on the date says what we mean whichever way the list was
+    // built. Dates are ISO, so a string compare is a date compare; the quote
+    // number breaks ties so two quotes raised the same day keep a stable order.
+    var rows = S.docs.slice().sort(function (a, b) {
+      var byDate = String(b.date || "").localeCompare(String(a.date || ""));
+      return byDate !== 0 ? byDate : String(b.number || "").localeCompare(String(a.number || ""));
+    }).map(function (doc) {
       var c = customerById(doc.customerId);
       return '<tr>' +
         '<td class="qd-doc-no">' + esc(docLabel(doc)) + '</td>' +
