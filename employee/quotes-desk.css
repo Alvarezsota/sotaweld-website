@@ -341,3 +341,32 @@
     padding: calc(var(--u) * 2.5) calc(var(--u) * 3);
   }
 }
+
+/* ---------- finished work, folded away ----------
+   Everything invoiced, paid or voided drops out of the live list into this,
+   shut by default with a count on the outside. A year of closed invoices then
+   costs one line on the page instead of a scroll past all of them to reach the
+   quote raised this morning. */
+#sota-quote-desk .qd-done {
+  margin-top: calc(var(--u) * 4);
+  border-top: 1px solid var(--line-soft);
+  padding-top: calc(var(--u) * 2);
+}
+#sota-quote-desk .qd-done-hd {
+  display: flex; align-items: center; gap: calc(var(--u) * 2);
+  width: 100%; background: none; border: none; cursor: pointer;
+  color: var(--muted); font: inherit; font-size: 12px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase;
+  padding: calc(var(--u) * 2); border-radius: 6px; text-align: left;
+}
+#sota-quote-desk .qd-done-hd:hover { color: var(--text); background: var(--sunken); }
+#sota-quote-desk .qd-done-caret { color: var(--dim); font-size: 10px; width: 10px; }
+#sota-quote-desk .qd-done-count {
+  background: var(--raised); color: var(--muted);
+  border-radius: 99px; padding: 1px 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0;
+}
+#sota-quote-desk .qd-done-bd { padding-top: calc(var(--u) * 2); }
+/* Closed work reads as closed, but stays legible -- it is still opened and
+   still printed from in here. */
+#sota-quote-desk .qd-done-bd table { opacity: .78; }

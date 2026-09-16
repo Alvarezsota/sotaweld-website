@@ -392,10 +392,19 @@
     // ago. Sorting on the date says what we mean whichever way the list was
     // built. Dates are ISO, so a string compare is a date compare; the quote
     // number breaks ties so two quotes raised the same day keep a stable order.
-    var rows = S.docs.slice().sort(function (a, b) {
+    // Newest first, whichever half of the list it lands in.
+    var byNewest = function (a, b) {
       var byDate = String(b.date || "").localeCompare(String(a.date || ""));
       return byDate !== 0 ? byDate : String(b.number || "").localeCompare(String(a.number || ""));
-    }).map(function (doc) {
+    };
+    var sorted = S.docs.slice().sort(byNewest);
+    // Work still in play versus work finished with. A document that has been
+    // invoiced, paid or voided is history: it wants to stay findable, not to
+    // sit between the two quotes waiting on an answer.
+    var live = sorted.filter(function (d) { return !DONE_STATUSES[d.status]; });
+    var done = sorted.filter(function (d) { return !!DONE_STATUSES[d.status]; });
+
+    var rowFor = function (doc) {
       var c = customerById(doc.customerId);
       return '<tr>' +
         '<td class="qd-doc-no">' + esc(docLabel(doc)) + '</td>' +
@@ -411,21 +420,42 @@
             'title="Removes it for good. An invoice number comes back if nothing else has taken one since.">Delete</button>' +
         '</td>' +
       '</tr>';
-    }).join("");
+    };
+
+    var head = '<thead><tr><th>Number</th><th>Status</th><th>Company</th><th>Job</th>' +
+      '<th>Date</th><th>Due</th><th class="qd-r">Total</th><th></th></tr></thead>';
+
+    var liveTable = live.length
+      ? '<table>' + head + '<tbody>' + live.map(rowFor).join("") + '</tbody></table>'
+      : '<p class="qd-empty">Nothing open. Everything raised so far is in the folder below.</p>';
+
+    // Shut by default and counted on the outside, so a year of finished
+    // invoices does not have to be scrolled past to reach today's quote.
+    var doneFolder = !done.length ? '' :
+      '<div class="qd-done">' +
+        '<button type="button" class="qd-done-hd" data-donefold="1" aria-expanded="' + (doneOpen ? "true" : "false") + '">' +
+          '<span class="qd-done-caret">' + (doneOpen ? "&#9662;" : "&#9656;") + '</span>' +
+          '<span class="qd-done-title">Invoiced &amp; closed</span>' +
+          '<span class="qd-done-count">' + done.length + '</span>' +
+        '</button>' +
+        (doneOpen ? '<div class="qd-done-bd"><table>' + head + '<tbody>' +
+          done.map(rowFor).join("") + '</tbody></table></div>' : '') +
+      '</div>';
 
     return '' +
     '<div class="qd-panel">' +
       '<div class="qd-panel-hd"><h2>Quotes &amp; invoices</h2><span class="qd-spacer"></span>' +
         '<span class="qd-hint">Quotes are dated SOTA numbers; invoices carry on the field-ticket run' +
           (S.settings.nextInvoiceNo ? '. Next invoice number: <strong>' + esc(S.settings.nextInvoiceNo) + '</strong>' : '') + '</span></div>' +
-      '<div class="qd-panel-bd qd-scroll">' +
-        '<table><thead><tr><th>Number</th><th>Status</th><th>Company</th><th>Job</th><th>Date</th><th>Due</th><th class="qd-r">Total</th><th></th></tr></thead>' +
-        '<tbody>' + rows + '</tbody></table>' +
-      '</div>' +
+      '<div class="qd-panel-bd qd-scroll">' + liveTable + doneFolder + '</div>' +
     '</div>';
   }
 
   var STATUSES = ["draft", "sent", "accepted", "invoiced", "paid", "void"];
+  // Done with: it has become an invoice, been paid, or been killed. The three
+  // above it -- draft, sent, accepted -- are all still waiting on somebody.
+  var DONE_STATUSES = { invoiced: true, paid: true, void: true };
+  var doneOpen = false;
   function statusSelect(doc) {
     return '<select class="qd-select qd-status" data-status="' + esc(doc.id) + '" aria-label="Status">' +
       STATUSES.map(function (s) {
@@ -707,10 +737,11 @@
   }
 
   MOUNT.addEventListener("click", function (e) {
-    var t = e.target.closest ? e.target.closest("[data-tab],[data-add],[data-del],[data-cust],[data-open],[data-deldoc],[data-act],[data-addcontact],[data-delcontact]") : null;
+    var t = e.target.closest ? e.target.closest("[data-tab],[data-add],[data-del],[data-cust],[data-open],[data-deldoc],[data-act],[data-addcontact],[data-delcontact],[data-donefold]") : null;
     if (!t) return;
 
     var v;
+    if (t.getAttribute("data-donefold")) { doneOpen = !doneOpen; render(); return; }
     if ((v = t.getAttribute("data-tab"))) { tab = v; render(); return; }
 
     if ((v = t.getAttribute("data-add"))) {
