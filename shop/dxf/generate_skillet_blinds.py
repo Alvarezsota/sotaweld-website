@@ -3,24 +3,23 @@
 Skillet blind (T-handle line blank) DXF generator
 State of the Arc Welding and Services LLC
 
-Disc OD follows the shop rule, confirmed against Gilbert's numbers:
+Disc OD follows the shop rule, confirmed against Gilbert's Class 150 numbers:
 
-    disc OD = bolt circle diameter - bolt diameter        (ASME B16.5 Class 150)
+    disc OD = bolt circle diameter - bolt diameter
 
 The blank seats against the inside of the bolt shanks, so the bolts capture and
-centre it. Note this is bolt DIAMETER, not bolt HOLE diameter -- the blank rests
-on the bolts themselves.
+centre it. Note this is bolt DIAMETER, not bolt HOLE diameter. Sizes that depart
+from the rule are listed in OVERRIDE with the reason.
 
 Handle reach follows the shop rule:
 
-    the crossbar STARTS 2" past the edge of the flange
+    the crossbar STARTS 2" past the edge of the flange   (FLANGE_GAP)
 
-so the whole T sits clear of the flange with 2" of bare stem behind it, and
-there is room to get a hand on it with the joint bolted up.
+so the whole T sits clear of the flange with 2" of bare stem behind it.
 
-Stem width is checked against the bolts. The stem is installed centred between
-two adjacent bolts, and every size is verified to keep at least MIN_BOLT_CLEAR
-between the stem edge and the bolt shank.
+Stem width is a CHECKED constraint, not a free parameter. The stem is installed
+centred between two adjacent bolts and no bolt passes through it, so every stem
+is verified to clear the bolt shanks -- see bolt_clearance() / check_stem().
 
     python3 generate_skillet_blinds.py [output_dir]
 
@@ -34,58 +33,84 @@ import sys
 from t_handle import t_blind
 from generate_paddle_blinds import dxf, svg, bbox
 
-CLASS = 150
-
-# Stem edge to bolt shank, per side. The stem must slip between two bolts.
-MIN_BOLT_CLEAR = 0.375
+# Hard floor on stem-edge-to-bolt-shank, per side. This is a physical "will it
+# drop between the bolts" limit. Class 600 and up crowd many bolts onto a small
+# circle, so the roomy 3/8" the Class 150 sizes enjoy is simply not available --
+# see the 2" 600 below, where the whole gap between bolt shanks is 1.288".
+MIN_BOLT_CLEAR = 0.125
 
 # Bare stem between the flange edge and the start of the crossbar.
 FLANGE_GAP = 2.00
 
 # ---------------------------------------------------------------------------
-# ASME B16.5 Class 150 flange data.
+# ASME B16.5 flange data, keyed (class, NPS).
 #   bolt_d     drives the disc OD (bolt circle - bolt diameter)
 #   flange_od  drives handle reach; half of it is Gilbert's "centre to edge"
 # ---------------------------------------------------------------------------
 FLANGE = {
-    # nps:  (bolt circle, n bolts, bolt dia, flange OD, Sch 40 ID)
-    "2":    (4.75,  4, 0.625,  6.00,  2.067),
-    "3":    (6.00,  4, 0.625,  7.50,  3.068),
-    "4":    (7.50,  8, 0.625,  9.00,  4.026),
-    "6":    (9.50,  8, 0.750, 11.00,  6.065),
-    "8":   (11.75,  8, 0.750, 13.50,  7.981),
-    "10":  (14.25, 12, 0.875, 16.00, 10.020),
+    # (cls, nps): (bolt circle, n bolts, bolt dia, flange OD, Sch 40 ID)
+    (150, "2"):  (4.75,  4, 0.625,  6.00,  2.067),
+    (150, "3"):  (6.00,  4, 0.625,  7.50,  3.068),
+    (150, "4"):  (7.50,  8, 0.625,  9.00,  4.026),
+    (150, "6"):  (9.50,  8, 0.750, 11.00,  6.065),
+    (150, "8"): (11.75,  8, 0.750, 13.50,  7.981),
+    (150, "10"):(14.25, 12, 0.875, 16.00, 10.020),
+    (600, "2"):  (5.00,  8, 0.625,  6.50,  2.067),
 }
 
+# Plain skillet -- no tag hole in the handle. t_blind() still supports one;
+# pass a diameter here and thread it into build() if that ever changes.
+TAG_HOLE = None
+
 # ---------------------------------------------------------------------------
-# T-handle dimensions.
-#   stem   stem width -- capped by bolt clearance, see check_stem()
-#   bar_l  crossbar length, tip to tip
-#   bar_d  crossbar depth, along the stem axis
-#   hole   tag hole in the stem
-# Reach is not listed: the crossbar always starts FLANGE_GAP past the flange.
+# T-handle dimensions. Only the STEM is bolt-constrained; the crossbar sits
+# clear of the flange entirely, so it stays generous even on tight sizes.
 # ---------------------------------------------------------------------------
 HANDLE = {
-    "2":  dict(stem=1.250, bar_l=4.00, bar_d=1.00, hole=0.500),
-    "3":  dict(stem=1.500, bar_l=4.50, bar_d=1.25, hole=0.500),
-    "4":  dict(stem=1.375, bar_l=4.50, bar_d=1.25, hole=0.500),
-    "6":  dict(stem=2.000, bar_l=6.00, bar_d=1.50, hole=0.625),
-    "8":  dict(stem=2.000, bar_l=6.00, bar_d=1.50, hole=0.625),
-    "10": dict(stem=2.000, bar_l=7.00, bar_d=1.75, hole=0.750),
+    (150, "2"):  dict(stem=1.250, bar_l=4.00, bar_d=1.00),
+    (150, "3"):  dict(stem=1.500, bar_l=4.50, bar_d=1.25),
+    (150, "4"):  dict(stem=1.375, bar_l=4.50, bar_d=1.25),
+    (150, "6"):  dict(stem=2.000, bar_l=6.00, bar_d=1.50),
+    (150, "8"):  dict(stem=2.000, bar_l=6.00, bar_d=1.50),
+    (150, "10"): dict(stem=2.000, bar_l=7.00, bar_d=1.75),
+    # 8 bolts on a 5" circle leave only 1.288" between shanks, so the stem is
+    # cut to 7/8" to keep 0.207" per side.
+    (600, "2"):  dict(stem=0.875, bar_l=4.00, bar_d=1.00),
 }
+
+# Disc OD overrides, where a size departs from bolt-circle-minus-bolt-diameter.
+#   (600,"2"): Gilbert's shop number is 4.25. The rule would give 4.375, which
+#   sits dead tangent to the bolt shanks; 4.25 leaves 1/16" radial clearance.
+#   Flagged for confirmation -- either the 600s use a different rule, or the
+#   Class 600 bolt data here is wrong.
+OVERRIDE = {
+    (600, "2"): 4.250,
+}
+
+# B16.5 Group 1.1 pressure rating, -20 to 100 F, psi. Drives plate thickness.
+RATING = {150: 285, 300: 740, 600: 1480}
+
+# Gasket ID (= pipe OD) for the B31.3 blank thickness formula.
+GASKET_ID = {"2": 2.375, "3": 3.500, "4": 4.500,
+             "6": 6.625, "8": 8.625, "10": 10.750}
 
 LABEL = {"2": '2"', "3": '3"', "4": '4"', "6": '6"', "8": '8"', "10": '10"'}
 
-# Per-size OD overrides, if a size ever needs to depart from the rule.
-OVERRIDE = {}
+ALLOW_S, WELD_E, CORROSION = 20000.0, 1.0, 0.0625
+PLATE = [0.1875, 0.25, 0.3125, 0.375, 0.4375, 0.5, 0.5625, 0.625, 0.75, 0.875, 1.0]
+FRAC = {0.1875: "3/16", 0.25: "1/4", 0.3125: "5/16", 0.375: "3/8",
+        0.4375: "7/16", 0.5: "1/2", 0.5625: "9/16", 0.625: "5/8",
+        0.75: "3/4", 0.875: "7/8", 1.0: "1"}
 
 
-def disc_od(nps):
-    bc, _, bolt_d, _, _ = FLANGE[nps]
+def disc_od(key):
+    if key in OVERRIDE:
+        return OVERRIDE[key]
+    bc, _, bolt_d, _, _ = FLANGE[key]
     return bc - bolt_d
 
 
-def bolt_clearance(nps, stem_w):
+def bolt_clearance(key, stem_w):
     """
     Gap between the stem edge and the nearest bolt shank, per side, with the
     stem installed centred between two adjacent bolts.
@@ -93,36 +118,43 @@ def bolt_clearance(nps, stem_w):
     The nearest bolt centre sits half a bolt pitch off the stem axis, so its
     perpendicular offset from the stem centreline is (BC/2) * sin(pi/n).
     """
-    bc, n, bolt_d, _, _ = FLANGE[nps]
-    offset = (bc / 2.0) * math.sin(math.pi / n)
-    return offset - bolt_d / 2.0 - stem_w / 2.0
+    bc, n, bolt_d, _, _ = FLANGE[key]
+    return (bc / 2.0) * math.sin(math.pi / n) - bolt_d / 2.0 - stem_w / 2.0
 
 
-def max_stem(nps):
+def max_stem(key):
     """Widest stem that still keeps MIN_BOLT_CLEAR to the bolts."""
-    return 2.0 * (bolt_clearance(nps, 0.0) - MIN_BOLT_CLEAR)
+    return 2.0 * (bolt_clearance(key, 0.0) - MIN_BOLT_CLEAR)
 
 
-def check_stem(nps, stem_w):
-    c = bolt_clearance(nps, stem_w)
+def check_stem(key, stem_w):
+    c = bolt_clearance(key, stem_w)
     if c < MIN_BOLT_CLEAR:
         raise ValueError(
-            'NPS %s stem %.3f" leaves only %.3f" to the bolts (min %.3f"). '
+            'CL%d NPS %s stem %.3f" leaves only %.3f" to the bolts (min %.3f"). '
             'Widest stem for this size is %.3f".'
-            % (nps, stem_w, c, MIN_BOLT_CLEAR, max_stem(nps)))
+            % (key[0], key[1], stem_w, c, MIN_BOLT_CLEAR, max_stem(key)))
     return c
 
 
-def build(nps, od, bored):
-    bc, n, bolt_d, flange_od, sch40 = FLANGE[nps]
-    h = HANDLE[nps]
-    check_stem(nps, h["stem"])
+def thickness(key):
+    """Blank thickness per ASME B31.3 304.5.3, rounded up to standard plate."""
+    cls, nps = key
+    t = GASKET_ID[nps] * math.sqrt(3.0 * RATING[cls] / (16.0 * ALLOW_S * WELD_E))
+    need = t + CORROSION
+    return need, next(p for p in PLATE if p >= need - 1e-9)
+
+
+def build(key, bored=False):
+    cls, nps = key
+    bc, n, bolt_d, flange_od, sch40 = FLANGE[key]
+    h = HANDLE[key]
+    check_stem(key, h["stem"])
     fil = 0.375 if h["stem"] >= 2.0 else 0.25
     kind = "SPACER" if bored else "SKILLET"
-    # Crossbar starts FLANGE_GAP past the flange edge; overall is its outer face.
     overall = flange_od / 2.0 + FLANGE_GAP + h["bar_d"]
     return t_blind(
-        disc_od=od,
+        disc_od=disc_od(key),
         stem_w=h["stem"],
         bar_len=h["bar_l"],
         bar_d=h["bar_d"],
@@ -131,36 +163,39 @@ def build(nps, od, bored):
         root_r=fil,
         inner_r=fil,
         corner_r=0.25,
-        hole=h["hole"],
-        label="%s CL%d %s" % (LABEL[nps], CLASS, kind),
+        hole=TAG_HOLE,
+        label="%s CL%d %s" % (LABEL[nps], cls, kind),
     )
 
 
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "skillet-blinds-cl%d" % CLASS)
-    os.makedirs(out, exist_ok=True)
+    base = sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(
+        os.path.abspath(__file__))
 
-    print("%-26s %8s %8s %8s %8s %9s %9s" % (
-        "file", "disc OD", "flange r", "bar at", "total L", "stem", "bolt gap"))
-    for nps in FLANGE:
-        od = OVERRIDE.get(nps, disc_od(nps))
-        h = HANDLE[nps]
-        bc, n, bolt_d, flange_od, sch40 = FLANGE[nps]
-        ents = build(nps, od, bored=False)
-        name = "NPS%s_CL%d_skillet" % (nps, CLASS)
+    print("%-26s %8s %8s %8s %8s %9s %8s" % (
+        "file", "disc OD", "bar at", "total L", "stem", "bolt gap", "plate"))
+    for key in FLANGE:
+        cls, nps = key
+        out = os.path.join(base, "skillet-blinds-cl%d" % cls)
+        os.makedirs(out, exist_ok=True)
+        ents = build(key)
+        name = "NPS%s_CL%d_skillet" % (nps, cls)
         with open(os.path.join(out, name + ".dxf"), "w") as f:
             f.write(dxf(ents))
         with open(os.path.join(out, name + ".svg"), "w") as f:
             f.write(svg(ents))
         x0, y0, x1, y1 = bbox(ents)
-        print("%-26s %8.3f %8.3f %8.3f %8.3f %9.3f %9.3f" % (
-            name + ".dxf", od, flange_od / 2.0,
-            flange_od / 2.0 + FLANGE_GAP, x1 - x0,
-            h["stem"], bolt_clearance(nps, h["stem"])))
+        bc, n, bolt_d, flange_od, sch40 = FLANGE[key]
+        need, plate = thickness(key)
+        print("%-26s %8.3f %8.3f %8.3f %9.3f %8.3f %8s  %s" % (
+            name + ".dxf", disc_od(key), flange_od / 2.0 + FLANGE_GAP,
+            x1 - x0, HANDLE[key]["stem"],
+            bolt_clearance(key, HANDLE[key]["stem"]),
+            FRAC[plate] + '"',
+            "<- OD overridden" if key in OVERRIDE else ""))
 
     print("\nCrossbar starts %.2f\" past the flange edge on every size." % FLANGE_GAP)
-    print("Bolt gap is stem edge to bolt shank, per side (min %.3f\")."
+    print("Bolt gap is stem edge to bolt shank, per side (floor %.3f\")."
           % MIN_BOLT_CLEAR)
 
 

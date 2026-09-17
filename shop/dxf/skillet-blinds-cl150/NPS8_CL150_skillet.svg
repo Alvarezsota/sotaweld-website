@@ -17,7 +17,6 @@
 <path d="M 14.6000 7.2250 A 0.3750 0.3750 0 0 0 14.2250 6.8500"/>
 <line x1="14.2250" y1="6.8500" x2="11.5618" y2="6.8500"/>
 <path d="M 11.5618 6.8500 A 0.3750 0.3750 0 0 0 11.1972 7.1372"/>
-<circle cx="12.8934" cy="5.8500" r="0.3125"/>
 <text x="5.8500" y="5.8500" font-size="0.5000" fill="#c0392b" stroke="none" text-anchor="middle" dominant-baseline="central" font-family="monospace">8" CL150 SKILLET</text>
 </g>
 </svg>

@@ -1,7 +1,7 @@
-# Skillet Blinds — T handle, Class 150
+# Skillet Blinds — T handle, Class 600
 
 Flat-pattern DXF cutting profiles for T-handle skillet blinds (line blanks),
-for ASME B16.5 Class 150 flanges. **Plain skillets — no hole in the handle.**
+for ASME B16.5 Class 600 flanges. **Plain skillets — no hole in the handle.**
 
 ## The two shop rules these are built on
 
@@ -16,12 +16,9 @@ room to get a hand on it with the joint bolted up.
 
 | NPS | Disc OD | Flange r | Crossbar starts | Total length | Stem | Crossbar | Bar depth | Plate |
 |---|---|---|---|---|---|---|---|---|
-| 2" | **4-1/8** | 3.000 | 5.000 | 8.062 | 1.250 | 4.00 | 1.00 | 3/16" |
-| 3" | **5-3/8** | 3.750 | 5.750 | 9.688 | 1.500 | 4.50 | 1.25 | 1/4" |
-| 4" | **6-7/8** | 4.500 | 6.500 | 11.188 | 1.375 | 4.50 | 1.25 | 5/16" |
-| 6" | **8-3/4** | 5.500 | 7.500 | 13.375 | 2.000 | 6.00 | 1.50 | 7/16" |
-| 8" | **11** | 6.750 | 8.750 | 15.750 | 2.000 | 6.00 | 1.50 | 9/16" |
-| 10" | **13-3/8** | 8.000 | 10.000 | 18.438 | 2.000 | 7.00 | 1.75 | 5/8" |
+| 2" | **4-1/4** † | 3.250 | 5.250 | 8.375 | 0.875 | 4.00 | 1.00 | 3/8" |
+
+† **OD set from the shop's number, not the rule.** The rule would give 4.375, which sits dead tangent to the bolt shanks; 4.250 leaves 1/16" radial clearance. Worth confirming — either the 600s use a different rule than the 150s (4.250 is bolt circle minus bolt *hole* diameter), or the Class 600 bolt data here is wrong.
 
 ## Bolt clearance — the stem passes BETWEEN the bolts
 
@@ -30,12 +27,7 @@ adjacent bolts** and is sized to clear the bolt shanks on both sides.
 
 | NPS | Bolts | Bolt pitch offset | Stem | Clear to bolt, per side | Widest stem allowed |
 |---|---|---|---|---|---|
-| 2" | 4 x 5/8" | 1.679 | 1.250 | **0.742** | 2.484 |
-| 3" | 4 x 5/8" | 2.121 | 1.500 | **1.059** | 3.368 |
-| 4" | 8 x 5/8" | 1.435 | 1.375 | **0.435** | 1.995 |
-| 6" | 8 x 3/4" | 1.818 | 2.000 | **0.443** | 2.635 |
-| 8" | 8 x 3/4" | 2.248 | 2.000 | **0.873** | 3.497 |
-| 10" | 12 x 7/8" | 1.844 | 2.000 | **0.407** | 2.563 |
+| 2" | 8 x 5/8" | 0.957 | 0.875 | **0.207** | 1.038 |
 
 *Bolt pitch offset* is the perpendicular distance from the stem centreline to
 the nearest bolt centre, `(BC/2) x sin(pi/n)`. Clearance is that, less the bolt
@@ -54,11 +46,11 @@ give more choices.
 ## Plate thickness
 
 Calculated per ASME B31.3 §304.5.3, `t = d_g x sqrt(3P / 16SE) + c`, at the
-Class 150 cold rating of **285 psi**, S = 20,000 psi (A516-70), E = 1.0, plus
+Class 600 cold rating of **1480 psi**, S = 20,000 psi (A516-70), E = 1.0, plus
 1/16" corrosion allowance, rounded up to standard plate.
 
 **A starting point, not a design.** It assumes ambient temperature and full
-rating; Class 150 derates with temperature. Confirm actual design pressure,
+rating; Class 600 derates with temperature. Confirm actual design pressure,
 temperature and material before committing plate. The DXFs are 2D, so thickness
 does not affect the cut file.
 
