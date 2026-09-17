@@ -3,13 +3,14 @@
 Skillet blind (T-handle line blank) DXF generator
 State of the Arc Welding and Services LLC
 
-Disc OD follows the shop rule, confirmed against Gilbert's Class 150 numbers:
+Disc OD follows the manufacturer chart Gilbert supplied:
 
-    disc OD = bolt circle diameter - bolt diameter
+    disc OD = bolt circle diameter - bolt HOLE diameter
 
-The blank seats against the inside of the bolt shanks, so the bolts capture and
-centre it. Note this is bolt DIAMETER, not bolt HOLE diameter. Sizes that depart
-from the rule are listed in OVERRIDE with the reason.
+That is bolt HOLE, not bolt diameter -- it leaves 1/16" radial clearance to the
+bolt shanks so the blank actually drops in, rather than sitting dead tangent.
+Every generated OD is asserted against CHART below, which is the manufacturer's
+published table; a mismatch fails the build rather than cutting a wrong part.
 
 Handle reach follows the shop rule:
 
@@ -78,14 +79,21 @@ HANDLE = {
     (600, "2"):  dict(stem=0.875, bar_l=4.00, bar_d=1.00),
 }
 
-# Disc OD overrides, where a size departs from bolt-circle-minus-bolt-diameter.
-#   (600,"2"): Gilbert's shop number is 4.25. The rule would give 4.375, which
-#   sits dead tangent to the bolt shanks; 4.25 leaves 1/16" radial clearance.
-#   Flagged for confirmation -- either the 600s use a different rule, or the
-#   Class 600 bolt data here is wrong.
-OVERRIDE = {
-    (600, "2"): 4.250,
+# Manufacturer's published line blank chart: (disc OD, plate thickness).
+# This is the authority for both. Every computed OD is asserted against it.
+CHART = {
+    (150, "2"):  (4.000,  0.3125),
+    (150, "3"):  (5.250,  0.3125),
+    (150, "4"):  (6.750,  0.375),
+    (150, "6"):  (8.625,  0.500),
+    (150, "8"): (10.875,  0.500),
+    (150, "10"):(13.250,  0.625),
+    (600, "2"):  (4.250,  0.375),
 }
+
+# Disc OD overrides, where a size must depart from the rule. Empty: the rule
+# reproduces the manufacturer chart exactly on every size.
+OVERRIDE = {}
 
 # B16.5 Group 1.1 pressure rating, -20 to 100 F, psi. Drives plate thickness.
 RATING = {150: 285, 300: 740, 600: 1480}
@@ -103,11 +111,22 @@ FRAC = {0.1875: "3/16", 0.25: "1/4", 0.3125: "5/16", 0.375: "3/8",
         0.75: "3/4", 0.875: "7/8", 1.0: "1"}
 
 
+def hole_dia(bolt_d):
+    """B16.5 drills the bolt hole 1/8" over the bolt, or 1/4" over 1" bolts."""
+    return bolt_d + (0.125 if bolt_d <= 1.0 else 0.25)
+
+
 def disc_od(key):
     if key in OVERRIDE:
         return OVERRIDE[key]
     bc, _, bolt_d, _, _ = FLANGE[key]
-    return bc - bolt_d
+    od = bc - hole_dia(bolt_d)
+    if key in CHART and abs(od - CHART[key][0]) > 1e-9:
+        raise ValueError(
+            "CL%d NPS %s: rule gives %.4f but the manufacturer chart says %.4f. "
+            "The bolt data for this size is wrong -- fix it rather than cutting."
+            % (key[0], key[1], od, CHART[key][0]))
+    return od
 
 
 def bolt_clearance(key, stem_w):
@@ -138,10 +157,15 @@ def check_stem(key, stem_w):
 
 
 def thickness(key):
-    """Blank thickness per ASME B31.3 304.5.3, rounded up to standard plate."""
+    """
+    Plate thickness. The manufacturer chart wins where it has the size; the
+    B31.3 304.5.3 calculation is the fallback and the sanity check.
+    """
     cls, nps = key
     t = GASKET_ID[nps] * math.sqrt(3.0 * RATING[cls] / (16.0 * ALLOW_S * WELD_E))
     need = t + CORROSION
+    if key in CHART:
+        return need, CHART[key][1]
     return need, next(p for p in PLATE if p >= need - 1e-9)
 
 
@@ -192,7 +216,7 @@ def main():
             x1 - x0, HANDLE[key]["stem"],
             bolt_clearance(key, HANDLE[key]["stem"]),
             FRAC[plate] + '"',
-            "<- OD overridden" if key in OVERRIDE else ""))
+            "chart" if key in CHART else "derived"))
 
     print("\nCrossbar starts %.2f\" past the flange edge on every size." % FLANGE_GAP)
     print("Bolt gap is stem edge to bolt shank, per side (floor %.3f\")."
