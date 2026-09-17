@@ -12,6 +12,9 @@
 // templates. An invoice that says "Welding Services  1  $4,418.80" tells them
 // nothing they can check; this tells them what they bought.
 //
+// The palette, the page box and the character folding below are exported and
+// drawn on by quote-pdf.ts as well, so the two documents cannot drift apart.
+//
 // The fonts and logo arrive as bytes rather than being read off disk, so this
 // runs unchanged in Deno and in a local harness.
 //
@@ -98,6 +101,11 @@ const FOLD: Record<string, string> = {
   '—': '-', '–': '-', '×': 'x', '·': '-', '•': '-', '…': '...',
   ' ': ' ',
 };
+// The fractions, specifically. Folding one of these to "7/8" is only safe on
+// its own; stuck to the number in front of it a whole dimension changes
+// meaning, and nothing downstream notices.
+const FRACTIONS = new Set('⅞⅛⅜⅝½¼¾⅓⅔'.split(''));
+
 export function makeSafe(fonts: PDFFont[]) {
   // pdf-lib does NOT throw on a glyph the font lacks -- widthOfTextAtSize
   // happily measures .notdef and the page gets a black box. Ask the embedded
@@ -109,15 +117,44 @@ export function makeSafe(fonts: PDFFont[]) {
     const cp = ch.codePointAt(0);
     return sets.every((s) => s === null || s.has(cp));
   };
+  const keep = (str: string) => str.split('').filter(drawable).join('');
   const cache = new Map<string, string>();
-  return (s: unknown) => String(s ?? '').split('').map((ch) => {
-    if (ch === '\n') return ch;
-    if (cache.has(ch)) return cache.get(ch)!;
+  const fold = (ch: string) => {
+    const hit = cache.get(ch);
+    if (hit !== undefined) return hit;
     let out = drawable(ch) ? ch : (FOLD[ch] ?? '?');
-    if (out !== ch) out = out.split('').filter(drawable).join('');
+    if (out !== ch) out = keep(out);
     cache.set(ch, out);
     return out;
-  }).join('');
+  };
+
+  // Built up a character at a time rather than mapped, because what a fraction
+  // should become depends on what came out before it.
+  return (s: unknown) => {
+    let out = '';
+    for (const ch of Array.from(String(s ?? ''))) {
+      if (ch === '\n') { out += ch; continue; }
+      // A fraction sitting against a whole number is the dangerous case. Inter
+      // has no glyph for the eighths, so 39 and seven eighths folded to "7/8"
+      // and printed as "397/8" -- not a near miss on a part going to a machine
+      // shop, a different plate. It is written out with the separator a shop
+      // drawing uses, 39-7/8.
+      //
+      // That applies even to the ones the font CAN draw. Inter carries the
+      // half but not the eighth, so leaving each to its own fate put
+      // "21-1/2" x 5-5/8"" on one line as "21 1/2" x 5-5/8"" -- two ways of
+      // writing the same thing on the same line, which reads like a mistake
+      // even though both are right. One rule, applied to all of them.
+      if (FRACTIONS.has(ch) && /[0-9]$/.test(out)) {
+        out += '-' + keep(FOLD[ch] ?? fold(ch));
+        continue;
+      }
+      // Standing on its own there is nothing to run into, so it keeps whatever
+      // shape it was typed in and the font can draw.
+      out += fold(ch);
+    }
+    return out;
+  };
 }
 
 export async function buildInvoicePdf(
