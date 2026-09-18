@@ -33,8 +33,15 @@ MIN_BOLT_CLEAR = 0.125     # stem edge to bolt shank, per side -- hard floor
 PREF_BOLT_CLEAR = 0.1875   # aim for this much; fall back toward the floor
 FLANGE_GAP = 2.00          # bare stem past the flange edge before the crossbar
 
-STEM_MIN, STEM_MAX = 0.625, 3.000
-STEM_OF_OD = 0.30          # preferred stem as a fraction of disc OD
+# ONE handle for every size and class. The stem is capped by the tightest
+# flange in the whole library -- the 1/2" Class 150, four 1/2" bolts on a
+# 2-3/8" bolt circle, which allows 0.929". 7/8" is the widest 1/8" step that
+# fits there, and it clears every other size with room to spare.
+STEM = 0.875
+BAR_L = 3.000
+BAR_D = 1.000
+ROOT_R = 0.1875
+CORNER_R = 0.25
 
 # The manufacturer table is published to 2 decimals, so 8-5/8" arrives as 8.62.
 # Snap back to the real fraction when the gap is plainly a rounding artifact.
@@ -88,34 +95,27 @@ def max_stem(bc, n, bd):
     return 2.0 * (bolt_offset(bc, n) - bd / 2.0 - MIN_BOLT_CLEAR)
 
 
-def stem_at_clear(bc, n, bd, clear):
-    return 2.0 * (bolt_offset(bc, n) - bd / 2.0 - clear)
-
-
 def pick_stem(od, bc, n, bd):
-    """
-    Stem sized to the part, then capped by the bolts. Aim to leave
-    PREF_BOLT_CLEAR to the shanks; only crowd toward MIN_BOLT_CLEAR when the
-    preferred gap would make the stem too thin to be a usable handle.
-    """
-    want = min(max(STEM_OF_OD * od, STEM_MIN), STEM_MAX)
-    roomy = floor_to(min(want, stem_at_clear(bc, n, bd, PREF_BOLT_CLEAR)), 0.125)
-    if roomy >= STEM_MIN:
-        return roomy
-    return floor_to(min(want, stem_at_clear(bc, n, bd, MIN_BOLT_CLEAR)), 0.125)
+    """One stem for the whole library. Kept as a function so callers are unchanged."""
+    return STEM
 
 
 def handle(stem):
-    bar_l = round_to(min(max(2.75 * stem, 2.5), 10.0), 0.25)
-    bar_d = round_to(min(max(0.75 * stem, 0.75), 2.0), 0.125)
-    fil = round_to(min(max(0.20 * stem, 0.125), 0.375), 0.0625)
-    return bar_l, bar_d, fil
+    return BAR_L, BAR_D, ROOT_R
 
 
 def main():
     base = sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(
         os.path.abspath(__file__))
     made, flagged = 0, []
+    tight = min((2.0 * (bolt_offset(snap(BC), B16_5[(c, n)][1])
+                        - B16_5[(c, n)][2] / 2.0 - MIN_BOLT_CLEAR), c, n)
+                for c, n, I, O, BC, t, w in rows())
+    if STEM > tight[0] + 1e-9:
+        raise ValueError("uniform stem %.3f exceeds CL%d %s limit of %.3f"
+                         % (STEM, tight[1], tight[2], tight[0]))
+    print("uniform stem %s\" -- tightest flange is CL%d %s at %.3f\" max\n"
+          % (frac(STEM), tight[1], tight[2], tight[0]))
 
     print("%-28s %8s %7s %6s %7s %6s %8s %8s" % (
         "file", "disc OD", "plate", "bolts", "stem", "gap", "bar at", "total L"))
@@ -136,16 +136,17 @@ def main():
             raise ValueError("CL%d %s: disc OD %.3f overlaps the bolt shanks"
                              % (cls, nps, OD))
 
-        stem = pick_stem(OD, BC, n, bd)
+        # The uniform stem is proved against the tightest flange above, so a
+        # per-part fallback is unreachable; this is belt and braces.
+        stem, bar_l, bar_d, fil = STEM, BAR_L, BAR_D, ROOT_R
         gap = bolt_offset(BC, n) - bd / 2.0 - stem / 2.0
-        if stem < STEM_MIN:
+        if gap < MIN_BOLT_CLEAR:
             flagged.append((cls, nps, stem, max_stem(BC, n, bd)))
             continue
-        bar_l, bar_d, fil = handle(stem)
 
         ents = t_blind(disc_od=OD, stem_w=stem, bar_len=bar_l, bar_d=bar_d,
                        overall=fod / 2.0 + FLANGE_GAP + bar_d,
-                       bore=None, root_r=fil, inner_r=fil, corner_r=0.25,
+                       bore=None, root_r=fil, inner_r=fil, corner_r=CORNER_R,
                        hole=None, label='%s CL%d SKILLET' % (nps, cls))
 
         out = os.path.join(base, "skillet-blinds-cl%d" % cls)

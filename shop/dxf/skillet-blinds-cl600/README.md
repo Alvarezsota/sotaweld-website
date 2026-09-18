@@ -2,77 +2,84 @@
 
 Every ASME B16.5 size in Class 600. **Plain skillets — no hole in the handle.**
 
+## One handle, every size and class
+
+| | |
+|---|---|
+| Stem width | **7/8"** |
+| Crossbar | **3"** long x **1"** deep |
+| Reach | crossbar starts **2" past the flange edge** |
+| Fillets | 3/16" stem root and under-bar corners, 1/4" bar corners |
+
+The stem is capped by the tightest flange in the whole library — the **1/2"
+Class 150**, four 1/2" bolts on a 2-3/8" bolt circle, which allows 0.929".
+7/8" is the widest 1/8" step that fits there, and it clears every other size
+in every class. The build re-proves this and **fails** if it ever stops holding.
+
+Because reach is measured from the flange edge, the handle still grows with the
+flange even though the stem does not — total length runs from 5.62" on the 1/2"
+150 to 43.69" on the 24" 1500.
+
 ## Where the numbers come from
 
 | Dimension | Source |
 |---|---|
 | Disc OD, bolt circle, bore, plate thickness | **Manufacturer table** (shop supplied) |
 | Bolt diameter | **Derived** as `bolt circle − disc OD − 1/8"`, cross-checked against B16.5 |
-| Flange OD, bolt count | **ASME B16.5** — not in the manufacturer table, see caveat below |
+| Flange OD, bolt count | **ASME B16.5** — not in the manufacturer table |
 
-Disc OD is `bolt circle − bolt HOLE diameter`, which leaves 1/16" radial to the
-bolt shanks so the blank drops in instead of sitting dead tangent. Every OD is
-asserted against the manufacturer table at build time; a mismatch fails the
-build rather than cutting a wrong part.
+Disc OD is `bolt circle − bolt HOLE diameter`, leaving 1/16" radial to the bolt
+shanks so the blank drops in rather than sitting dead tangent. Every OD is
+asserted against the manufacturer table at build time.
 
-> **Caveat.** Flange OD and bolt count are from my ASME B16.5 tables, not from
-> your manufacturer sheet, because that sheet does not carry them. Bolt count
-> sets the stem width and flange OD sets the handle length, so if a size looks
-> off, those two are where to check first. Bolt *diameter* is verified against
-> your data on all 79 sizes and matches exactly.
+> **Caveat.** Flange OD and bolt count are from my ASME B16.5 tables, not your
+> manufacturer sheet, which does not carry them. Bolt count sets the bolt gap
+> and flange OD sets the handle length, so if a size looks wrong those are the
+> two to check. Bolt *diameter* is verified against your data on all 112 sizes
+> and matches exactly.
 
-## Handle
-
-The crossbar **starts 2" past the flange edge** — stem out past the flange, then
-2" of bare stem, then the T. Stem is sized to the part (about 30% of disc OD)
-and then capped by the bolts, aiming for 0.1875" clearance to the shanks and never
-going below 0.125".
-
-| NPS | Disc OD | Plate | Bolts | Stem | Crossbar | Bar depth | Bolt gap/side | Overall L | Approx lb |
-|---|---|---|---|---|---|---|---|---|---|
-| 1/2 | **2** | 1/4" | 4 x 1/2" | 5/8 | 2-1/2 | 3/4 | 0.366 | 5.625 | 0 |
-| 3/4 | **2-1/2** | 1/4" | 4 x 5/8" | 3/4 | 2-1/2 | 3/4 | 0.462 | 6.310 | 1 |
-| 1 | **2-3/4** | 1/4" | 4 x 5/8" | 3/4 | 2-1/2 | 3/4 | 0.550 | 6.565 | 1 |
-| 1-1/4 | **3-1/8** | 3/8" | 4 x 5/8" | 7/8 | 2-1/2 | 3/4 | 0.620 | 6.938 | 1 |
-| 1-1/2 | **3-5/8** | 3/8" | 4 x 3/4" | 1 | 2-3/4 | 3/4 | 0.716 | 7.622 | 2 |
-| 2 | **4-1/4** | 3/8" | 8 x 5/8" | 7/8 | 2-1/2 | 3/4 | 0.207 | 8.125 | 2 |
-| 2-1/2 | **5** | 1/2" | 8 x 3/4" | 1 | 2-3/4 | 3/4 | 0.249 | 9.000 | 4 |
-| 3 | **5-3/4** | 1/2" | 8 x 3/4" | 1-3/8 | 3-3/4 | 1 | 0.205 | 10.000 | 5 |
-| 3-1/2 | **6-1/4** | 5/8" | 8 x 7/8" | 1-1/2 | 4 | 1-1/8 | 0.200 | 10.750 | 7 |
-| 4 | **7-1/2** | 5/8" | 8 x 7/8" | 2 | 5-1/2 | 1-1/2 | 0.189 | 12.625 | 11 |
-| 5 | **9-3/8** | 3/4" | 8 x 1" | 2-5/8 | 7-1/4 | 2 | 0.197 | 15.188 | 20 |
-| 6 | **10-3/8** | 7/8" | 12 x 1" | 1-1/2 | 4 | 1-1/8 | 0.238 | 15.312 | 24 |
-| 8 | **12-1/2** | 1-1/8" | 12 x 1-1/8" | 2 | 5-1/2 | 1-1/2 | 0.217 | 18.000 | 44 |
-| 10 | **15-5/8** | 1-3/8" | 16 x 1-1/4" | 1-5/8 | 4-1/2 | 1-1/4 | 0.221 | 21.062 | 80 |
-| 12 | **17-7/8** | 1-5/8" | 20 x 1-1/4" | 1-3/8 | 3-3/4 | 1 | 0.193 | 22.938 | 120 |
-| 14 | **19-1/4** | 1-3/4" | 20 x 1-3/8" | 1-3/8 | 3-3/4 | 1 | 0.248 | 24.500 | 149 |
-| 16 | **22-1/8** | 2" | 20 x 1-1/2" | 1-3/4 | 4-3/4 | 1-1/4 | 0.233 | 27.812 | 226 |
-| 18 | **24** | 2-1/8" | 20 x 1-5/8" | 2 | 5-1/2 | 1-1/2 | 0.202 | 30.125 | 283 |
-| 20 | **26-3/4** | 2-1/2" | 24 x 1-5/8" | 1-5/8 | 4-1/2 | 1-1/4 | 0.235 | 32.625 | 408 |
-| 24 | **31** | 2-7/8" | 24 x 1-7/8" | 2 | 5-1/2 | 1-1/2 | 0.216 | 37.500 | 630 |
+| NPS | Disc OD | Plate | Bolts | Bolt circle | Bolt gap/side | Overall L | Approx lb |
+|---|---|---|---|---|---|---|---|
+| 1/2 | **2** | 1/4" | 4 x 1/2" | 2-5/8 | 0.241 | 5.875 | 1 |
+| 3/4 | **2-1/2** | 1/4" | 4 x 5/8" | 3-1/4 | 0.399 | 6.560 | 1 |
+| 1 | **2-3/4** | 1/4" | 4 x 5/8" | 3-1/2 | 0.487 | 6.815 | 1 |
+| 1-1/4 | **3-1/8** | 3/8" | 4 x 5/8" | 3-7/8 | 0.620 | 7.188 | 1 |
+| 1-1/2 | **3-5/8** | 3/8" | 4 x 3/4" | 4-1/2 | 0.778 | 7.872 | 2 |
+| 2 | **4-1/4** | 3/8" | 8 x 5/8" | 5 | 0.207 | 8.375 | 2 |
+| 2-1/2 | **5** | 1/2" | 8 x 3/4" | 5-7/8 | 0.312 | 9.250 | 4 |
+| 3 | **5-3/4** | 1/2" | 8 x 3/4" | 6-5/8 | 0.455 | 10.000 | 5 |
+| 3-1/2 | **6-1/4** | 5/8" | 8 x 7/8" | 7-1/4 | 0.512 | 10.625 | 6 |
+| 4 | **7-1/2** | 5/8" | 8 x 7/8" | 8-1/2 | 0.751 | 12.125 | 9 |
+| 5 | **9-3/8** | 3/4" | 8 x 1" | 10-1/2 | 1.072 | 14.188 | 16 |
+| 6 | **10-3/8** | 7/8" | 12 x 1" | 11-1/2 | 0.551 | 15.188 | 23 |
+| 8 | **12-1/2** | 1-1/8" | 12 x 1-1/8" | 13-3/4 | 0.779 | 17.500 | 41 |
+| 10 | **15-5/8** | 1-3/8" | 16 x 1-1/4" | 17 | 0.596 | 20.812 | 77 |
+| 12 | **17-7/8** | 1-5/8" | 20 x 1-1/4" | 19-1/4 | 0.443 | 22.938 | 119 |
+| 14 | **19-1/4** | 1-3/4" | 20 x 1-3/8" | 20-3/4 | 0.498 | 24.500 | 148 |
+| 16 | **22-1/8** | 2" | 20 x 1-1/2" | 23-3/4 | 0.670 | 27.562 | 222 |
+| 18 | **24** | 2-1/8" | 20 x 1-5/8" | 25-3/4 | 0.764 | 29.625 | 277 |
+| 20 | **26-3/4** | 2-1/2" | 24 x 1-5/8" | 28-1/2 | 0.610 | 32.375 | 403 |
+| 24 | **31** | 2-7/8" | 24 x 1-7/8" | 33 | 0.779 | 37.000 | 621 |
 
 ## The stem passes BETWEEN the bolts
 
-No bolt passes through the handle. Install the blank with the stem **centred
-between two adjacent bolts** — on 4-bolt sizes that means the handle exits at
-45° to the bolt pairs. The generator refuses to build a stem that would foul a
-bolt.
+No bolt passes through the handle. Install with the stem **centred between two
+adjacent bolts** — on 4-bolt sizes the handle exits at 45° to the bolt pairs.
 
 ## ⚠ Weight
 
-The `Approx lb` column is bare steel at 0.2836 lb/in³. Anything over about 50 lb
-is rigging, not hand-carrying — **the T handle is for positioning and
-identification, not a lifting point.** The largest parts in this class run into
-the hundreds of pounds.
+`Approx lb` is bare steel at 0.2836 lb/in³. **The T handle is for positioning and
+identification, not lifting.** One 7/8" stem carries every size in this library,
+so on the large high-class blanks it is a token handle on a part weighing
+hundreds of pounds — rig those, do not carry them.
 
 ## Before you cut
 
 - **Units are inches.** Geometry is nominal — apply kerf compensation in CAM.
 - **Two layers.** `CUT` is the profile. `ETCH` is part-ID text only; send it to
   a marking op or delete the layer. Do not cut it.
-- **LINE / ARC only**, AutoCAD R12. Every profile verified as a closed contour
-  with no degenerate entities and no holes.
-- Filleted stem root and filleted corners under the crossbar.
+- **LINE / ARC only**, AutoCAD R12. Every profile verified as a closed contour,
+  no degenerate entities, no holes.
 
 ## Regenerating
 
@@ -80,6 +87,6 @@ the hundreds of pounds.
 python3 ../generate_all_skillets.py [output_dir]
 ```
 
-No dependencies. Data lives in `../blank_data.py`: `MANUFACTURER` is your table
-verbatim, `B16_5` is flange OD and bolt count. `../skillet-blind-index.csv` is
-every part in all four classes on one sheet.
+No dependencies. Data is in `../blank_data.py`. Handle geometry is the `STEM`,
+`BAR_L`, `BAR_D` constants at the top of the generator — change one and every
+class regenerates together. `../skillet-blind-index.csv` lists all 112 parts.
