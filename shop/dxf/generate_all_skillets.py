@@ -38,10 +38,34 @@ FLANGE_GAP = 2.00          # bare stem past the flange edge before the crossbar
 # 2-3/8" bolt circle, which allows 0.929". 7/8" is the widest 1/8" step that
 # fits there, and it clears every other size with room to spare.
 STEM = 0.875
-BAR_L = 3.000
-BAR_D = 1.000
+
+# The knob (crossbar) steps up at 12" NPS and above, where the blanks get heavy
+# enough to want a better grip. The stem stays 7/8" everywhere -- only the knob
+# changes, so the bolt clearance is untouched by this.
+BIG_KNOB_FROM = 12.0
+BAR_L, BAR_D = 3.000, 1.000          # under 12"
+BAR_L_BIG, BAR_D_BIG = 4.000, 1.250  # 12" and up
 ROOT_R = 0.1875
 CORNER_R = 0.25
+
+
+def nps_value(nps):
+    """'1-1/4' -> 1.25, '3/4' -> 0.75, '12' -> 12.0."""
+    whole, _, frac_part = nps.partition("-")
+    if "/" in whole:
+        n, d = whole.split("/")
+        return float(n) / float(d)
+    v = float(whole)
+    if frac_part:
+        n, d = frac_part.split("/")
+        v += float(n) / float(d)
+    return v
+
+
+def knob(nps):
+    """Crossbar length and depth for this size."""
+    return (BAR_L_BIG, BAR_D_BIG) if nps_value(nps) >= BIG_KNOB_FROM \
+        else (BAR_L, BAR_D)
 
 # The manufacturer table is published to 2 decimals, so 8-5/8" arrives as 8.62.
 # Snap back to the real fraction when the gap is plainly a rounding artifact.
@@ -100,8 +124,9 @@ def pick_stem(od, bc, n, bd):
     return STEM
 
 
-def handle(stem):
-    return BAR_L, BAR_D, ROOT_R
+def handle(nps):
+    bl, bd = knob(nps)
+    return bl, bd, ROOT_R
 
 
 def main():
@@ -114,8 +139,11 @@ def main():
     if STEM > tight[0] + 1e-9:
         raise ValueError("uniform stem %.3f exceeds CL%d %s limit of %.3f"
                          % (STEM, tight[1], tight[2], tight[0]))
-    print("uniform stem %s\" -- tightest flange is CL%d %s at %.3f\" max\n"
-          % (frac(STEM), tight[1], tight[2], tight[0]))
+    print("uniform stem %s\" -- tightest flange is CL%d %s at %.3f\" max" % (
+        frac(STEM), tight[1], tight[2], tight[0]))
+    print("knob %s x %s under %s\", %s x %s at %s\" and up\n" % (
+        frac(BAR_L), frac(BAR_D), frac(BIG_KNOB_FROM),
+        frac(BAR_L_BIG), frac(BAR_D_BIG), frac(BIG_KNOB_FROM)))
 
     print("%-28s %8s %7s %6s %7s %6s %8s %8s" % (
         "file", "disc OD", "plate", "bolts", "stem", "gap", "bar at", "total L"))
@@ -138,7 +166,8 @@ def main():
 
         # The uniform stem is proved against the tightest flange above, so a
         # per-part fallback is unreachable; this is belt and braces.
-        stem, bar_l, bar_d, fil = STEM, BAR_L, BAR_D, ROOT_R
+        stem, fil = STEM, ROOT_R
+        bar_l, bar_d = knob(nps)
         gap = bolt_offset(BC, n) - bd / 2.0 - stem / 2.0
         if gap < MIN_BOLT_CLEAR:
             flagged.append((cls, nps, stem, max_stem(BC, n, bd)))
