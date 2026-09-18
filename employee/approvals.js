@@ -68,8 +68,13 @@ function rateOr(...candidates) {
 // show what was typed and what the box would fall back to if it were cleared.
 function personLine(o) {
   const pd = o.perDiem ? o.perDiemRate : 0;
-  const isFlat = Array.isArray(o.parts);
-  const partsSum = isFlat ? o.parts.reduce((s, p) => s + Number(p.quantity) * Number(p.rate), 0) : 0;
+  // Flat rate is a property of the JOB, and it is passed in as one. It used to
+  // be inferred from whether a ticket happened to carry parts, which made the
+  // two impossible to tell apart: showing parts on an hourly job would have
+  // flipped that job to flat-rate billing and dropped every hour off it.
+  const isFlat = o.isFlat === true;
+  const parts = Array.isArray(o.parts) ? o.parts : [];
+  const partsSum = parts.reduce((s, p) => s + Number(p.quantity) * Number(p.rate), 0);
   const effectiveBillRate = (o.isStainless && !isFlat) ? o.stainlessRate : o.billRate;
 
   // Hours invoiced and hours paid are not always the same number: a class the
@@ -79,7 +84,12 @@ function personLine(o) {
   // is the ordinary case. Matches pay_hours in v_work_lines -- change one,
   // change the other.
   const payHours = (o.payHours == null || o.payHours === '') ? o.hours : Number(o.payHours);
-  const revenue = (isFlat ? partsSum : o.hours * effectiveBillRate) + pd;
+  // On a flat job the parts ARE the bill, so there are no hours to add. On an
+  // hourly job they are billed on TOP of the hours -- which is what
+  // v_week_job_invoice has always done, adding parts_amount into total_billed.
+  // This screen used to leave them out of both the line and the week total, so
+  // it read short against the invoice it is there to approve.
+  const revenue = (isFlat ? 0 : o.hours * effectiveBillRate) + partsSum + pd;
   const cost = payHours * o.payRate + pd;
   return {
     role: o.role, name: o.name, hours: o.hours, payHours,
@@ -88,7 +98,8 @@ function personLine(o) {
     entryId: o.entryId, helperRowId: o.helperRowId || null, description: o.description || '',
     realJobId: o.realJobId || null, realOneOffName: o.realOneOffName || '',
     helperId: o.helperId || null, perDiemFlag: !!o.perDiem,
-    parts: isFlat ? o.parts : null,
+    isFlat,
+    parts: parts.length ? parts : null,
     welderId: o.welderId || null, entryDate: o.entryDate || null, forJobId: o.forJobId || null,
     isStainless: !!o.isStainless,
     entryHasWelder: o.entryHasWelder !== false,
@@ -229,7 +240,11 @@ function buildJobGroups(entries, jobs) {
       description: e.description,
       realJobId: e.job_id,
       realOneOffName: e.one_off_name,
-      parts: isFlatJob ? (e.daily_entry_parts || []) : undefined,
+      // Parts ride the ticket whatever the job bills as. They were hidden on an
+      // hourly job, which is how $283.75 of laser-cut blinds sat on the Viper
+      // week with nothing on this screen to show for them.
+      parts: e.daily_entry_parts || [],
+      isFlat: isFlatJob,
       welderId: e.welder_id,
       entryDate: e.entry_date,
       forJobId: e.for_job_id,
@@ -250,7 +265,7 @@ function buildJobGroups(entries, jobs) {
     }));
     if (e.description) d.descs.push(e.description);
 
-    (e.daily_entry_helpers || []).forEach(dh => {
+    (e.daily_entry_helpers || []).forEach((dh, hIdx) => {
       const hp = dh.helpers || {};
       // A helper bills at his own rate. The job bill rate and the stainless rate
       // are what the welding goes out at and neither one reaches him, so the only
@@ -275,6 +290,12 @@ function buildJobGroups(entries, jobs) {
         realOneOffName: e.one_off_name,
         forJobId: e.for_job_id,
         description: e.description,
+        isFlat: isFlatJob,
+        // A helper-only ticket has no welder line to hang its parts on. Given
+        // to the first helper rather than to each of them, because every line
+        // on this screen adds into the same week total and parts shown twice
+        // are parts billed twice.
+        parts: (!e.welder_id && hIdx === 0) ? (e.daily_entry_parts || []) : [],
         overrides: {
           pay: dh.pay_rate_override, bill: dh.bill_rate_override, perDiem: dh.per_diem_override
         },
@@ -641,9 +662,9 @@ function renderDetail(groupId) {
               <tbody>
                 ${d.lines.map((l, li) => `
                   <tr data-entry-id="${esc(l.entryId)}" data-helper-row-id="${l.helperRowId ? esc(l.helperRowId) : ''}" data-line-key="${dateStr}-${li}">
-                    <td class="l-name">${esc(l.name)}<span class="role-tag2">${l.role}</span>${l.role === 'welder' && l.description ? `<div class="line-desc">${esc(l.description)}</div>` : ''}${l.isStainless ? `<div class="line-desc stainless-tag">Stainless</div>` : ''}${rateTag(l)}${l.parts ? `<div class="line-desc flat-tag">Flat rate</div>${l.parts.map(p => `<div class="line-desc part-line-desc">${esc(p.description)} — ${p.quantity} &times; $${p.rate} = ${money(Number(p.quantity) * Number(p.rate))}</div>`).join('')}` : ''}</td>
+                    <td class="l-name">${esc(l.name)}<span class="role-tag2">${l.role}</span>${l.role === 'welder' && l.description ? `<div class="line-desc">${esc(l.description)}</div>` : ''}${l.isStainless ? `<div class="line-desc stainless-tag">Stainless</div>` : ''}${rateTag(l)}${l.isFlat ? `<div class="line-desc flat-tag">Flat rate</div>` : ''}${l.parts ? l.parts.map(p => `<div class="line-desc part-line-desc">${esc(p.description)} — ${p.quantity} &times; $${p.rate} = ${money(Number(p.quantity) * Number(p.rate))}</div>`).join('') : ''}</td>
                     <td class="l-num line-hours">${l.hours}</td>
-                    <td class="l-num dim">${l.parts ? '—' : '$' + l.billRate}</td>
+                    <td class="l-num dim">${l.isFlat ? '—' : '$' + l.billRate}</td>
                     <td class="l-num dim">${l.pd ? money(l.pd) : '—'}</td>
                     <td class="l-num">${money(l.revenue)}</td>
                     <td class="l-num pos">${money(l.margin)}</td>
