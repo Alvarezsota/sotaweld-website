@@ -322,3 +322,64 @@ body.inv-open { overflow: hidden; }
   border: 1px solid var(--line); background: rgba(255,255,255,.02);
   color: var(--dim2); font-size: 12.5px; line-height: 1.55; }
 .bills-elsewhere b { color: var(--text); }
+
+/* ---------------------------------------------------------------------------
+   PARTS ON THE JOB
+   ---------------------------------------------------------------------------
+   Its own block, below the crew and above the totals, because that is what it
+   is: material billed to the site for the week. It used to be shown against a
+   welder's ticket, which read as though the man had done it. */
+.job-parts { margin: 14px 0 0; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: rgba(255,255,255,.02); }
+.jp-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.jp-head h4 { margin: 0; font-size: 13.5px; }
+.jp-note { color: var(--dim2); font-size: 12px; }
+.jp-empty { margin: 4px 0 10px; color: var(--dim2); font-size: 12.5px; }
+/* .lines2 carries min-width:560px because the crew table has seven columns and
+   lives in a horizontal scroller. This one has five and short numbers, so it
+   drops the floor and fits a phone instead -- a table you have to drag
+   sideways to read is not much better than one you cannot see at all. */
+.jp-table { width: 100%; min-width: 0; }
+.jp-table th, .jp-table td { padding: 8px 10px; }
+.jp-table tfoot td { border-top: 1px solid var(--line); font-weight: 600; padding-top: 6px; }
+.jp-table th:nth-child(2), .jp-table td:nth-child(2) { width: 46px; }
+.jp-table th:nth-child(3), .jp-table td:nth-child(3) { width: 72px; }
+.jp-table th:nth-child(4), .jp-table td:nth-child(4) { width: 78px; }
+.jp-table th:nth-child(5), .jp-table td:nth-child(5) { width: 72px; }
+/* Typed, because `.lines2 th` right-aligns every header and a bare .jp-desc
+   loses to it -- which put the DESCRIPTION heading over the money columns. */
+.jp-table th.jp-desc, .jp-table td.jp-desc,
+.jp-table tfoot td.jp-desc { text-align: left; white-space: normal; overflow-wrap: anywhere; }
+
+/* Description takes the room; the numbers stay put. On a phone the row wraps
+   to its own line rather than pushing the Add button off the side. */
+.jp-add { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.jp-add .jp-in-desc { flex: 1 1 240px; min-width: 0; }
+.jp-add .jp-in-qty  { flex: 0 0 82px; }
+.jp-add .jp-in-rate { flex: 0 0 116px; }
+.jp-add .btn2 { flex: 0 0 auto; }
+
+.jp-msg { margin-top: 8px; color: var(--dim2); font-size: 12.5px; min-height: 1em; }
+.jp-msg-bad { color: var(--molten); }
+
+/* On a phone five columns do not fit, and forcing them squeezed the
+   description to one character a line -- every assertion passed and the thing
+   was unreadable. So it stops being a table: each part becomes a block with
+   its description across the top and its figures underneath, each labelled. */
+@media (max-width: 560px) {
+  .jp-add .jp-in-qty, .jp-add .jp-in-rate { flex: 1 1 calc(50% - 4px); }
+  .jp-add .btn2 { flex: 1 1 100%; }
+
+  .jp-table, .jp-table tbody, .jp-table tfoot, .jp-table tr, .jp-table td { display: block; width: auto; }
+  .jp-table thead { display: none; }
+  .jp-table tr { padding: 10px 0; border-top: 1px solid rgba(51,58,68,.5); }
+  .jp-table td { border: 0; padding: 2px 0; text-align: left; white-space: normal; }
+  .jp-table td.jp-desc { font-weight: 600; margin-bottom: 4px; }
+  .jp-table td.l-num[data-label] { display: flex; justify-content: space-between; gap: 12px; }
+  .jp-table td.l-num[data-label]::before {
+    content: attr(data-label); color: var(--dim2); font-size: 12px;
+    text-transform: uppercase; letter-spacing: .06em; }
+  .jp-table td.line-actions { margin-top: 6px; }
+  .jp-table tfoot tr { border-top: 1px solid var(--line); }
+  .jp-table tfoot td:empty { display: none; }
+}

@@ -84,12 +84,11 @@ function personLine(o) {
   // is the ordinary case. Matches pay_hours in v_work_lines -- change one,
   // change the other.
   const payHours = (o.payHours == null || o.payHours === '') ? o.hours : Number(o.payHours);
-  // On a flat job the parts ARE the bill, so there are no hours to add. On an
-  // hourly job they are billed on TOP of the hours -- which is what
-  // v_week_job_invoice has always done, adding parts_amount into total_billed.
-  // This screen used to leave them out of both the line and the week total, so
-  // it read short against the invoice it is there to approve.
-  const revenue = (isFlat ? 0 : o.hours * effectiveBillRate) + partsSum + pd;
+  // On a flat job the parts on the ticket ARE the bill, so there are no hours
+  // to add. An hourly line is hours and nothing else: material that went to the
+  // site belongs to the job, not to the man who happened to file a ticket that
+  // day, and it is counted once at the job level rather than on anybody's row.
+  const revenue = (isFlat ? partsSum : o.hours * effectiveBillRate) + pd;
   const cost = payHours * o.payRate + pd;
   return {
     role: o.role, name: o.name, hours: o.hours, payHours,
@@ -146,7 +145,7 @@ function anchorJobId(job, jobs, week) {
   return family[0].id;
 }
 
-function buildJobGroups(entries, jobs) {
+function buildJobGroups(entries, jobs, jobParts) {
   const groups = {}; // effectiveJobId -> { job, days: { dateStr: { lines: [] } } }
 
   entries.forEach(e => {
@@ -240,10 +239,7 @@ function buildJobGroups(entries, jobs) {
       description: e.description,
       realJobId: e.job_id,
       realOneOffName: e.one_off_name,
-      // Parts ride the ticket whatever the job bills as. They were hidden on an
-      // hourly job, which is how $283.75 of laser-cut blinds sat on the Viper
-      // week with nothing on this screen to show for them.
-      parts: e.daily_entry_parts || [],
+      parts: isFlatJob ? (e.daily_entry_parts || []) : [],
       isFlat: isFlatJob,
       welderId: e.welder_id,
       entryDate: e.entry_date,
@@ -265,7 +261,7 @@ function buildJobGroups(entries, jobs) {
     }));
     if (e.description) d.descs.push(e.description);
 
-    (e.daily_entry_helpers || []).forEach((dh, hIdx) => {
+    (e.daily_entry_helpers || []).forEach(dh => {
       const hp = dh.helpers || {};
       // A helper bills at his own rate. The job bill rate and the stainless rate
       // are what the welding goes out at and neither one reaches him, so the only
@@ -291,11 +287,6 @@ function buildJobGroups(entries, jobs) {
         forJobId: e.for_job_id,
         description: e.description,
         isFlat: isFlatJob,
-        // A helper-only ticket has no welder line to hang its parts on. Given
-        // to the first helper rather than to each of them, because every line
-        // on this screen adds into the same week total and parts shown twice
-        // are parts billed twice.
-        parts: (!e.welder_id && hIdx === 0) ? (e.daily_entry_parts || []) : [],
         overrides: {
           pay: dh.pay_rate_override, bill: dh.bill_rate_override, perDiem: dh.per_diem_override
         },
@@ -308,13 +299,37 @@ function buildJobGroups(entries, jobs) {
     });
   });
 
+  // Material billed to the job this week. A job can have parts and no hours --
+  // a week where the shop cut something and nobody went to site -- and that
+  // still bills, so it gets a panel of its own rather than being invisible.
+  (jobParts || []).forEach(p => {
+    if (!groups[p.job_id]) {
+      const job = jobs.find(j => j.id === p.job_id);
+      if (!job) return;
+      groups[p.job_id] = {
+        id: p.job_id, job, name: job.name,
+        operator: job.operator, billTo: job.bill_to, days: {}
+      };
+    }
+    const g = groups[p.job_id];
+    (g.parts || (g.parts = [])).push(p);
+  });
+
   return Object.values(groups).map(g => {
     let hours = 0, welderHours = 0, helperHours = 0, revenue = 0, cost = 0;
     Object.values(g.days).forEach(d => d.lines.forEach(l => {
       hours += l.hours; revenue += l.revenue; cost += l.cost;
       if (l.role === 'helper') helperHours += l.hours; else welderHours += l.hours;
     }));
-    return { ...g, hours, welderHours, helperHours, revenue, cost, margin: revenue - cost, marginPct: revenue ? Math.round((revenue - cost) / revenue * 100) : 0 };
+    // Counted once, here, off the job -- never off a crew line. It is the same
+    // arithmetic v_week_job_invoice does when it adds parts_amount into
+    // total_billed, so the number this screen approves is the number that bills.
+    const parts = g.parts || [];
+    const partsTotal = parts.reduce((s, p) => s + Number(p.quantity) * Number(p.rate), 0);
+    revenue += partsTotal;
+    return { ...g, parts, partsTotal, hours, welderHours, helperHours, revenue, cost,
+             margin: revenue - cost,
+             marginPct: revenue ? Math.round((revenue - cost) / revenue * 100) : 0 };
   }).sort((a, b) => b.revenue - a.revenue);
 }
 
@@ -337,7 +352,7 @@ async function loadWeek(skipReconcile) {
   //
   // Naming the constraint ends the argument. It costs one identifier and it does
   // not care how many other columns ever point at a person.
-  const [entriesRes, jobsRes, jwRes, openRes, hlprsRes, weldersRes] = await Promise.all([
+  const [entriesRes, jobsRes, jwRes, openRes, hlprsRes, weldersRes, jobPartsRes] = await Promise.all([
     sb.from('daily_entries')
       .select('*, profiles!daily_entries_welder_id_fkey(full_name, pay_rate, bill_rate, bills_as_helper_id, bills_as_helper:helpers!profiles_bills_as_helper_id_fkey(name, pay_rate, bill_rate)), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate)), daily_entry_parts(*)')
       .gte('entry_date', start).lte('entry_date', end),
@@ -349,7 +364,11 @@ async function loadWeek(skipReconcile) {
     sb.from('job_weeks').select('id, job_id, week_start, invoice_no')
       .eq('invoice_open', true).is('qb_invoice_id', null),
     sb.from('helpers').select('*').order('name'),
-    sb.from('profiles').select('*').order('full_name')
+    sb.from('profiles').select('*').order('full_name'),
+    // Material billed to a job for this week. It belongs to the job, not to
+    // anybody's ticket, so it is read on its own rather than off an entry.
+    sb.from('job_week_parts').select('*').eq('week_start', start)
+      .order('sort_order').order('created_at')
   ]);
 
   // A query that fails and a week nobody worked used to look identical. The error
@@ -363,7 +382,8 @@ async function loadWeek(skipReconcile) {
   const failed = [
     ['the tickets', entriesRes], ['the jobs', jobsRes], ['the approvals', jwRes],
     ['the open invoices', openRes],
-    ['the helpers', hlprsRes], ['the welders', weldersRes]
+    ['the helpers', hlprsRes], ['the welders', weldersRes],
+    ['the job parts', jobPartsRes]
   ].filter(([, r]) => r.error);
 
   if (failed.length) {
@@ -413,7 +433,7 @@ async function loadWeek(skipReconcile) {
     (parents || []).forEach((r) => { carriedParents[r.id] = r; });
   }
 
-  currentGroups = buildJobGroups(entries, jobs);
+  currentGroups = buildJobGroups(entries, jobs, jobPartsRes.data || []);
   renderGrid();
   if (openJobId) renderDetail(openJobId);
 
@@ -622,6 +642,53 @@ function renderGrid() {
   });
 }
 
+// Material billed to the job this week, in its own block under the crew.
+//
+// Its own block on purpose. Parts used to hang off a welder's daily ticket,
+// which put shop-cut blinds under his name beside his hours and read as though
+// they were his day's work. They are not: they belong to the job site. Nothing
+// here touches an hour, a pay rate or a per diem.
+//
+// A one-off job has no job row to hang material on, so it gets no block rather
+// than a button that cannot save.
+function jobPartsHtml(g) {
+  if (!g.job) return '';
+  // The numbers carry their own labels so the table can stack into rows on a
+  // phone without the figures becoming three anonymous columns of money.
+  const rows = (g.parts || []).map(p => `
+    <tr data-part-id="${esc(p.id)}">
+      <td class="jp-desc">${esc(p.description)}</td>
+      <td class="l-num" data-label="Qty">${p.quantity}</td>
+      <td class="l-num dim" data-label="Price">$${p.rate}</td>
+      <td class="l-num" data-label="Amount">${money(Number(p.quantity) * Number(p.rate))}</td>
+      <td class="l-num line-actions">
+        <button type="button" class="row-del" data-action="delete-part">Delete</button>
+      </td>
+    </tr>`).join('');
+
+  return `
+    <div class="job-parts" data-job-id="${esc(g.job.id)}">
+      <div class="jp-head">
+        <h4>Parts &amp; material</h4>
+        <span class="jp-note">Billed to this job for the week. Not anybody's hours.</span>
+      </div>
+      ${(g.parts || []).length ? `
+        <table class="lines2 jp-table">
+          <thead><tr><th class="jp-desc">Description</th><th>Qty</th><th>Price</th><th>Amount</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr><td class="jp-desc">Parts total</td><td></td><td></td>
+            <td class="l-num">${money(g.partsTotal)}</td><td></td></tr></tfoot>
+        </table>` : `<p class="jp-empty">No parts on this job this week.</p>`}
+      <div class="jp-add">
+        <input type="text"   class="input jp-in-desc" placeholder="What it is — e.g. 2&quot; 150 skid blind, 1/2&quot; plate">
+        <input type="number" class="input jp-in-qty"  placeholder="Qty" step="any" min="0">
+        <input type="number" class="input jp-in-rate" placeholder="Price each" step="0.01" min="0">
+        <button type="button" class="btn2 btn2-solid small" data-action="add-part">Add</button>
+      </div>
+      <div class="jp-msg"></div>
+    </div>`;
+}
+
 function renderDetail(groupId) {
   const g = currentGroups.find(x => x.id === groupId);
   const detailEl = document.getElementById('jobDetail');
@@ -679,6 +746,8 @@ function renderDetail(groupId) {
         </div>`;
       }).join('')}
     </div>
+
+    ${jobPartsHtml(g)}
 
     <div class="totals2">
       <div class="tot-item2"><span class="tot-lbl2">Welder hrs</span><span class="tot-num2">${g.welderHours}</span></div>
@@ -862,12 +931,66 @@ function renderDetail(groupId) {
     renderDetail(g.id);
   });
 
-  document.querySelectorAll('.lines2 tbody tr').forEach(row => {
+  // Crew rows only. The parts table borrows the same class for its styling and
+  // carries no line key, and reading one off it would throw here and take the
+  // whole panel's wiring down with it.
+  document.querySelectorAll('.lines2 tbody tr[data-line-key]').forEach(row => {
     const [dateStr, liStr] = row.dataset.lineKey.split(/-(\d+)$/);
     const line = g.days[dateStr].lines[Number(liStr)];
 
     row.querySelector('[data-action="edit-line"]').addEventListener('click', () => startEditLine(row, line, groupId));
     row.querySelector('[data-action="delete-line"]').addEventListener('click', () => deleteLine(line, groupId));
+  });
+
+  wireJobParts(g, groupId);
+}
+
+// Adding and removing material on the job. Deliberately nothing to do with the
+// crew rows above it: no hours move, no rate moves, no per diem moves.
+function wireJobParts(g, groupId) {
+  const box = document.querySelector('.job-parts');
+  if (!box || !g.job) return;
+  const say = (msg, bad) => {
+    const el = box.querySelector('.jp-msg');
+    el.textContent = msg || '';
+    el.className = 'jp-msg' + (bad ? ' jp-msg-bad' : '');
+  };
+
+  box.querySelector('[data-action="add-part"]').addEventListener('click', async () => {
+    const description = box.querySelector('.jp-in-desc').value.trim();
+    const quantity = Number(box.querySelector('.jp-in-qty').value);
+    const rate = Number(box.querySelector('.jp-in-rate').value);
+
+    // Said plainly rather than saved as a zero somebody has to find later.
+    if (!description) return say('Say what the part is before adding it.', true);
+    if (!Number.isFinite(quantity) || quantity <= 0) return say('Quantity has to be a number above nought.', true);
+    if (!Number.isFinite(rate) || rate <= 0) return say('Price each has to be a number above nought.', true);
+
+    say('Adding…');
+    const { error } = await sb.from('job_week_parts').insert({
+      job_id: g.job.id,
+      week_start: ymd(weekStart),
+      description, quantity, rate,
+      sort_order: (g.parts || []).length,
+      created_by: currentUser ? currentUser.id : null
+    });
+    if (error) return say('That did not save: ' + error.message, true);
+    await loadWeek();
+    renderDetail(groupId);
+  });
+
+  box.querySelectorAll('[data-action="delete-part"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const tr = btn.closest('tr');
+      const id = tr.dataset.partId;
+      const what = tr.querySelector('.jp-desc').textContent.trim();
+      if (!confirm(`Take "${what}" off this job?\n\nThe hours on this week are not touched.`)) return;
+      say('Removing…');
+      const { error } = await sb.from('job_week_parts').delete().eq('id', id);
+      if (error) return say('That did not delete: ' + error.message, true);
+      await loadWeek();
+      renderDetail(groupId);
+    });
   });
 }
 
