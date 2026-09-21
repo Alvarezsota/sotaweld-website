@@ -115,6 +115,22 @@ Deno.serve(async (req) => {
       .map((s: unknown) => String(s ?? '').trim())
       .filter((s: string) => s && s.toLowerCase() !== to.toLowerCase() && EMAIL.test(s));
 
+    /* Blind copy to whoever pressed send.
+       
+       This does not go through Outlook, so a quote that leaves here leaves no
+       trace in anybody's mailbox -- the portal knows it went, and the sender's
+       Sent Items does not. Two went to Desert Electric today and there was
+       nothing in Gilbert's inbox to show for either.
+       
+       Blind rather than copied: it is a record for the office, and a customer
+       reading the company's own address in the CC line of a quote addressed to
+       him learns nothing useful. Skipped when he is already on it, and on a
+       test, which is already going nowhere else. */
+    const bcc = (!isTest && myEmail
+                 && myEmail.toLowerCase() !== to.toLowerCase()
+                 && !cc.some((a: string) => a.toLowerCase() === myEmail.toLowerCase()))
+      ? [myEmail] : [];
+
     // The same document the Print / PDF button hands over, asked for the same
     // way, with the caller's own token -- not the service key, which is not a
     // user and would be turned away as not signed in.
@@ -183,6 +199,7 @@ Deno.serve(async (req) => {
         from: setting.quote_email_from || FROM_DEFAULT,
         to,
         ...(cc.length ? { cc } : {}),
+        ...(bcc.length ? { bcc } : {}),
         reply_to: setting.quote_email_reply_to || REPLY_DEFAULT,
         subject,
         html,
@@ -209,7 +226,7 @@ Deno.serve(async (req) => {
       }).eq('id', quoteId);
     }
 
-    return json({ ok: true, test: isTest, to, cc, subject, filename, id: out?.id ?? null });
+    return json({ ok: true, test: isTest, to, cc, bcc, subject, filename, id: out?.id ?? null });
   } catch (err) {
     return json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 500);
   }
