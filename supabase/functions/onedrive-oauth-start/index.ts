@@ -28,7 +28,15 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 // Files.ReadWrite is the whole ask: write into the signed-in account's own
 // OneDrive. Not Files.ReadWrite.All, which would be every file in the tenant.
 // offline_access is what makes it survive past the first hour.
-const SCOPES = 'offline_access Files.ReadWrite User.Read';
+//
+// Mail.ReadWrite is a DRAFT in that account's own mailbox and nothing more.
+// Deliberately not Mail.Send: the portal writes the quote, attaches the PDF and
+// leaves it in Drafts, and a person decides whether it goes. That is the whole
+// point of doing it this way rather than sending it ourselves -- a quote sent
+// from Gilbert's own mailbox authenticates as his domain says it should and
+// lands in his Sent Items, where two Desert Electric quotes sent over Resend
+// from an address the domain never authorised left no trace and never arrived.
+const SCOPES = 'offline_access Files.ReadWrite Mail.ReadWrite User.Read';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });

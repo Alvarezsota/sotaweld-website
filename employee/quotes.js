@@ -356,7 +356,8 @@ window.SOTA_QD_PDF = {
 
    The desk asks nothing and knows nothing about who any of these people are.
    It calls send(); this puts the question on screen and does the sending. */
-const SEND_QUOTE_URL = `${SUPABASE_URL}/functions/v1/send-quote`;
+const SEND_QUOTE_URL  = `${SUPABASE_URL}/functions/v1/send-quote`;
+const DRAFT_QUOTE_URL = `${SUPABASE_URL}/functions/v1/quote-outlook-draft`;
 
 function askRecipients(o) {
   return new Promise((resolve) => {
@@ -387,11 +388,10 @@ function askRecipients(o) {
 
         <div class="qd-send-act">
           <button value="cancel" class="qd-btn qd-btn--ghost">Cancel</button>
-          <button value="test" class="qd-btn">Test to me</button>
-          <button value="send" class="qd-btn qd-btn--primary">Send to ${esc(o.firstName || 'customer')}</button>
+          <button value="draft" class="qd-btn qd-btn--primary">Draft it in Outlook</button>
         </div>
-        <p class="qd-send-foot">Test to me sends it to ${esc(o.myEmail)} and nobody else.
-          It does not touch the quote or mark it sent.</p>
+        <p class="qd-send-foot">Written into your Outlook Drafts with the PDF attached,
+          addressed and ready. Nothing goes anywhere until you send it yourself.</p>
       </form>`;
 
     // Mounted inside the desk, not on the body: every colour, font and button
@@ -400,13 +400,9 @@ function askRecipients(o) {
     // from wherever it sits, so nesting costs nothing.
     (document.getElementById('sota-quote-desk') || document.body).appendChild(dlg);
     dlg.addEventListener('close', () => {
-      const chose = dlg.returnValue;
-      const out = (chose === 'send' || chose === 'test')
+      const out = dlg.returnValue === 'draft'
         ? {
-            test: chose === 'test',
-            // A test goes to one inbox. The server enforces that too; this
-            // only keeps the request honest about what was asked for.
-            cc: chose === 'test' ? [] : o.others
+            cc: o.others
               .filter((_, i) => dlg.querySelector(`[data-cc="${i}"]`).checked)
               .map((c) => c.email),
             message: (dlg.querySelector('#qdSendMsg').value || '').trim(),
@@ -420,6 +416,9 @@ function askRecipients(o) {
 }
 
 window.SOTA_QD_EMAIL = {
+  /* Kept under the name the desk already calls, because what the desk wants has
+     not changed: put this quote in front of this customer. Only the road there
+     has. */
   send: async function (doc, state) {
     const profile = await adminReady;
     if (!profile) throw new Error('not an admin');
@@ -444,14 +443,10 @@ window.SOTA_QD_EMAIL = {
         && String(c.email).toLowerCase() !== String(row.customer_email).toLowerCase())
       .map((c) => ({ name: (c.name || '').trim(), email: String(c.email).trim() }));
 
-    const { data: { user } } = await sb.auth.getUser();
-    const myEmail = (user && user.email) || 'your sign-in address';
-
     const picked = await askRecipients({
       quoteNo: row.quote_no,
       customerName: row.customer_name,
       jobName: row.job_name,
-      myEmail,
       firstName: String(row.bill_to_attn || '').trim().split(/\s+/)[0],
       totalLabel: '$' + Number(row.total || 0).toLocaleString('en-US',
         { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -464,15 +459,18 @@ window.SOTA_QD_EMAIL = {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) throw new Error('signed out -- sign in again');
 
-    const res = await fetch(SEND_QUOTE_URL, {
+    const res = await fetch(DRAFT_QUOTE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({
-        quote_id: row.id, cc: picked.cc, message: picked.message, test: picked.test,
-      }),
+      body: JSON.stringify({ quote_id: row.id, cc: picked.cc, message: picked.message }),
     });
     const out = await res.json().catch(() => ({}));
-    if (!res.ok || !out.ok) throw new Error(out.error || `It would not send (${res.status})`);
+    if (!res.ok || !out.ok) throw new Error(out.error || `The draft could not be made (${res.status})`);
+
+    // Straight into it, in a new tab. The point of a draft is that he reads it
+    // before it goes, and a draft he has to go and find is a draft he sends
+    // without reading.
+    if (out.web_link) window.open(out.web_link, '_blank', 'noopener');
     return out;
   },
 };
