@@ -344,6 +344,125 @@ window.SOTA_QD_PDF = {
   }
 };
 
+/* ---------------- emailing the quote ----------------
+   The document goes to the contact picked on the quote. Everyone else at that
+   company is offered as a copy, ticked off rather than typed: the addresses
+   are already on file and retyping one is how a quote goes to nobody.
+
+   Like the convert and the download, anything still pending is flushed first.
+   The server draws the PDF from the rows, so a quote the tables have not caught
+   up with would be sent as it was a minute ago rather than as it is on screen --
+   and unlike a download, there is no taking that back.
+
+   The desk asks nothing and knows nothing about who any of these people are.
+   It calls send(); this puts the question on screen and does the sending. */
+const SEND_QUOTE_URL = `${SUPABASE_URL}/functions/v1/send-quote`;
+
+function askRecipients(o) {
+  return new Promise((resolve) => {
+    const esc = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    const dlg = document.createElement('dialog');
+    dlg.className = 'qd-send';
+    dlg.innerHTML = `
+      <form method="dialog" class="qd-send-form">
+        <h3>Email ${esc(o.quoteNo || 'this quote')}</h3>
+        <p class="qd-send-sub">${esc(o.customerName)}${o.jobName ? ' &middot; ' + esc(o.jobName) : ''}
+          &middot; ${esc(o.totalLabel)}</p>
+
+        <label class="qd-send-l">Goes to</label>
+        <p class="qd-send-to">${esc(o.attn || o.to)}<small>${esc(o.to)}</small></p>
+
+        ${o.others.length ? `
+          <label class="qd-send-l">Copy to</label>
+          <div class="qd-send-cc">${o.others.map((c, i) => `
+            <label><input type="checkbox" data-cc="${i}"> <span>${esc(c.name || c.email)}
+              <small>${esc(c.email)}</small></span></label>`).join('')}</div>`
+          : '<p class="qd-send-none">Nobody else on file for this company to copy.</p>'}
+
+        <label class="qd-send-l" for="qdSendMsg">Note (optional)</label>
+        <textarea id="qdSendMsg" class="qd-send-msg" rows="3"
+          placeholder="Left blank, it says the quote is attached and what it comes to."></textarea>
+
+        <div class="qd-send-act">
+          <button value="cancel" class="qd-btn qd-btn--ghost">Cancel</button>
+          <button value="send" class="qd-btn qd-btn--primary">Send it</button>
+        </div>
+      </form>`;
+
+    // Mounted inside the desk, not on the body: every colour, font and button
+    // style on this page is scoped to #sota-quote-desk, and a dialog hung off
+    // the body would come up unstyled. showModal() lifts it to the top layer
+    // from wherever it sits, so nesting costs nothing.
+    (document.getElementById('sota-quote-desk') || document.body).appendChild(dlg);
+    dlg.addEventListener('close', () => {
+      const out = dlg.returnValue === 'send'
+        ? {
+            cc: o.others
+              .filter((_, i) => dlg.querySelector(`[data-cc="${i}"]`).checked)
+              .map((c) => c.email),
+            message: (dlg.querySelector('#qdSendMsg').value || '').trim(),
+          }
+        : null;
+      dlg.remove();
+      resolve(out);
+    });
+    dlg.showModal();
+  });
+}
+
+window.SOTA_QD_EMAIL = {
+  send: async function (doc, state) {
+    const profile = await adminReady;
+    if (!profile) throw new Error('not an admin');
+
+    clearTimeout(syncTimer);
+    const live = state || (window.SOTAQuoteDesk ? window.SOTAQuoteDesk.getState() : null);
+    if (live) await syncQuotesToTables(live);
+
+    const { data: row, error: findErr } = await sb.from('desk_quotes')
+      .select('id, quote_no, job_name, total, customer_name, customer_email, bill_to_attn')
+      .eq('doc_id', doc.id).maybeSingle();
+    if (findErr) throw new Error(findErr.message);
+    if (!row) throw new Error('That quote has not saved yet. Try again in a moment.');
+    if (!row.customer_email) {
+      throw new Error('There is no email address on that quote. Pick a contact for '
+        + (row.customer_name || 'this customer') + ' first.');
+    }
+
+    const cust = ((live && live.customers) || []).find((c) => c.id === doc.customerId) || {};
+    const others = (cust.contacts || [])
+      .filter((c) => c && c.email
+        && String(c.email).toLowerCase() !== String(row.customer_email).toLowerCase())
+      .map((c) => ({ name: (c.name || '').trim(), email: String(c.email).trim() }));
+
+    const picked = await askRecipients({
+      quoteNo: row.quote_no,
+      customerName: row.customer_name,
+      jobName: row.job_name,
+      totalLabel: '$' + Number(row.total || 0).toLocaleString('en-US',
+        { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      to: row.customer_email,
+      attn: row.bill_to_attn,
+      others,
+    });
+    if (!picked) return { cancelled: true };
+
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) throw new Error('signed out -- sign in again');
+
+    const res = await fetch(SEND_QUOTE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ quote_id: row.id, cc: picked.cc, message: picked.message }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) throw new Error(out.error || `It would not send (${res.status})`);
+    return out;
+  },
+};
+
 /* ---------------- numbering ----------------
    Two series, neither of them the module's to invent.
 

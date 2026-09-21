@@ -225,6 +225,9 @@
         '<div class="qd-bar-right">' +
           '<button class="qd-btn qd-btn--ghost" data-act="new">New quote</button>' +
           '<button class="qd-btn" data-act="print">Print / PDF</button>' +
+          (d.kind === "quote"
+            ? '<button class="qd-btn" data-act="email">Email to customer</button>'
+            : '') +
           '<button class="qd-btn" data-act="invoice">Convert to invoice</button>' +
           (d.kind === "invoice"
             ? '<button class="qd-btn" data-act="quickbooks">Send to QuickBooks</button>'
@@ -967,6 +970,37 @@
         return;
       }
       buildPrint(d); window.print(); return;
+    }
+
+    // Sends the same PDF the Print button draws, to the contact picked on the
+    // quote, with anyone else at that company offered as a copy. The page owns
+    // the asking; the sending is the server's.
+    if (name === "email") {
+      var mail = window.SOTA_QD_EMAIL;
+      if (!mail || typeof mail.send !== "function") {
+        toast("Emailing is not wired up on this page"); return;
+      }
+      var cst = customerById(d.customerId);
+      var who = cst ? (cst.contacts || []).filter(function (x) { return x.id === d.contactId; })[0] : null;
+      if (!who || !who.email) {
+        toast("Pick a contact with an email address on this quote first");
+        return;
+      }
+      busy(btn, "Sending...");
+      Promise.resolve(mail.send(d, S)).then(function (out) {
+        busy(btn, false);
+        if (!out || out.cancelled) return;
+        // The server marks it sent; the desk has to agree or a refresh would
+        // appear to undo it.
+        d.status = "sent";
+        if (S.draft.id === d.id) S.draft.status = "sent";
+        persist(); render();
+        toast("Sent to " + out.to + (out.cc && out.cc.length ? " (copied " + out.cc.length + ")" : ""));
+      }, function (err) {
+        busy(btn, false);
+        toast(err && err.message ? err.message : "That quote could not be sent");
+      });
+      return;
     }
 
     if (name === "quickbooks") {

@@ -370,3 +370,55 @@
 /* Closed work reads as closed, but stays legible -- it is still opened and
    still printed from in here. */
 #sota-quote-desk .qd-done-bd table { opacity: .78; }
+
+/* ---------------------------------------------------------------------------
+   SENDING A QUOTE
+   ---------------------------------------------------------------------------
+   The question asked before a quote leaves the building: who it goes to, who
+   is copied, and anything to say with it. Deliberately not a confirm() -- the
+   copies are tickboxes because the addresses are already on file, and typing
+   one out again is how a quote goes to the wrong man.
+
+   Mounted inside #sota-quote-desk so it inherits the desk's palette; the top
+   layer puts it above the page regardless of where it sits in the tree. */
+#sota-quote-desk .qd-send {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 0; width: min(440px, calc(100vw - 32px));
+  font-family: var(--f-body);
+}
+#sota-quote-desk .qd-send::backdrop { background: rgba(8, 10, 12, .72); }
+#sota-quote-desk .qd-send-form { padding: calc(var(--u) * 5); margin: 0; }
+#sota-quote-desk .qd-send h3 {
+  margin: 0; font-family: var(--f-display); font-size: 19px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase;
+}
+#sota-quote-desk .qd-send-sub { margin: calc(var(--u)) 0 calc(var(--u) * 4); font-size: 13px; color: var(--muted); }
+#sota-quote-desk .qd-send-l {
+  display: block; margin: calc(var(--u) * 3) 0 calc(var(--u)); font-size: 11px;
+  font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--dim);
+}
+#sota-quote-desk .qd-send-to {
+  margin: 0; padding: calc(var(--u) * 2) calc(var(--u) * 3); font-size: 14px;
+  background: var(--sunken); border: 1px solid var(--line-soft); border-radius: var(--r);
+}
+#sota-quote-desk .qd-send-to small,
+#sota-quote-desk .qd-send-cc small { display: block; font-size: 12px; color: var(--muted); }
+#sota-quote-desk .qd-send-cc { display: grid; gap: calc(var(--u)); }
+#sota-quote-desk .qd-send-cc label {
+  display: flex; gap: calc(var(--u) * 2); align-items: flex-start; cursor: pointer;
+  padding: calc(var(--u) * 1.5) calc(var(--u) * 2); border-radius: var(--r);
+  font-size: 14px; border: 1px solid transparent;
+}
+#sota-quote-desk .qd-send-cc label:hover { background: var(--raised); border-color: var(--line-soft); }
+#sota-quote-desk .qd-send-cc input { margin-top: 3px; accent-color: var(--steel); }
+#sota-quote-desk .qd-send-none { margin: 0; font-size: 13px; color: var(--dim); }
+#sota-quote-desk .qd-send-msg {
+  width: 100%; box-sizing: border-box; resize: vertical;
+  background: var(--sunken); color: var(--text);
+  border: 1px solid var(--line); border-radius: var(--r);
+  padding: calc(var(--u) * 2) calc(var(--u) * 3); font: inherit; font-size: 14px;
+}
+#sota-quote-desk .qd-send-act {
+  display: flex; gap: calc(var(--u) * 2); justify-content: flex-end;
+  margin-top: calc(var(--u) * 5);
+}
