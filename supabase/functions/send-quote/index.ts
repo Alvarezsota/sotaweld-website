@@ -84,10 +84,24 @@ Deno.serve(async (req) => {
       .eq('id', quoteId).maybeSingle();
     if (!q) return json({ ok: false, error: 'that quote could not be found' }, 404);
 
+    /* A test goes to whoever is signed in, and nowhere else.
+       
+       Taken from the session rather than from anything the caller passed, so
+       "test" can never be a way to post a customer's prices to an address of
+       someone's choosing. It also means testing needs no contact invented on
+       the customer, no dropdown changed and nothing put back afterwards --
+       which is what made the first version of this too fiddly to actually use.
+       A test never marks the quote sent. */
+    const isTest = body.test === true;
+    const myEmail = String(who.user.email ?? '').trim();
+    if (isTest && !myEmail) {
+      return json({ ok: false, error: 'your sign-in has no email address to test against' }, 422);
+    }
+
     // The address on the quote unless the caller named another. Never invented:
     // a quote with nobody to send it to is a mistake to be shown, not worked
     // around by guessing at the company's switchboard.
-    const to = String(body.to ?? q.customer_email ?? '').trim();
+    const to = isTest ? myEmail : String(body.to ?? q.customer_email ?? '').trim();
     if (!to) {
       return json({ ok: false, error:
         `There is no email address on ${q.quote_no ?? 'this quote'}. Pick a contact for `
@@ -95,7 +109,9 @@ Deno.serve(async (req) => {
     }
     if (!EMAIL.test(to)) return json({ ok: false, error: `"${to}" is not an email address` }, 422);
 
-    const cc = (Array.isArray(body.cc) ? body.cc : [])
+    // Nobody is copied on a test. The whole point is that it reaches one
+    // inbox, and a test that copies the customer is not a test.
+    const cc = isTest ? [] : (Array.isArray(body.cc) ? body.cc : [])
       .map((s: unknown) => String(s ?? '').trim())
       .filter((s: string) => s && s.toLowerCase() !== to.toLowerCase() && EMAIL.test(s));
 
@@ -127,8 +143,8 @@ Deno.serve(async (req) => {
       ? `This quote is good through ${usDate(q.valid_through as string)}.`
       : '';
     const jobLine = q.job_name ? ` for ${q.job_name}` : '';
-    const subject = String(body.subject ?? '').trim()
-      || `Quote ${q.quote_no ?? ''} — ${q.customer_name ?? ''}${jobLine}`.replace(/\s+/g, ' ').trim();
+    const subject = (isTest ? '[TEST] ' : '') + (String(body.subject ?? '').trim()
+      || `Quote ${q.quote_no ?? ''} — ${q.customer_name ?? ''}${jobLine}`.replace(/\s+/g, ' ').trim());
 
     const note = String(body.message ?? '').trim();
     const greeting = q.bill_to_attn ? `${String(q.bill_to_attn).trim()},` : 'Good morning,';
@@ -181,15 +197,19 @@ Deno.serve(async (req) => {
     }
 
     // Written down only once it has actually gone. A quote marked sent that
-    // never left is worse than one nobody marked at all.
-    await db.from('desk_quotes').update({
-      status: 'sent',
-      sent_at: new Date().toISOString(),
-      sent_to: [to, ...cc].join(', '),
-      updated_at: new Date().toISOString(),
-    }).eq('id', quoteId);
+    // never left is worse than one nobody marked at all -- and a test that
+    // left is still not a quote that went to the customer, so it writes
+    // nothing and the quote stays exactly as it was.
+    if (!isTest) {
+      await db.from('desk_quotes').update({
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        sent_to: [to, ...cc].join(', '),
+        updated_at: new Date().toISOString(),
+      }).eq('id', quoteId);
+    }
 
-    return json({ ok: true, to, cc, subject, filename, id: out?.id ?? null });
+    return json({ ok: true, test: isTest, to, cc, subject, filename, id: out?.id ?? null });
   } catch (err) {
     return json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 500);
   }

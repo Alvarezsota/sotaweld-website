@@ -387,8 +387,11 @@ function askRecipients(o) {
 
         <div class="qd-send-act">
           <button value="cancel" class="qd-btn qd-btn--ghost">Cancel</button>
-          <button value="send" class="qd-btn qd-btn--primary">Send it</button>
+          <button value="test" class="qd-btn">Test to me</button>
+          <button value="send" class="qd-btn qd-btn--primary">Send to ${esc(o.firstName || 'customer')}</button>
         </div>
+        <p class="qd-send-foot">Test to me sends it to ${esc(o.myEmail)} and nobody else.
+          It does not touch the quote or mark it sent.</p>
       </form>`;
 
     // Mounted inside the desk, not on the body: every colour, font and button
@@ -397,9 +400,13 @@ function askRecipients(o) {
     // from wherever it sits, so nesting costs nothing.
     (document.getElementById('sota-quote-desk') || document.body).appendChild(dlg);
     dlg.addEventListener('close', () => {
-      const out = dlg.returnValue === 'send'
+      const chose = dlg.returnValue;
+      const out = (chose === 'send' || chose === 'test')
         ? {
-            cc: o.others
+            test: chose === 'test',
+            // A test goes to one inbox. The server enforces that too; this
+            // only keeps the request honest about what was asked for.
+            cc: chose === 'test' ? [] : o.others
               .filter((_, i) => dlg.querySelector(`[data-cc="${i}"]`).checked)
               .map((c) => c.email),
             message: (dlg.querySelector('#qdSendMsg').value || '').trim(),
@@ -437,10 +444,15 @@ window.SOTA_QD_EMAIL = {
         && String(c.email).toLowerCase() !== String(row.customer_email).toLowerCase())
       .map((c) => ({ name: (c.name || '').trim(), email: String(c.email).trim() }));
 
+    const { data: { user } } = await sb.auth.getUser();
+    const myEmail = (user && user.email) || 'your sign-in address';
+
     const picked = await askRecipients({
       quoteNo: row.quote_no,
       customerName: row.customer_name,
       jobName: row.job_name,
+      myEmail,
+      firstName: String(row.bill_to_attn || '').trim().split(/\s+/)[0],
       totalLabel: '$' + Number(row.total || 0).toLocaleString('en-US',
         { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       to: row.customer_email,
@@ -455,7 +467,9 @@ window.SOTA_QD_EMAIL = {
     const res = await fetch(SEND_QUOTE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ quote_id: row.id, cc: picked.cc, message: picked.message }),
+      body: JSON.stringify({
+        quote_id: row.id, cc: picked.cc, message: picked.message, test: picked.test,
+      }),
     });
     const out = await res.json().catch(() => ({}));
     if (!res.ok || !out.ok) throw new Error(out.error || `It would not send (${res.status})`);

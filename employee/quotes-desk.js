@@ -1030,6 +1030,9 @@
       Promise.resolve(mail.send(d, S)).then(function (out) {
         busy(btn, false);
         if (!out || out.cancelled) return;
+        // A test went to him, not to the customer, so the quote is untouched
+        // and must not be shown as sent -- the server writes nothing either.
+        if (out.test) { toast("Test sent to " + out.to); return; }
         // The server marks it sent; the desk has to agree or a refresh would
         // appear to undo it.
         d.status = "sent";
