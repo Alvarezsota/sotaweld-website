@@ -84,15 +84,24 @@ function docFromRow(q, lines) {
   };
 }
 
-/* And the other way, for writing back. */
+/* And the other way, for writing back.
+
+   The Contact dropdown picks who the quote is made out to, so the address on
+   the document follows it rather than sitting on the company's switchboard
+   address whoever was chosen. The name goes down beside it: contacts live in
+   this blob and not in a table, so the PDF builder cannot look one up from
+   desk_contact_id and has to be handed it. Falls back to the company when no
+   contact is picked, which is what it always did. */
 function rowFromDoc(d, state) {
   const cust = (state.customers || []).find((c) => c.id === d.customerId) || {};
+  const contact = (cust.contacts || []).find((ct) => ct.id === d.contactId) || null;
   return {
     doc_id: d.id,
     quote_no: d.number || null,
     quote_date: d.date,
     customer_name: cust.company || '',
-    customer_email: cust.email || null,
+    customer_email: (contact && contact.email) || cust.email || null,
+    bill_to_attn: (contact && (contact.name || '').trim()) || null,
     qb_customer_id: cust.qbCustomerId || null,
     desk_customer_id: d.customerId || null,
     desk_contact_id: d.contactId || null,

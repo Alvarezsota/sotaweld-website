@@ -92,7 +92,7 @@ const InvoicePreview = (function () {
       const environment = (cust && cust.environment) || 'production';
 
       const { data: row } = await sb.from('qb_customer_billing')
-        .select('cc_roster, cc_emails, qb_term_id, qb_term_name')
+        .select('to_email, cc_roster, cc_emails, qb_term_id, qb_term_name')
         .eq('qb_customer_id', String(customerId)).eq('qb_environment', environment).maybeSingle();
 
       // Payment terms live on the same row as who gets copied, because both are
@@ -112,6 +112,9 @@ const InvoicePreview = (function () {
         environment,
         roster: roster.filter(r => r && r.email),
         chosen: new Set(sending.map(e => String(e).toLowerCase())),
+        // Blank means QuickBooks uses the address on its own customer record,
+        // which is what every invoice did before this box existed.
+        toEmail: (row && row.to_email) ? String(row.to_email) : '',
       };
     } catch (err) {
       cc = null;                     // never let this stop an invoice being looked at
@@ -135,6 +138,41 @@ const InvoicePreview = (function () {
         </div>
         <select class="input inv-terms" id="invTerms">${opts}</select>
         <p class="inv-cc-note" id="termsNote"></p>
+      </div>`;
+  }
+
+  /* Who it is addressed to, as opposed to who is copied.
+
+     QuickBooks holds one email on the customer record and uses it for every
+     invoice. That is fine while a company has one person who pays the bills
+     and wrong the moment it has two -- Desert Electric's request came from one
+     man, the PO is cut by a second and the invoice is paid by a third. to_email
+     overrides it per customer; blank leaves QuickBooks to its own record, which
+     is what this did before there was a box.
+
+     The same roster feeds both this and the copy list, so an address is typed
+     once and can then be the addressee one month and a copy the next. */
+  function toHtml() {
+    if (!cc) return '';
+    const onFile = String(cc.toEmail || '').toLowerCase();
+    const known = cc.roster.some(r => String(r.email).toLowerCase() === onFile);
+    const opts = ['<option value="">Whoever QuickBooks has on file</option>']
+      .concat(cc.roster.map(r =>
+        `<option value="${esc(r.email)}"${String(r.email).toLowerCase() === onFile ? ' selected' : ''}>${
+          esc(r.name ? r.name + ' — ' + r.email : r.email)}</option>`))
+      // An address set before it was on the roster, or typed straight into the
+      // table, still has to be selectable or changing anything else would drop it.
+      .concat(onFile && !known ? [`<option value="${esc(cc.toEmail)}" selected>${esc(cc.toEmail)}</option>`] : [])
+      .join('');
+    return `
+      <div class="inv-cc">
+        <div class="inv-cc-h">Send this invoice to
+          <small>${cc.roster.length
+            ? 'Everyone below can be picked here or ticked as a copy underneath.'
+            : 'Add someone below and they can be picked here too.'}</small>
+        </div>
+        <select class="input inv-terms" id="invTo">${opts}</select>
+        <p class="inv-cc-note" id="toNote"></p>
       </div>`;
   }
 
@@ -181,6 +219,7 @@ const InvoicePreview = (function () {
       qb_customer_id: cc.customerId,
       qb_environment: cc.environment,
       qb_customer_name: cc.customerName,
+      to_email: cc.toEmail || null,
       cc_roster: cc.roster,
       cc_emails: chosen,
       updated_at: new Date().toISOString(),
@@ -328,6 +367,7 @@ const InvoicePreview = (function () {
         </div>` : ''}
 
       ${termsHtml()}
+      ${toHtml()}
       ${ccHtml()}
 
       <div class="inv-actions">
@@ -378,6 +418,29 @@ const InvoicePreview = (function () {
           : `Saved. No terms set for ${cc.customerName}.`;
         note.className = 'inv-cc-note inv-ok';
       }
+    });
+
+    const toEl = document.getElementById('invTo');
+    if (toEl) toEl.addEventListener('change', async () => {
+      const was = cc.toEmail;
+      cc.toEmail = toEl.value || '';
+      const note = document.getElementById('toNote');
+      const say = (msg, bad) => {
+        if (!note) return;
+        note.textContent = msg;
+        note.className = 'inv-cc-note' + (bad ? ' inv-err' : ' inv-ok');
+      };
+      const { error } = await saveCc();
+      if (error) {
+        cc.toEmail = was;
+        toEl.value = was;
+        say('Could not save that: ' + error.message, true);
+        return;
+      }
+      const hit = cc.roster.find(r => String(r.email).toLowerCase() === cc.toEmail.toLowerCase());
+      say(cc.toEmail
+        ? `Saved. Invoices for ${cc.customerName} go to ${hit && hit.name ? hit.name : cc.toEmail} from now on.`
+        : `Saved. Back to whatever address QuickBooks holds for ${cc.customerName}.`, false);
     });
 
     const addBtn = document.getElementById('ccAddBtn');

@@ -336,7 +336,7 @@ export async function buildPartsInvoicePdf(
 export async function buildQuotePdfFor(db: Db, quoteId: string): Promise<PdfResult> {
   const { data: q, error } = await db.from('desk_quotes')
     .select('id, quote_no, quote_date, valid_days, valid_through, net_days, po_number, '
-          + 'customer_name, customer_email, job_name, scope, reference_part, lump')
+          + 'customer_name, customer_email, bill_to_attn, job_name, scope, reference_part, lump')
     .eq('id', quoteId).maybeSingle();
   if (error) return { ok: false, error: `could not read the quote: ${(error as { message?: string }).message ?? error}` };
   if (!q) return { ok: false, error: 'that quote could not be found' };
@@ -406,6 +406,10 @@ export async function buildQuotePdfFor(db: Db, quoteId: string): Promise<PdfResu
       net_days: q.net_days == null ? null : Number(q.net_days),
       po_number: (q.po_number as string) ?? null,
       customer_name: (q.customer_name as string) ?? null,
+      // Who the quote is made out to. The desk writes both down together;
+      // the Attn line has been blank on every quote until now because this
+      // was never passed, not because nothing was ever picked.
+      bill_to_attn: (q.bill_to_attn as string) ?? null,
       bill_email: (q.customer_email as string) ?? null,
       reference_part: (q.reference_part as string) ?? null,
       job_name: (q.job_name as string) ?? null,
