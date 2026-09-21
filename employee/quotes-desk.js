@@ -478,7 +478,20 @@
         (x.qbCustomerId ? "" : ' · not in QuickBooks') + '</small></button>';
     }).join("");
 
+    // Counted here rather than at the click, so the button says what it will do
+    // before it is pressed instead of refusing afterwards.
+    var usedBy = !c ? [] : S.docs.filter(function (d) { return d.customerId === c.id; });
+
     var editor = !c ? '<p class="qd-empty">No customers yet.</p>' :
+      '<div class="qd-section-hd" style="margin-bottom:14px">' +
+        '<h3>' + esc(c.company) + '</h3><span class="qd-spacer"></span>' +
+        (usedBy.length
+          ? '<span class="qd-note" style="margin:0">' + esc(usedBy.length) +
+            (usedBy.length === 1 ? ' document is' : ' documents are') +
+            ' billed to this company, so it cannot be deleted.</span>'
+          : '<button class="qd-btn qd-btn--mini qd-btn--danger" data-delcust="' + esc(c.id) +
+            '">Delete company</button>') +
+      '</div>' +
       '<div class="qd-grid qd-grid--2">' +
         field("Company", '<input class="qd-input" data-cf="company" value="' + esc(c.company) + '">') +
         field("Billing email", '<input class="qd-input" data-cf="email" value="' + esc(c.email) + '">') +
@@ -740,7 +753,7 @@
   }
 
   MOUNT.addEventListener("click", function (e) {
-    var t = e.target.closest ? e.target.closest("[data-tab],[data-add],[data-del],[data-cust],[data-open],[data-deldoc],[data-act],[data-addcontact],[data-delcontact],[data-donefold]") : null;
+    var t = e.target.closest ? e.target.closest("[data-tab],[data-add],[data-del],[data-cust],[data-open],[data-deldoc],[data-act],[data-addcontact],[data-delcontact],[data-delcust],[data-donefold]") : null;
     if (!t) return;
 
     var v;
@@ -784,6 +797,33 @@
       cu3.contacts = cu3.contacts.filter(function (ct) { return ct.id !== v; });
       if (S.draft.contactId === v) S.draft.contactId = "";
       persist(); render(); return;
+    }
+
+    /* Deleting a company takes its contacts with it, so it refuses while any
+       quote or invoice is billed to it -- a document whose customer no longer
+       exists prints no name, no address and no terms, and there is no getting
+       the company back to repair it. The button is not offered in that case;
+       this is the second check, because a stale screen can still be clicked. */
+    if ((v = t.getAttribute("data-delcust"))) {
+      var gone = customerById(v);
+      if (!gone) return;
+      var held = S.docs.filter(function (d) { return d.customerId === v; });
+      if (held.length) {
+        toast(gone.company + " is on " + held.length +
+              (held.length === 1 ? " document" : " documents") + " and cannot be deleted");
+        return;
+      }
+      if (!window.confirm("Delete " + gone.company + " and its " + gone.contacts.length +
+                          (gone.contacts.length === 1 ? " contact" : " contacts") +
+                          "? This cannot be undone.")) return;
+      S.customers = S.customers.filter(function (x) { return x.id !== v; });
+      if (activeCustomer === v) activeCustomer = S.customers.length ? S.customers[0].id : null;
+      // A draft pointing at a company that no longer exists would quietly lose
+      // its billing details, so it is cut loose rather than left dangling.
+      if (S.draft.customerId === v) { S.draft.customerId = ""; S.draft.contactId = ""; }
+      persist(); render();
+      toast(gone.company + " deleted");
+      return;
     }
 
     if ((v = t.getAttribute("data-act"))) act(v, t);
