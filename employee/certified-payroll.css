@@ -1,0 +1,84 @@
+/* Certified payroll (WH-347) — leans on dark-theme.css, approvals.css and
+   summary.css; only adds what those don't cover. */
+
+.cp-lede { color: var(--dim); font-size: 13px; line-height: 1.6; max-width: 760px; margin-top: 6px; }
+
+.cp-controls { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; margin-bottom: 18px; }
+.cp-control { flex: 1 1 220px; min-width: 200px; }
+.cp-control .field-label { margin-top: 0; }
+.cp-control-week { flex: 1 1 320px; }
+.cp-control-week .week-nav { margin-top: 0; align-items: center; }
+.cp-week-label { flex: 1; text-align: center; font-weight: 800; font-size: 14px; white-space: nowrap; }
+
+.cp-panel { margin-bottom: 14px; padding: 0; overflow: hidden; }
+.cp-panel > summary {
+  cursor: pointer; padding: 14px 16px; font-weight: 800; font-size: 14px; list-style: none;
+  display: flex; align-items: center; gap: 10px;
+}
+.cp-panel > summary::-webkit-details-marker { display: none; }
+.cp-panel > summary::before { content: '\25B8'; color: var(--dim); font-size: 12px; }
+.cp-panel[open] > summary::before { content: '\25BE'; }
+.cp-panel-sub { font-weight: 600; font-size: 12px; color: var(--dim); }
+.cp-panel-body { padding: 4px 16px 16px; border-top: 1px solid var(--line); }
+
+.cp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 16px; }
+.cp-grid .field-label { margin-top: 8px; }
+.cp-grid .input { padding: 10px 12px; font-size: 14px; border-radius: 10px; }
+.cp-grid-wide { grid-column: 1 / -1; }
+.cp-hint { color: var(--dim2); font-size: 12px; line-height: 1.55; margin: 10px 0 0; }
+.cp-switch { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 13px; font-weight: 600; }
+
+.cp-rates { margin-top: 14px; }
+.cp-rates-head { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); margin-bottom: 6px; }
+.cp-rate-row { display: grid; grid-template-columns: 1fr 110px 110px 36px; gap: 8px; align-items: center; margin-bottom: 6px; }
+.cp-rate-row .input { padding: 8px 10px; font-size: 13px; border-radius: 8px; }
+.cp-rate-row .row-x { justify-self: center; }
+
+.cp-crew-row { display: grid; grid-template-columns: 1.2fr 1.2fr 90px 2fr; gap: 8px 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.cp-crew-row:last-child { border-bottom: none; }
+.cp-crew-row .input { padding: 8px 10px; font-size: 13px; border-radius: 8px; }
+.cp-crew-name { font-weight: 700; font-size: 14px; }
+.cp-crew-name .role-tag2 { margin-left: 6px; }
+.cp-crew-head { font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: #8b939f; font-weight: 600; }
+
+.cp-report { margin-top: 6px; }
+.cp-report-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.cp-report-title { font-family: 'Oswald', sans-serif; font-size: 22px; font-weight: 600; letter-spacing: .02em; }
+.cp-report-sub { color: var(--dim); font-size: 13px; margin-top: 3px; line-height: 1.5; }
+.cp-status { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 4px 9px; border-radius: 6px; }
+.cp-status.draft { color: var(--dim); background: var(--steel-700); }
+.cp-status.submitted { color: var(--ok); background: rgba(87,201,140,.14); }
+
+.cp-table-scroll { overflow-x: auto; }
+.cp-table { min-width: 1260px; }
+.cp-table th:first-child, .cp-table td:first-child { min-width: 200px; }
+.cp-table th:nth-child(2), .cp-table td:nth-child(2) { min-width: 120px; }
+.cp-table th, .cp-table td { padding-left: 8px; padding-right: 8px; }
+.cp-table th.day, .cp-table td.day { text-align: center; width: 54px; padding-left: 4px; padding-right: 4px; }
+.cp-table td.day { font-variant-numeric: tabular-nums; }
+.cp-table td.day .ot { display: block; color: var(--molten-2); font-size: 11px; }
+.cp-table td.day .st { display: block; }
+.cp-table td .sub { display: block; font-size: 11px; color: var(--dim2); font-weight: 400; margin-top: 2px; }
+.cp-table td.miss { color: var(--danger); }
+.cp-table tr.tot td { font-weight: 700; border-top: 2px solid #2a2e35; }
+
+.cp-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 18px 0 0; }
+.cp-actions .spacer { flex: 1; }
+.cp-save-msg { font-size: 12px; color: var(--dim); }
+.cp-save-msg.ok { color: var(--ok); }
+.cp-save-msg.bad { color: var(--danger); }
+
+.cp-compliance { margin-top: 16px; }
+.cp-compliance h3 { margin: 0 0 8px; font-family: 'Oswald', sans-serif; font-size: 15px; letter-spacing: .04em; }
+.cp-compliance p { color: var(--dim); font-size: 13px; line-height: 1.6; margin: 0 0 8px; }
+.cp-sign { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 8px; }
+.cp-sign .input { padding: 10px 12px; font-size: 14px; border-radius: 10px; }
+
+.cp-empty { padding: 26px 18px; text-align: center; color: var(--dim); line-height: 1.6; }
+.cp-empty b { color: var(--text); }
+
+@media (max-width: 780px) {
+  .cp-crew-row { grid-template-columns: 1fr 1fr; }
+  .cp-crew-head { display: none; }
+  .cp-rate-row { grid-template-columns: 1fr 80px 80px 32px; }
+}
