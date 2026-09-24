@@ -8,7 +8,10 @@
 .section-note2 span { font-size: 13px; color: var(--dim); font-weight: 500; line-height: 1.5; }
 .btn2.small { font-size: 13px; padding: 8px 14px; white-space: nowrap; }
 
-.jt-head, .jt-row { display: grid; grid-template-columns: 1.7fr .95fr 1.05fr .75fr .75fr .95fr .6fr .65fr .65fr .65fr .65fr .58fr .58fr .58fr 36px; align-items: center; gap: 8px; }
+/* Sixteen columns: Project # sits beside PO #, which is where it is read.
+   Narrow screens never see this -- the head is hidden below and every cell
+   stacks under its own label, so a new column costs nothing there. */
+.jt-head, .jt-row { display: grid; grid-template-columns: 1.7fr .95fr 1.05fr .7fr .7fr .7fr .95fr .6fr .62fr .62fr .62fr .62fr .56fr .56fr .56fr 36px; align-items: center; gap: 8px; }
 
 /* The per-cell wrappers carry each column's name for the phone layout. On a
    wide screen they are not boxes at all: display:contents drops the wrapper and

@@ -1,6 +1,11 @@
 let currentUser = null;
 let jobsList = [];
 let customersList = [];   // qb_customers -- who a job can bill to
+/* The quote desk's contact book, keyed by QuickBooks customer id. The names
+   Gilbert types against each company on the Quotes page are the same people who
+   turn up as the company rep on a job, and typing them twice is how the two
+   drift apart. Read here, never written. */
+let repsByCustomer = new Map();
 
 /* Rate sheets: a customer who bills by named classification rather than by one
    welder rate. Electric Hydrogen is the first. Loaded here so the People tab
@@ -215,7 +220,8 @@ function jobRowHtml(j) {
       ${jf('Bills to', billToCell(j))}
       ${jf('Bid #', `<input class="cell-in bid job-bidnum" value="${escAttr(j.bid_number || '')}" placeholder="Bid #" title="Your bid or quote number for this job. Optional, works on any job, and prints on the invoice.">`)}
       ${jf('PO #', `<input class="cell-in bid job-po" value="${escAttr(j.po_number || '')}" placeholder="PO #" title="The customer's purchase order number for this job. Theirs, not ours &mdash; their accounts match the bill against it, and without it an invoice can sit in a queue until somebody rings up. Prints on the invoice.">`)}
-      ${jf('Company rep', `<input class="cell-in job-rep" value="${escAttr(j.company_rep || '')}" placeholder="Company rep" title="The company representative on this job &mdash; the customer's man, not ours. Prints on the face of the invoice and on the crew sheet behind it, so whoever opens either one at their end knows whose job it is on their side.">`)}
+      ${jf('Project #', `<input class="cell-in bid job-projnum" value="${escAttr(j.project_number || '')}" placeholder="Project #" title="The customer's project number for this job, where they issue one alongside a PO. Theirs, not ours &mdash; the PO is what their accounts match the bill against, the project number is what their engineering side files it under.">`)}
+      ${jf('Company rep', repCell(j))}
       ${jf('Per diem', `<div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num job-pd" value="${escAttr(j.per_diem)}"></div>`)}
       ${jf('Bill rate $/hr', `<div class="c pd-cell billrate-cell"><span class="pd-dollar">$</span><input class="cell-in num job-billrate" value="${escAttr(j.bill_rate)}" placeholder="Default" title="Override the welder's normal bill rate for this job. Leave blank to use their default rate."></div>`)}
       ${jf('Stainless $/hr', `<div class="c pd-cell stainless-cell"><span class="pd-dollar">$</span><input class="cell-in num job-stainless" value="${escAttr(j.stainless_bill_rate)}" title="Bill rate per hour when a welder flags stainless work on this job"></div>`)}
@@ -308,16 +314,63 @@ async function loadJobs() {
   // only typed here is a job the invoice cannot be sent for -- the push refuses
   // with "job X has no QuickBooks customer mapped" -- so the choice is made from
   // the real list and the QuickBooks id is stored with it.
-  const [jobRes, custRes] = await Promise.all([
+  const [jobRes, custRes, deskRes] = await Promise.all([
     sb.from('jobs').select('*').order('name'),
-    sb.from('qb_customers').select('id, display_name, active').eq('active', true).order('display_name')
+    sb.from('qb_customers').select('id, display_name, active').eq('active', true).order('display_name'),
+    sb.from('quote_desk_state').select('state').eq('id', 1).maybeSingle()
   ]);
   jobsList = jobRes.data || [];
+
+  // A desk company carries qbCustomerId, which is what a job is linked by, so
+  // the two line up without anything new being stored. A company with no
+  // QuickBooks link has no job to appear on and is skipped.
+  repsByCustomer = new Map();
+  const deskCustomers = (deskRes && deskRes.data && deskRes.data.state
+    && Array.isArray(deskRes.data.state.customers)) ? deskRes.data.state.customers : [];
+  deskCustomers.forEach((c) => {
+    if (!c || !c.qbCustomerId) return;
+    const names = (c.contacts || [])
+      .map((ct) => String((ct && ct.name) || '').trim())
+      .filter(Boolean);
+    if (names.length) repsByCustomer.set(String(c.qbCustomerId), names);
+  });
   // A failed read must not look like an empty customer list, or every job would
   // appear to be billed to nobody.
   customersList = custRes.error ? null : (custRes.data || []);
   if (custRes.error) console.error('customer list:', custRes.error);
   renderJobs();
+}
+
+/** The company rep cell.
+ *
+ *  A dropdown of the contacts held against this job's customer on the Quotes
+ *  page, so a name typed once there can be picked here rather than typed again.
+ *  Falls back to a plain box in the two cases where a list would be a lie: no
+ *  customer picked yet, and a customer nobody has put contacts against.
+ *
+ *  A rep already on the job who is not in that list stays on it, shown and
+ *  selected. Silently dropping a name because the quote desk has not caught up
+ *  would take it off the next invoice without anybody being told. */
+function repCell(j) {
+  const rep = j.company_rep || '';
+  const TITLE = "The company representative on this job &mdash; the customer's man, not "
+    + 'ours. Prints on the face of the invoice and on the crew sheet behind it, so whoever '
+    + 'opens either one at their end knows whose job it is on their side.';
+
+  const names = j.qb_customer_id ? (repsByCustomer.get(String(j.qb_customer_id)) || []) : [];
+  if (!names.length) {
+    const why = j.qb_customer_id
+      ? ' No contacts on file for this customer yet &mdash; add them on the Quotes page under Customers and they will appear here.'
+      : ' Pick a customer for this job and the contacts held for them appear here.';
+    return `<input class="cell-in job-rep" value="${escAttr(rep)}" placeholder="Company rep" title="${TITLE}${why}">`;
+  }
+
+  const known = names.some((n) => n === rep);
+  return `<select class="cell-in job-rep-pick" title="${TITLE}">
+      <option value="">&mdash; none &mdash;</option>
+      ${rep && !known ? `<option value="${escAttr(rep)}" selected>${esc(rep)}</option>` : ''}
+      ${names.map((n) => `<option value="${escAttr(n)}"${n === rep ? ' selected' : ''}>${esc(n)}</option>`).join('')}
+    </select>`;
 }
 
 /** The bill-to cell. A job already billing to a name QuickBooks does not have
@@ -381,6 +434,28 @@ onList('jobsTable', 'change', async (e) => {
   renderJobs();          // drops the "not in QuickBooks" marker once it is fixed
 });
 
+/* The rep dropdown saves the moment it changes rather than on blur, the same
+   as the customer one above it. A pick that only lands when you happen to click
+   elsewhere is a pick that sometimes does not land at all. */
+onList('jobsTable', 'change', async (e) => {
+  if (!e.target.classList.contains('job-rep-pick')) return;
+  const row = e.target.closest('[data-job-id]');
+  if (!row) return;
+  const job = jobsList.find(j => j.id === row.dataset.jobId);
+  if (!job) return;
+
+  const patch = { company_rep: e.target.value.trim() || null };
+  const was = job.company_rep;
+  const { error } = await sb.from('jobs').update(patch).eq('id', job.id);
+  if (error) {
+    // Never leave a name on screen that is not saved: it prints on the invoice.
+    e.target.value = was || '';
+    alert('Could not set the company rep: ' + error.message);
+    return;
+  }
+  Object.assign(job, patch);
+});
+
 onList('jobsTable', 'blur', async (e) => {
   const row = e.target.closest('[data-job-id]');
   if (!row) return;
@@ -398,6 +473,7 @@ onList('jobsTable', 'blur', async (e) => {
   else if (e.target.classList.contains('job-bidnum')) patch = { bid_number: e.target.value.trim() || null };
   else if (e.target.classList.contains('job-po')) patch = { po_number: e.target.value.trim() || null };
   else if (e.target.classList.contains('job-rep')) patch = { company_rep: e.target.value.trim() || null };
+  else if (e.target.classList.contains('job-projnum')) patch = { project_number: e.target.value.trim() || null };
   if (!patch) return;
 
   Object.assign(job, patch);
