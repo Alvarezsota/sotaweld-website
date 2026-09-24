@@ -4,14 +4,42 @@
 .tab2 { border: none; background: none; color: var(--dim); font-size: 14px; font-weight: 700; padding: 9px 15px; border-radius: 8px; cursor: pointer; font-family: inherit; }
 .tab2.on { background: var(--steel-700); color: var(--text); }
 
+/* The Setup page is the widest thing in the portal -- sixteen columns of job
+   against the six or seven every other page carries -- so it takes the whole
+   window rather than the 1100px .wrap-wide gives everything else, which left
+   the table squeezed into the middle third of a desktop screen with the job
+   names cut in half. Overriding .wrap-wide itself would move every page in the
+   portal to suit this one. The 22px gutter it sets is kept. */
+.as-body { max-width: none; }
+
+/* And a floor under the table. Sixteen columns sharing whatever is left after
+   the window shrinks is how the job names came to be cut in half; below this
+   the panel scrolls sideways instead of squeezing the columns to nothing.
+   Above the stacked breakpoint only -- a phone lays each cell out under its
+   own label and must never be made to scroll sideways. */
+@media (min-width: 761px) {
+  #jobsPanel { overflow-x: auto; }
+  /* Measured, not guessed: the floor is what the longest real value in each
+     column needs side by side -- "Project Roadrunner (Infinium / EH2)",
+     "ROCKING DOUBLE S LLC", a full PO number and a rep's full name. Below it
+     the panel scrolls sideways; above it nothing is ever cut off. */
+  #jobsPanel .jt-head, #jobsPanel .jt-row { min-width: 1660px; }
+  #jobsPanel .section-note2 { position: sticky; left: 0; }
+}
+
 .section-note2 { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; background: var(--steel-850); border: 1px solid var(--line); border-radius: 12px; padding: 13px 16px; margin-bottom: 16px; }
 .section-note2 span { font-size: 13px; color: var(--dim); font-weight: 500; line-height: 1.5; }
 .btn2.small { font-size: 13px; padding: 8px 14px; white-space: nowrap; }
 
 /* Sixteen columns: Project # sits beside PO #, which is where it is read.
    Narrow screens never see this -- the head is hidden below and every cell
-   stacks under its own label, so a new column costs nothing there. */
-.jt-head, .jt-row { display: grid; grid-template-columns: 1.7fr .95fr 1.05fr .7fr .7fr .7fr .95fr .6fr .62fr .62fr .62fr .62fr .56fr .56fr .56fr 36px; align-items: center; gap: 8px; }
+   stacks under its own label, so a new column costs nothing there.
+
+   The Job column is given more than twice the share of anything beside it
+   because it holds the longest string on the row by far -- "Project Roadrunner
+   (Infinium / EH2)" against "Net 30" -- and it is the one you read to find the
+   row you want. A cut-off job name makes the whole table useless. */
+.jt-head, .jt-row { display: grid; grid-template-columns: 3.2fr .95fr 1.95fr .7fr .85fr .7fr 1.35fr .6fr .6fr .6fr .6fr .6fr .5fr .5fr .5fr 36px; align-items: center; gap: 8px; }
 
 /* The per-cell wrappers carry each column's name for the phone layout. On a
    wide screen they are not boxes at all: display:contents drops the wrapper and
