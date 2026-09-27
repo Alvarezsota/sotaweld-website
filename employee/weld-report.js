@@ -238,14 +238,34 @@ function forJobSlotHtml(entry) {
 function jobSelectHtml(entry) {
   const other = entry.jobId === 'other';
   const admin = isAdmin();
-  const fromTicket = !admin && ticketJobIds.length > 0;
 
-  if (!fromTicket) {
+  if (admin) {
     return `<select class="input job-select">
         <option value="">Pick your job…</option>
         ${pickable(jobs, entry.jobId).map(j => `<option value="${j.id}" ${entry.jobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${j.is_yard ? ' (yard)' : ''}${putAway(j)}</option>`).join('')}
         <option value="other" ${other ? 'selected' : ''}>+ Other / one-off job…</option>
       </select>`;
+  }
+
+  /* No ticket, no jobs. A job he did not put hours against does not exist on
+     this screen, and that has to include the case where he has put hours
+     against nothing at all -- otherwise the one day the rule matters most, the
+     day nothing is filed, is the day the whole list comes back.
+
+     Nothing is lost by it. The report already refuses to submit without a
+     ticket and the banner above says so and links to the hours screen; this
+     only stops him filling a card in first and finding out afterwards. */
+  if (!ticketJobIds.length) {
+    const saved = entry.jobId && entry.jobId !== 'other'
+      ? jobs.find((j) => j.id === entry.jobId) : null;
+    return `<select class="input job-select"${saved ? '' : ' disabled'}>
+        ${saved
+          ? `<option value="${saved.id}" selected>${esc(saved.name)}${saved.operator ? ' — ' + esc(saved.operator) : ''}</option>`
+          : '<option value="" selected>Log your hours first…</option>'}
+      </select>
+      <span class="wr-job-note">${saved
+        ? 'From a report already filed. Your hours for this day are not logged yet.'
+        : 'Your jobsite comes from your hours. Log them for this day and it will appear here.'}</span>`;
   }
 
   const onTicket = ticketJobIds
