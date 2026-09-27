@@ -310,3 +310,13 @@
 @media (max-width: 760px) {
   .wr-qty-input { font-size: 16px; width: 58px; padding: 9px 3px; }
 }
+
+/* Says where the jobsite came from. On a one-job day the picker is disabled and
+   this is the only thing telling him why, so it is not decoration. */
+.wr-job-note {
+  display: block;
+  margin: 6px 2px 0;
+  font-size: 12px;
+  color: var(--dim, #949aa1);
+  line-height: 1.4;
+}

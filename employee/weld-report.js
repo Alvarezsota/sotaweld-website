@@ -12,6 +12,22 @@ let weldTargets = {};
 // Empty when no ticket has been filed yet, which is not the same as zero hours.
 let ticketHoursByCustomer = {};
 
+/* The jobs his time ticket says he was on that day, most hours first.
+   
+   Derrick filed a weld report against Vaquero Vermejo #8 on 21 September while
+   his ticket said Vaquero Scoop, and nobody had logged an hour on Vermejo for
+   nine days. The inches landed on a job the crew had left, and the split he
+   recorded had no partner on that job to match it, which is what raised the
+   flag. The picker offered him every live job in the company and nothing
+   noticed that none of them was where he had actually been.
+   
+   So the report follows the ticket: one job on the ticket and that job is the
+   answer, two and he picks between those two. The ticket is filed first -- the
+   report already refuses without it -- so by the time he is choosing, the day
+   is settled. Empty means no ticket yet, and then nothing is restricted,
+   because a man who has not filed his hours is stopped by the banner instead. */
+let ticketJobIds = [];
+
 /* Whether he has filed his hours for the day he is reporting on.
  *
  * The weld report says what he welded. The hours ticket says which job he was
@@ -104,8 +120,19 @@ function newMiscRow(desc) {
 function newSplitLine(nominal, schedule, qty) {
   return { uid: uid(), nominal: nominal || '', schedule: schedule || 'std', qty: qty != null ? qty : 1 };
 }
+/* A fresh card comes up already pointing at the job his hours say he was on.
+   On a split day the second card takes the second job rather than repeating the
+   first, which is the whole reason a man opens a second card. Falls back to
+   empty when there is no ticket, and an admin is never pre-filled -- he is
+   usually here to put right a report that went to the wrong place. */
+function defaultJobId() {
+  if (isAdmin() || !ticketJobIds.length) return '';
+  const taken = entries.map((e) => e.jobId).filter(Boolean);
+  return ticketJobIds.find((id) => !taken.includes(id)) || ticketJobIds[0];
+}
+
 function newEntry() {
-  return { uid: uid(), rowId: null, jobId: '', oneOffName: '', forJobId: '', miscRows: [newMiscRow()], splitPartnerId: '', splitLines: [] };
+  return { uid: uid(), rowId: null, jobId: defaultJobId(), oneOffName: '', forJobId: '', miscRows: [newMiscRow()], splitPartnerId: '', splitLines: [] };
 }
 
 function miscRowHtml(r) {
@@ -187,6 +214,62 @@ function forJobSlotHtml(entry) {
     </div>`;
 }
 
+/* The jobsite picker.
+ *
+ * Off the ticket when there is one: the jobs he logged hours against that day
+ * and nothing else. One job and there is nothing to choose, so it says so and
+ * is left disabled -- the value still posts, a disabled select is skipped by
+ * nothing here because the entry carries jobId, not the DOM. Two jobs and he
+ * picks between them.
+ *
+ * Three things deliberately still get through:
+ *
+ *   An admin sees the whole list. Gilbert fixes these reports, and a screen
+ *   that will not let him point one at the right job is a screen he has to go
+ *   round through the database.
+ *
+ *   A job already on the report stays selectable even when it is not on the
+ *   ticket, marked as such. Dropping it would blank the select over a saved
+ *   report and the next save would write null.
+ *
+ *   No ticket, no restriction. He is stopped by the banner instead, and
+ *   guessing at his jobs from nothing would be worse than the old list.
+ */
+function jobSelectHtml(entry) {
+  const other = entry.jobId === 'other';
+  const admin = isAdmin();
+  const fromTicket = !admin && ticketJobIds.length > 0;
+
+  if (!fromTicket) {
+    return `<select class="input job-select">
+        <option value="">Pick your job…</option>
+        ${pickable(jobs, entry.jobId).map(j => `<option value="${j.id}" ${entry.jobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${j.is_yard ? ' (yard)' : ''}${putAway(j)}</option>`).join('')}
+        <option value="other" ${other ? 'selected' : ''}>+ Other / one-off job…</option>
+      </select>`;
+  }
+
+  const onTicket = ticketJobIds
+    .map((id) => jobs.find((j) => j.id === id))
+    .filter(Boolean);
+  const strayId = entry.jobId && entry.jobId !== 'other' && !ticketJobIds.includes(entry.jobId)
+    ? entry.jobId : '';
+  const stray = strayId ? jobs.find((j) => j.id === strayId) : null;
+  const lone = onTicket.length === 1 && !stray && !other;
+
+  const opt = (j, note) => `<option value="${j.id}" ${entry.jobId === j.id ? 'selected' : ''}>${
+    esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${j.is_yard ? ' (yard)' : ''}${note || ''}</option>`;
+
+  return `<select class="input job-select"${lone ? ' disabled' : ''}>
+      ${lone ? '' : '<option value="">Pick your job…</option>'}
+      ${onTicket.map((j) => opt(j)).join('')}
+      ${stray ? opt(stray, ' (not on your hours)') : ''}
+      ${other ? '<option value="other" selected>+ Other / one-off job…</option>' : ''}
+    </select>
+    <span class="wr-job-note">${lone
+      ? 'Taken from your hours for this day.'
+      : 'You logged hours on ' + onTicket.length + ' jobs this day — pick the one these welds were on.'}</span>`;
+}
+
 function entryCardHtml(entry) {
   const other = entry.jobId === 'other';
   return `
@@ -196,11 +279,7 @@ function entryCardHtml(entry) {
         <button type="button" class="remove-job" data-action="remove-entry">&times; Remove</button>
       </div>
       <label class="field-label">Jobsite</label>
-      <select class="input job-select">
-        <option value="">Pick your job…</option>
-        ${pickable(jobs, entry.jobId).map(j => `<option value="${j.id}" ${entry.jobId === j.id ? 'selected' : ''}>${esc(j.name)}${j.operator ? ' — ' + esc(j.operator) : ''}${j.is_yard ? ' (yard)' : ''}${putAway(j)}</option>`).join('')}
-        <option value="other" ${other ? 'selected' : ''}>+ Other / one-off job…</option>
-      </select>
+      ${jobSelectHtml(entry)}
       <div data-oneoff-slot>${oneOffSlotHtml(entry)}</div>
       <div data-forjob-slot>${forJobSlotHtml(entry)}</div>
 
@@ -793,6 +872,7 @@ function setHelper(id, why) {
    dropped on the floor. */
 async function loadTicketHours(date) {
   ticketHoursByCustomer = {};
+  ticketJobIds = [];
   ticketFiled = null;
   try {
     const { data: rows } = await sb.from('daily_entries')
@@ -801,14 +881,22 @@ async function loadTicketHours(date) {
     // Any ticket at all counts, including one on a job with no customer set.
     // The question is whether the day is accounted for, not whose it was.
     ticketFiled = (rows || []).length > 0;
+    const hoursByJob = new Map();
     (rows || []).forEach((r) => {
-      const cust = targetCustomerForJob(r.job_id, r.for_job_id);
       const hrs = Number(r.hours);
+      // The job as the ticket names it, not the yard's target: a man reporting
+      // yard work picks the yard here and says who it is for underneath, the
+      // same as he always did.
+      if (r.job_id) hoursByJob.set(r.job_id, (hoursByJob.get(r.job_id) || 0) + (hrs > 0 ? hrs : 0));
+      const cust = targetCustomerForJob(r.job_id, r.for_job_id);
       if (!cust || !(hrs > 0)) return;
       ticketHoursByCustomer[cust.id] = (ticketHoursByCustomer[cust.id] || 0) + hrs;
     });
+    // Most hours first, so a split day defaults to where he spent it.
+    ticketJobIds = [...hoursByJob.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
   } catch {
     ticketHoursByCustomer = {};   // never judge a day against another day's hours
+    ticketJobIds = [];            // and never restrict off a lookup that failed
     // A lookup that failed is not proof he skipped it. Letting him through is
     // the right way to be wrong here: the alternative is a man who did log his
     // work being locked out of his report by a dropped connection.
