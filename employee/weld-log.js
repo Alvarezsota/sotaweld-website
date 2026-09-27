@@ -832,6 +832,69 @@ document.getElementById('nextWeekBtn').addEventListener('click', () => { weekSta
 
 const WELD_DIGEST_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/weld-digest';
 
+/* Which customers actually have weld inches on the date in the box.
+ *
+ * Read off that date rather than listed from the customer table, because the
+ * question is not who we bill, it is who was worked that day. A list of every
+ * customer would let him pick one with nothing on it, and the function answers
+ * that with a 404 -- a refusal for asking a reasonable question.
+ *
+ * The name is derived exactly as weld-digest derives it: the QuickBooks name
+ * first so every job linked to that customer lands in one bundle however its
+ * bill_to was typed, the typed text second, "Unassigned" last. If these two
+ * ever disagree the dropdown offers something the send cannot match, so they
+ * are kept the same on purpose.
+ */
+function customerOfReport(row) {
+  const j = effectiveJobFor(row);
+  return ((j && j.qb_customer_name) || '').trim()
+      || ((j && j.bill_to) || '').trim()
+      || 'Unassigned';
+}
+
+async function loadEmailCustomers(date) {
+  const sel = document.getElementById('emailCustomer');
+  if (!sel) return;
+  const had = sel.value;
+
+  if (!date) {
+    sel.innerHTML = '<option value="">All customers</option>';
+    sel.disabled = true;
+    return;
+  }
+
+  try {
+    const { data, error } = await sb.from('weld_reports')
+      .select('job_id, for_job_id')
+      .eq('report_date', date);
+    if (error) throw error;
+
+    const names = [...new Set((data || []).map(customerOfReport))]
+      .sort((a, b) => a === 'Unassigned' ? 1 : b === 'Unassigned' ? -1 : a.localeCompare(b));
+
+    if (!names.length) {
+      sel.innerHTML = '<option value="">No weld reports on this date</option>';
+      sel.disabled = true;
+      return;
+    }
+
+    sel.disabled = false;
+    sel.innerHTML = '<option value="">All customers (' + names.length + ')</option>'
+      + names.map((n) => `<option value="${escAttr(n)}">${esc(n)}</option>`).join('');
+    // Keep his pick across a date change when that customer worked both days.
+    if (had && names.includes(had)) sel.value = had;
+  } catch {
+    // A failed lookup must not take the whole send away. Fall back to the
+    // everything option, which is what the button did before this existed.
+    sel.innerHTML = '<option value="">All customers</option>';
+    sel.disabled = false;
+  }
+}
+
+document.getElementById('emailDateInput').addEventListener('change', (e) => {
+  loadEmailCustomers(e.target.value);
+});
+
 document.getElementById('emailCcPreset').addEventListener('change', (e) => {
   const email = e.target.value;
   if (!email) return;
@@ -848,6 +911,7 @@ document.getElementById('sendLogEmailBtn').addEventListener('click', async () =>
   const date = document.getElementById('emailDateInput').value;
   const to = document.getElementById('emailToInput').value.trim();
   const cc = document.getElementById('emailCcInput').value.trim();
+  const customer = document.getElementById('emailCustomer').value;
 
   if (!date || !to) {
     statusEl.textContent = 'Pick a date and enter an email address.';
@@ -864,7 +928,7 @@ document.getElementById('sendLogEmailBtn').addEventListener('click', async () =>
     const res = await fetch(WELD_DIGEST_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-      body: JSON.stringify({ date, to, cc })
+      body: JSON.stringify(customer ? { date, to, cc, customer } : { date, to, cc })
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || `Send failed (${res.status})`);
@@ -883,7 +947,9 @@ document.getElementById('sendLogEmailBtn').addEventListener('click', async () =>
 
       const ccNote = json.ccList && json.ccList.length ? ` (cc: ${json.ccList.join(', ')})` : '';
       const list = done.map(s => `${s.customer} ${Number(s.inches || 0).toFixed(2)} in`).join(' · ');
-      const lead = done.length === 1 ? 'Sent one email' : `Sent ${done.length} emails, one per customer,`;
+      const lead = done.length === 1
+        ? (customer ? `Sent ${customer}'s log` : 'Sent one email')
+        : `Sent ${done.length} emails, one per customer,`;
       statusEl.textContent = `${lead} to ${to}${ccNote} — ${list}.`;
       statusEl.className = 'wl-email-status wl-email-ok';
 
@@ -933,7 +999,10 @@ document.getElementById('newReportBtn').addEventListener('click', () => {
   document.getElementById('emailDateInput').value = todayIso();
   document.getElementById('emailToInput').value = currentUser.email;
 
+  // loadWeek fills jobsById, and without it every report resolves to
+  // Unassigned -- so the customer list is built after it, not before.
   await loadWeek();
+  await loadEmailCustomers(todayIso());
 
   // Hours come from the daily entries, which Approvals can change after a report
   // was turned in, so watch those as closely as the reports themselves.
