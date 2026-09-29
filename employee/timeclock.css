@@ -82,6 +82,28 @@
 .tc-card-total { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .tc-empty { margin: 8px 2px; font-size: 13px; color: var(--dim2); font-style: italic; }
 
+/* --------------------------------------------------- a day already worked */
+.tc-add-toggle {
+  background: none; border: 1px solid var(--line); border-radius: 8px;
+  color: var(--molten); font: inherit; font-size: 12px; font-weight: 700;
+  padding: 6px 12px; cursor: pointer; white-space: nowrap;
+}
+.tc-add-toggle:hover { border-color: var(--molten); }
+/* display:grid on the box below would outrank the browser's rule for [hidden],
+   the same trap the whose-clock bar fell into. */
+.tc-addday[hidden] { display: none; }
+.tc-addday { display: block; padding-top: 4px; }
+.tc-add-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.tc-add-field { display: flex; flex-direction: column; gap: 4px; }
+.tc-add-field span {
+  font-size: 10px; font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--dim);
+}
+.tc-add-date { grid-column: 1 / -1; }
+.tc-add-note { margin: 10px 0 0; font-size: 12px; color: var(--dim2); }
+.tc-add-actions { display: flex; gap: 10px; margin-top: 12px; }
+.tc-add-actions .btn2 { flex: 1; }
+
 /* ------------------------------------------------------------- the punches */
 .tc-punch {
   display: grid; grid-template-columns: 74px 1fr auto auto auto;

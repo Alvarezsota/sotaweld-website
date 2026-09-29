@@ -435,6 +435,87 @@ $('todayList').addEventListener('click', async (e) => {
   await reload();
 });
 
+/* ----------------------------------------------------- a day already worked */
+
+/* The earliest day that can be posted: Monday of last week. The same line the
+   database draws, drawn again here so the date box will not even offer a day
+   that is going to come back refused. */
+function earliestPostable() {
+  return addDays(getMonday(new Date()), -7);
+}
+
+function applyAddDayLimits() {
+  const el = $('adDate');
+  el.min = ymd(earliestPostable());
+  el.max = ymd(new Date());
+  if (!el.value) {
+    // Yesterday, since a day you are posting after the fact is usually the one
+    // just gone -- but never before the floor, on a Monday.
+    const y = addDays(new Date(), -1);
+    el.value = ymd(y < earliestPostable() ? new Date() : y);
+  }
+}
+
+function addDaySay(text, kind) {
+  const el = $('adMsg');
+  el.textContent = text || '';
+  el.className = 'tc-msg' + (kind ? ` tc-msg-${kind}` : '');
+}
+
+$('addDayToggle').addEventListener('click', () => {
+  const box = $('addDayBox');
+  box.hidden = !box.hidden;
+  $('addDayToggle').textContent = box.hidden ? 'Post a day' : 'Close';
+  if (!box.hidden) { applyAddDayLimits(); addDaySay(''); $('adDate').focus(); }
+});
+
+$('adCancel').addEventListener('click', () => {
+  $('addDayBox').hidden = true;
+  $('addDayToggle').textContent = 'Post a day';
+  addDaySay('');
+});
+
+$('adSave').addEventListener('click', async () => {
+  const btn = $('adSave');
+  const date = $('adDate').value;
+  const tIn = $('adIn').value;
+  const tOut = $('adOut').value;
+  const lOut = $('adLunchOut').value;
+  const lIn = $('adLunchIn').value;
+
+  if (!date) { addDaySay('Pick the day.', 'err'); return; }
+  if (!tIn || !tOut) { addDaySay('A day needs a time in and a time out.', 'err'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Posting...';
+  addDaySay('');
+  try {
+    const { data, error } = await sb.rpc('office_add_day', {
+      p_date: date,
+      p_in: tIn,
+      p_out: tOut,
+      p_lunch_out: lOut || null,
+      p_lunch_in: lIn || null,
+      p_employee: isMine() ? null : whoId,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    const when = new Date(`${date}T12:00:00`);
+
+    // Posting a day in the week on screen should show it landing. Posting one
+    // in the week before means going and looking at a week nobody asked for,
+    // so say what it came to instead.
+    await reload();
+    addDaySay(`${dayLabel(when)}: ${hoursFmt(row ? row.hours : 0)} hours posted.`, 'ok');
+    $('adLunchOut').value = $('adLunchIn').value = '';
+  } catch (err) {
+    addDaySay(cleanError(err), 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Post this day';
+  }
+});
+
 $('prevWeek').addEventListener('click', async () => {
   weekStart = addDays(weekStart, -7);
   await loadWeek();
@@ -472,6 +553,7 @@ setInterval(() => {
 (async function start() {
   if (!(await loadWho())) return;
   weekStart = getMonday(new Date());
+  applyAddDayLimits();
   await reload();
 
   // A punch made on the shop phone should show up on the office screen without

@@ -63,6 +63,36 @@
     <p class="tc-msg" id="clockMsg"></p>
   </section>
 
+  <!-- A day already worked. The clock starts mid-week, so the days before it
+       started have to get in somehow; afterwards this is the Tuesday somebody
+       forgets to tap in. Two weeks back and no further. -->
+  <section class="tc-card tc-addcard">
+    <div class="tc-card-head">
+      <h2 class="tc-card-title">A day you already worked</h2>
+      <button type="button" class="tc-add-toggle" id="addDayToggle">Post a day</button>
+    </div>
+    <div class="tc-addday" id="addDayBox" hidden>
+      <div class="tc-add-grid">
+        <label class="tc-add-field tc-add-date"><span>Day</span>
+          <input type="date" class="input" id="adDate"></label>
+        <label class="tc-add-field"><span>In</span>
+          <input type="time" class="input" id="adIn" value="08:00"></label>
+        <label class="tc-add-field"><span>Out</span>
+          <input type="time" class="input" id="adOut" value="17:00"></label>
+        <label class="tc-add-field"><span>Lunch from</span>
+          <input type="time" class="input" id="adLunchOut" placeholder="optional"></label>
+        <label class="tc-add-field"><span>Lunch to</span>
+          <input type="time" class="input" id="adLunchIn" placeholder="optional"></label>
+      </div>
+      <p class="tc-add-note">Leave both lunch boxes empty if you did not take one. Lunch is not paid.</p>
+      <div class="tc-add-actions">
+        <button type="button" class="btn2 btn2-solid" id="adSave">Post this day</button>
+        <button type="button" class="btn2 btn2-ghost" id="adCancel">Cancel</button>
+      </div>
+      <p class="tc-msg" id="adMsg"></p>
+    </div>
+  </section>
+
   <section class="tc-card">
     <div class="tc-card-head">
       <h2 class="tc-card-title">Today</h2>
