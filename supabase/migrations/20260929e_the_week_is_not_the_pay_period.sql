@@ -5,16 +5,15 @@
 -- welders' tickets run on -- and over forty hours in it is paid at one and a
 -- half. That is settled and this does not change it.
 --
--- QuickBooks pays on a different calendar. The pay period is Thursday to
--- Wednesday, paid the Friday after: 09-24 to 09-30, paid 10-02. So every
--- payroll run reaches across two workweeks and takes part of each.
+-- Payroll runs on the same seven days: Monday to Sunday, paid the Friday
+-- after. So the pay period and the workweek are the same week here, and the
+-- two sets of figures agree.
 --
--- Both can be true at once -- federal law lets an employer fix any recurring
--- seven-day workweek, and it does not have to match the pay period -- but it
--- means the week's total on screen is NOT the number typed into the run. The
--- run wants the hours that fall inside 09-24 to 09-30. Overtime is still
--- decided by the Monday-to-Sunday week, but only the overtime hours that land
--- inside those seven days belong to that cheque.
+-- They are still worked out separately, because they are separately true and
+-- nothing guarantees they stay aligned. QuickBooks arrived set to Thursday-to-
+-- Wednesday periods, which is a thing a payroll schedule can be, and if a
+-- period ever stops matching the workweek again the page says what the run is
+-- owed rather than quietly handing over the wrong week's total.
 --
 -- HOW AN OVERTIME HOUR GETS A DATE
 -- ---------------------------------------------------------------------------
@@ -28,12 +27,14 @@
 -- Where the pay period starts. One Thursday on file and every period is seven
 -- days from it, so this follows QuickBooks rather than guessing, and a change
 -- of schedule is one row rather than a code change.
+-- A Monday, and paid the Friday after the Sunday it ends on: 09-21 to 09-27
+-- is paid 10-02.
 insert into public.app_settings (key, value)
-values ('payroll_period_anchor', '2026-09-24')
+values ('payroll_period_anchor', '2026-09-21')
 on conflict (key) do nothing;
 
 insert into public.app_settings (key, value)
-values ('payroll_pay_day_offset', '2')
+values ('payroll_pay_day_offset', '5')
 on conflict (key) do nothing;
 
 create or replace function public.office_pay_period(p_for date default null)
@@ -43,8 +44,8 @@ set search_path to 'public'
 as $$
   with a as (
     select coalesce((select value::date from app_settings where key = 'payroll_period_anchor'),
-                    date '2026-09-24') as anchor,
-           coalesce((select value::int from app_settings where key = 'payroll_pay_day_offset'), 2) as pay_offset,
+                    date '2026-09-21') as anchor,
+           coalesce((select value::int from app_settings where key = 'payroll_pay_day_offset'), 5) as pay_offset,
            coalesce(p_for, (now() at time zone 'America/Chicago')::date) as d
   )
   -- Modulo, so it works for a date before the anchor as well as after it.
