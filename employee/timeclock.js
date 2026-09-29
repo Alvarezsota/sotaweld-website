@@ -20,6 +20,11 @@ let todayRows = [];
 let weekStart = null;
 let weekDays = [];
 let weekTotals = null;
+/* The QuickBooks pay period the week on screen falls in, and what that run
+   should be paid. Not the same seven days as the week above it, which is the
+   whole reason it is here. */
+let payPeriod = null;
+let periodTotals = null;
 let busy = false;
 let editingId = null;
 
@@ -161,6 +166,24 @@ async function loadWeek() {
   ]);
   weekDays = days || [];
   weekTotals = weeks || null;
+  await loadPeriod();
+}
+
+/* The pay period only matters to whoever is typing the payroll run, so it is
+   not fetched for the person clocking in and out. Asked for by the LAST day of
+   the week on screen: a Monday-to-Sunday week reaches into two Thursday-to-
+   Wednesday periods, and the later one is the run still to be paid. */
+async function loadPeriod() {
+  if (!isAdmin()) { payPeriod = null; periodTotals = null; return; }
+  const { data: p } = await sb.rpc('office_pay_period', { p_for: ymd(addDays(weekStart, 6)) });
+  payPeriod = (Array.isArray(p) ? p[0] : p) || null;
+  if (!payPeriod) { periodTotals = null; return; }
+  const { data: t } = await sb.rpc('office_period_totals', {
+    p_employee: whoId,
+    p_start: payPeriod.period_start,
+    p_end: payPeriod.period_end,
+  });
+  periodTotals = (Array.isArray(t) ? t[0] : t) || null;
 }
 
 async function reload() {
@@ -329,13 +352,55 @@ function renderWeek() {
         <span class="tc-pay-sub">at $${esc(num(t.pay_rate).toFixed(2))}/hr</span>
       </div>` : ''}
     </div>
-    ${isAdmin() ? `<p class="tc-pay-note">These are the two numbers the QuickBooks payroll run
-      asks for: <b>${esc(hoursFmt(reg))}</b> regular and <b>${esc(hoursFmt(ot))}</b> overtime${
-      t && t.qb_employee_id ? ` for employee ${esc(t.qb_employee_id)}` : ''}.</p>` : ''}`;
+    ${isAdmin() ? periodHtml(t) : ''}`;
 
   $('footNote').textContent = isMine()
     ? 'Your week runs Monday to Sunday. Anything over 40 hours in it is paid at time and a half.'
     : 'The week runs Monday to Sunday. Anything over 40 hours in it is paid at time and a half.';
+}
+
+/* What the payroll run is actually owed.
+ *
+ * The week above this is a workweek: Monday to Sunday, and over forty hours in
+ * it is overtime. That is the law's unit and the shop's unit, and it is not
+ * the unit QuickBooks pays in -- the pay period runs Thursday to Wednesday, so
+ * every run takes part of one workweek and part of the next.
+ *
+ * Typing the week's total into the run would therefore pay the wrong number,
+ * which is what this page used to invite. These figures are the hours that
+ * fall inside the period, with overtime still decided by the workweek and
+ * counted on the days it was worked.
+ */
+function periodHtml(weekRow) {
+  if (!payPeriod || !periodTotals) return '';
+  const p = periodTotals;
+  const span = (a, b) => {
+    const s = new Date(`${a}T12:00:00`);
+    const e = new Date(`${b}T12:00:00`);
+    const f = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `${f(s)} \u2013 ${f(e)}`;
+  };
+  const paid = new Date(`${payPeriod.pay_date}T12:00:00`);
+  const differs = Math.abs(num(p.hours) - num(weekRow && weekRow.hours)) > 0.005;
+
+  return `
+    <div class="tc-period">
+      <div class="tc-period-head">
+        QuickBooks pay period &middot; ${esc(span(payPeriod.period_start, payPeriod.period_end))}
+        <span class="tc-period-paid">paid ${esc(paid.toLocaleDateString(undefined,
+          { weekday: 'short', month: 'short', day: 'numeric' }))}</span>
+      </div>
+      <div class="tc-period-nums">
+        <span><b>${esc(hoursFmt(p.regular_hours))}</b> regular</span>
+        <span><b>${esc(hoursFmt(p.overtime_hours))}</b> overtime</span>
+        <span class="tc-period-gross">$${esc(num(p.gross_pay).toFixed(2))}</span>
+      </div>
+      <p class="tc-period-note">These are the numbers this run asks for${
+        weekRow && weekRow.qb_employee_id ? `, for employee ${esc(weekRow.qb_employee_id)}` : ''}.${
+        differs ? ' They are not the week above: the pay period runs Thursday to Wednesday '
+          + 'and the workweek runs Monday to Sunday, so each run takes part of two weeks. '
+          + 'Overtime is still worked out on the Monday-to-Sunday week.' : ''}</p>
+    </div>`;
 }
 
 function render() {

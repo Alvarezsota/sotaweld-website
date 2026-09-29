@@ -211,6 +211,34 @@
 .tc-pay-note { margin: 12px 0 0; font-size: 12px; color: var(--dim); line-height: 1.5; }
 .tc-pay-note b { color: var(--text); font-variant-numeric: tabular-nums; }
 
+/* The pay period, set apart from the week above it on purpose: two sets of
+   numbers that look alike and mean different things is exactly how the wrong
+   one gets typed into payroll. */
+.tc-period {
+  margin-top: 14px; padding: 12px 14px;
+  background: var(--steel-800); border: 1px solid var(--line);
+  border-left: 3px solid var(--molten); border-radius: 10px;
+}
+.tc-period-head {
+  font-size: 11px; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dim);
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline;
+}
+.tc-period-paid { color: var(--dim2); letter-spacing: .06em; }
+.tc-period-nums {
+  display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; margin-top: 8px;
+  font-size: 13px; color: var(--dim);
+}
+.tc-period-nums b {
+  font-size: 19px; font-weight: 800; color: var(--text);
+  font-variant-numeric: tabular-nums; margin-right: 3px;
+}
+.tc-period-gross {
+  margin-left: auto; font-size: 17px; font-weight: 800; color: var(--molten);
+  font-variant-numeric: tabular-nums;
+}
+.tc-period-note { margin: 8px 0 0; font-size: 11px; color: var(--dim2); line-height: 1.55; }
+
 .tc-foot { margin: 4px 2px 0; font-size: 12px; color: var(--dim2); line-height: 1.5; }
 
 @media (min-width: 560px) {
