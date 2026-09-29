@@ -25,6 +25,10 @@ let weekTotals = null;
    whole reason it is here. */
 let payPeriod = null;
 let periodTotals = null;
+/* Weeks already paid. A locked week is history to whoever worked it -- no
+   posting into it, no changing it, no deleting from it -- and still open to
+   whoever paid it, because a correction after payday is a real thing. */
+let lockedWeeks = new Set();
 let busy = false;
 let editingId = null;
 
@@ -166,8 +170,18 @@ async function loadWeek() {
   ]);
   weekDays = days || [];
   weekTotals = weeks || null;
-  await loadPeriod();
+  await Promise.all([loadPeriod(), loadLocks()]);
 }
+
+/* Every lock this person has, not just the week on screen: the post-a-day box
+   needs to know whether last week is shut before it offers it. */
+async function loadLocks() {
+  const { data } = await sb.from('office_week_locks')
+    .select('week_start').eq('employee_id', whoId);
+  lockedWeeks = new Set((data || []).map((r) => r.week_start));
+}
+
+const weekIsPaid = (mondayIso) => lockedWeeks.has(mondayIso);
 
 /* The pay period only matters to whoever is typing the payroll run, so it is
    not fetched for the person clocking in and out. Asked for by the LAST day of
@@ -189,6 +203,7 @@ async function loadPeriod() {
 async function reload() {
   await Promise.all([loadState(), loadToday(), loadWeek()]);
   render();
+  applyAddDayLimits();
 }
 
 /* ------------------------------------------------------------------ drawing */
@@ -289,7 +304,9 @@ function renderToday() {
 }
 
 function renderWeek() {
-  $('weekLabel').textContent = weekLabelText(weekStart);
+  const paid = weekIsPaid(ymd(weekStart));
+  $('weekLabel').innerHTML = `${esc(weekLabelText(weekStart))}${
+    paid ? '<span class="tc-paid-tag">paid</span>' : ''}`;
 
   const byDate = {};
   weekDays.forEach((d) => { byDate[d.work_date] = d; });
@@ -354,6 +371,8 @@ function renderWeek() {
     </div>
     ${isAdmin() ? periodHtml(t) : ''}`;
 
+  $('lockBar').innerHTML = lockBarHtml(paid);
+
   $('footNote').textContent = isMine()
     ? 'Your week runs Monday to Sunday. Anything over 40 hours in it is paid at time and a half.'
     : 'The week runs Monday to Sunday. Anything over 40 hours in it is paid at time and a half.';
@@ -401,6 +420,26 @@ function periodHtml(weekRow) {
           + 'and the workweek runs Monday to Sunday, so each run takes part of two weeks. '
           + 'Overtime is still worked out on the Monday-to-Sunday week.' : ''}</p>
     </div>`;
+}
+
+/* Marking a week paid is a person's decision, not a date. Nothing here knows
+   when a payroll run went in -- only the man who submitted it does -- so he
+   taps it, and from then on the week is shut to everybody but him. */
+function lockBarHtml(paid) {
+  if (isAdmin()) {
+    return `
+      <div class="tc-lock${paid ? ' is-paid' : ''}">
+        <span class="tc-lock-text">${paid
+          ? 'This week is marked paid. She cannot add to it or change it; you still can.'
+          : 'Mark this week paid once you have submitted the payroll run. It then stops moving underneath the cheque.'}</span>
+        <button type="button" class="tc-lock-btn" data-action="${paid ? 'unlock' : 'lock'}">${
+          paid ? 'Unlock' : 'Mark week paid'}</button>
+      </div>`;
+  }
+  if (!paid) return '';
+  return `<div class="tc-lock is-paid">
+    <span class="tc-lock-text">This week has been paid. If something on it is wrong, call the office.</span>
+  </div>`;
 }
 
 function render() {
@@ -500,19 +539,55 @@ $('todayList').addEventListener('click', async (e) => {
   await reload();
 });
 
+$('lockBar').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="lock"], [data-action="unlock"]');
+  if (!btn) return;
+  const monday = ymd(weekStart);
+  btn.disabled = true;
+  try {
+    if (btn.dataset.action === 'lock') {
+      const { error } = await sb.from('office_week_locks')
+        .insert({ employee_id: whoId, week_start: monday, locked_by: currentUser.id });
+      if (error) throw error;
+      lockedWeeks.add(monday);
+    } else {
+      const { error } = await sb.from('office_week_locks')
+        .delete().eq('employee_id', whoId).eq('week_start', monday);
+      if (error) throw error;
+      lockedWeeks.delete(monday);
+    }
+    renderWeek();
+    applyAddDayLimits();
+  } catch (err) {
+    btn.disabled = false;
+    alert('That did not save.\n\n' + cleanError(err));
+  }
+});
+
 /* ----------------------------------------------------- a day already worked */
 
 /* The earliest day that can be posted: Monday of last week. The same line the
    database draws, drawn again here so the date box will not even offer a day
    that is going to come back refused. */
 function earliestPostable() {
-  return addDays(getMonday(new Date()), -7);
+  const thisMonday = getMonday(new Date());
+  const lastMonday = addDays(thisMonday, -7);
+  // No point offering a day in a week that is already paid -- she would fill
+  // the box in and the database would refuse it. If this week is somehow paid
+  // too, the box has nothing to offer and is closed off entirely.
+  if (!isAdmin() && weekIsPaid(ymd(lastMonday))) return thisMonday;
+  return lastMonday;
 }
 
 function applyAddDayLimits() {
   const el = $('adDate');
-  el.min = ymd(earliestPostable());
+  const floor = earliestPostable();
+  el.min = ymd(floor);
   el.max = ymd(new Date());
+  // Everything reachable is paid, so there is nothing to post.
+  const shut = !isAdmin() && weekIsPaid(ymd(getMonday(new Date()))) && weekIsPaid(ymd(floor));
+  $('addDayToggle').disabled = shut;
+  if (shut) { $('addDayBox').hidden = true; $('addDayToggle').textContent = 'Post a day'; }
   if (!el.value) {
     // Yesterday, since a day you are posting after the fact is usually the one
     // just gone -- but never before the floor, on a Monday.

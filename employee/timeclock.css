@@ -239,6 +239,28 @@
 }
 .tc-period-note { margin: 8px 0 0; font-size: 11px; color: var(--dim2); line-height: 1.55; }
 
+/* -------------------------------------------------------------- paid week */
+.tc-paid-tag {
+  margin-left: 8px; font-size: 9px; font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--steel-900); background: var(--ok);
+  border-radius: 5px; padding: 2px 6px; vertical-align: 1px;
+}
+.tc-lock {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 12px; padding: 10px 12px;
+  background: var(--steel-800); border: 1px solid var(--line); border-radius: 10px;
+}
+.tc-lock.is-paid { border-color: rgba(87,201,140,.45); }
+.tc-lock-text { flex: 1 1 180px; font-size: 12px; color: var(--dim); line-height: 1.5; }
+.tc-lock-btn {
+  background: none; border: 1px solid var(--edge); border-radius: 8px;
+  color: var(--text); font: inherit; font-size: 12px; font-weight: 700;
+  padding: 7px 12px; cursor: pointer; white-space: nowrap;
+}
+.tc-lock-btn:hover { border-color: var(--molten); color: var(--molten); }
+.tc-lock.is-paid .tc-lock-btn { color: var(--dim); }
+.tc-add-toggle:disabled { opacity: .45; cursor: default; }
+
 .tc-foot { margin: 4px 2px 0; font-size: 12px; color: var(--dim2); line-height: 1.5; }
 
 @media (min-width: 560px) {
