@@ -364,7 +364,10 @@ async function loadWeek(skipReconcile) {
     sb.from('job_weeks').select('id, job_id, week_start, invoice_no')
       .eq('invoice_open', true).is('qb_invoice_id', null),
     sb.from('helpers').select('*').order('name'),
-    sb.from('profiles').select('*').order('full_name'),
+    // Everybody paid against a job. Office staff are paid for time on the
+    // clock, have no ticket in this week and nothing to approve, so they are
+    // not on the crew sheet this page builds.
+    sb.from('profiles').select('*').neq('pay_kind', 'office').order('full_name'),
     // Material billed to a job for this week. It belongs to the job, not to
     // anybody's ticket, so it is read on its own rather than off an entry.
     sb.from('job_week_parts').select('*').eq('week_start', start)

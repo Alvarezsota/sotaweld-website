@@ -779,7 +779,7 @@ async function loadWeek() {
       .gte('report_date', start).lte('report_date', end)
       .order('report_date'),
     sb.from('jobs').select('*'),
-    sb.from('profiles').select('id, full_name').order('full_name'),
+    sb.from('profiles').select('id, full_name').neq('pay_kind', 'office').order('full_name'),
     sb.from('daily_entries')
       .select('welder_id, entry_date, hours, daily_entry_helpers(helper_id)')
       .gte('entry_date', start).lte('entry_date', end),
