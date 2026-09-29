@@ -1,0 +1,207 @@
+/* The clock is meant to be used standing up, one hand, on a phone on the desk.
+   Everything that matters is big enough to hit without looking, and the state
+   of the day is readable from across the room. */
+
+.tc-wrap { max-width: 640px; margin: 0 auto; padding: 18px 14px 60px; }
+
+/* ------------------------------------------------------------ whose clock */
+/* display:flex outranks the browser's own rule for [hidden], so a bar that is
+   hidden in the markup shows anyway. Say it here or an office person is offered
+   a picker of whose clock to look at, which is nobody's but her own. */
+.tc-whose[hidden] { display: none; }
+.tc-whose {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--steel-850); border: 1px solid var(--line);
+  border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;
+}
+.tc-whose-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim);
+}
+.tc-whose-pick { flex: 1 1 180px; min-width: 160px; }
+.tc-whose-note { font-size: 12px; color: var(--dim2); flex-basis: 100%; }
+
+/* ----------------------------------------------------------------- the face */
+.tc-clock {
+  background: var(--steel-850); border: 1px solid var(--line);
+  border-left: 3px solid var(--dim2);
+  border-radius: 14px; padding: 22px 20px 20px; margin-bottom: 18px;
+  text-align: center;
+}
+.tc-clock.tc-work  { border-left-color: var(--ok); }
+.tc-clock.tc-lunch { border-left-color: var(--molten); }
+
+.tc-now {
+  font-size: 44px; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+}
+.tc-state {
+  margin-top: 10px; font-size: 15px; font-weight: 800;
+  letter-spacing: .06em; text-transform: uppercase;
+}
+.tc-clock.tc-work  .tc-state { color: var(--ok); }
+.tc-clock.tc-lunch .tc-state { color: var(--molten); }
+.tc-clock.tc-out   .tc-state { color: var(--dim); }
+.tc-since { margin-top: 4px; font-size: 13px; color: var(--dim); }
+
+.tc-buttons { display: flex; gap: 10px; margin-top: 18px; }
+.tc-btn {
+  flex: 1; min-height: 58px; border-radius: 12px; border: 1px solid var(--edge);
+  font: inherit; font-size: 16px; font-weight: 800; cursor: pointer;
+  background: var(--steel-800); color: var(--text);
+  /* A punch is one tap. Nothing here should ever select text or double-zoom. */
+  -webkit-tap-highlight-color: transparent; user-select: none;
+}
+.tc-btn:disabled { opacity: .55; cursor: default; }
+.tc-btn-go {
+  color: var(--molten-ink); border-color: transparent;
+  background: linear-gradient(180deg, var(--molten-2), var(--molten));
+  box-shadow: 0 6px 18px -8px rgba(233,162,59,.8);
+}
+.tc-btn-stop { color: var(--danger); }
+.tc-btn-soft { color: var(--text); }
+
+.tc-msg { margin: 12px 0 0; font-size: 13px; min-height: 1.2em; }
+.tc-msg-ok  { color: var(--ok); }
+.tc-msg-err { color: var(--danger); }
+
+/* --------------------------------------------------------------- the cards */
+.tc-card {
+  background: var(--steel-850); border: 1px solid var(--line);
+  border-radius: 14px; padding: 16px 16px 14px; margin-bottom: 16px;
+}
+.tc-card-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+.tc-card-title {
+  margin: 0; font-size: 12px; font-weight: 800; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim);
+}
+.tc-card-total { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tc-empty { margin: 8px 2px; font-size: 13px; color: var(--dim2); font-style: italic; }
+
+/* ------------------------------------------------------------- the punches */
+.tc-punch {
+  display: grid; grid-template-columns: 74px 1fr auto auto auto;
+  align-items: center; gap: 10px;
+  padding: 10px 2px; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 14px;
+}
+.tc-punch:last-child { border-bottom: none; }
+.tc-punch-kind {
+  font-size: 10px; font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--dim2);
+}
+.tc-punch.is-lunch .tc-punch-kind { color: var(--molten); }
+.tc-punch-times { font-variant-numeric: tabular-nums; }
+.tc-punch-times em { color: var(--ok); font-style: normal; font-weight: 700; }
+.tc-punch-len { font-weight: 800; font-variant-numeric: tabular-nums; }
+.tc-punch.is-lunch .tc-punch-len { color: var(--dim2); font-weight: 600; }
+.tc-fixed {
+  font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--molten); border: 1px solid var(--line); border-radius: 6px; padding: 2px 5px;
+}
+.tc-fix {
+  background: none; border: 1px solid var(--line); border-radius: 8px;
+  color: var(--dim); font: inherit; font-size: 12px; font-weight: 700;
+  padding: 5px 10px; cursor: pointer;
+}
+.tc-fix:hover { border-color: var(--edge); color: var(--text); }
+
+.tc-fixbox {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px;
+  background: var(--steel-800); border: 1px solid var(--line);
+  border-radius: 10px; padding: 12px; margin: 4px 0 10px;
+}
+.tc-fix-field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 170px; }
+.tc-fix-field span {
+  font-size: 10px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--dim);
+}
+.tc-fix-msg { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--danger); }
+
+/* ------------------------------------------------------------------ the week */
+.tc-weeknav { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.tc-nav-btn {
+  width: 40px; height: 40px; flex: 0 0 auto; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--steel-800); color: var(--text);
+  font-size: 20px; line-height: 1; cursor: pointer;
+}
+.tc-nav-btn:hover { border-color: var(--edge); color: var(--molten); }
+.tc-week-label {
+  flex: 1; text-align: center; font-size: 13px; font-weight: 800;
+  letter-spacing: .06em; color: var(--dim); text-transform: uppercase;
+}
+
+.tc-day {
+  display: grid; grid-template-columns: 1fr auto auto 58px;
+  align-items: baseline; gap: 10px;
+  padding: 9px 2px; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 14px;
+}
+.tc-day:last-child { border-bottom: none; }
+/* Placed by column rather than by order: a day with no times has no span and no
+   lunch element at all, and left to flow the hours would slide left into their
+   place and stop lining up with the column above. */
+.tc-day-name  { grid-column: 1; }
+.tc-day-span  { grid-column: 2; }
+.tc-day-lunch { grid-column: 3; }
+.tc-day-hours { grid-column: 4; }
+.tc-day-name { font-weight: 700; }
+.tc-day.is-empty .tc-day-name { color: var(--dim2); font-weight: 500; }
+.tc-day.is-today .tc-day-name { color: var(--molten); font-weight: 800; }
+.tc-today-tag {
+  font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--molten-ink); background: var(--molten); border-radius: 5px;
+  padding: 1px 5px; margin-left: 6px; vertical-align: 1px;
+}
+.tc-day-span, .tc-day-lunch {
+  font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums;
+}
+.tc-day-span em { color: var(--ok); font-style: normal; }
+.tc-day-hours {
+  text-align: right; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.tc-day.is-empty .tc-day-hours { color: var(--dim2); font-weight: 500; }
+
+/* ----------------------------------------------------------------- payroll */
+.tc-payroll { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
+.tc-pay-head {
+  font-size: 11px; font-weight: 800; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim); margin-bottom: 10px;
+}
+.tc-pay-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.tc-pay-cell {
+  background: var(--steel-800); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 12px;
+}
+.tc-pay-cell.is-ot { border-color: var(--molten); }
+.tc-pay-label {
+  display: block; font-size: 10px; font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--dim);
+}
+.tc-pay-val {
+  display: block; margin-top: 3px; font-size: 22px; font-weight: 800;
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.tc-pay-cell.is-ot .tc-pay-val { color: var(--molten); }
+.tc-pay-sub { display: block; margin-top: 2px; font-size: 11px; color: var(--dim2); }
+.tc-pay-note { margin: 12px 0 0; font-size: 12px; color: var(--dim); line-height: 1.5; }
+.tc-pay-note b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+.tc-foot { margin: 4px 2px 0; font-size: 12px; color: var(--dim2); line-height: 1.5; }
+
+@media (min-width: 560px) {
+  .tc-pay-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 460px) {
+  .tc-now { font-size: 38px; }
+  .tc-punch { grid-template-columns: 62px 1fr auto; }
+  .tc-punch .tc-fixed, .tc-punch .tc-fix { grid-column: 2 / -1; justify-self: start; }
+  /* The name and the hours stay on one line and the times drop underneath, so
+     a day with nothing on it is one line rather than three. */
+  .tc-day { grid-template-columns: 1fr 58px; row-gap: 2px; }
+  .tc-day-name { grid-column: 1; grid-row: 1; }
+  .tc-day-hours { grid-column: 2; grid-row: 1; }
+  .tc-day-span, .tc-day-lunch { grid-column: 1; font-size: 11px; }
+}

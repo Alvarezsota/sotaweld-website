@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="sota-build" content="20260929a">
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<title>Time Clock | State of the Arc Welding</title>
+<meta name="robots" content="noindex">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dark-theme.css?v=20260929a">
+<link rel="stylesheet" href="timeclock.css?v=20260929a">
+</head>
+<body>
+
+<header class="et-nav">
+  <div class="et-nav-left">
+    <img src="../assets/img/logo.jpeg" alt="Logo">
+    <span class="et-wordmark">State of the Arc</span>
+  </div>
+  <nav class="et-links" id="navLinks">
+    <a class="et-link on" href="timeclock.html">Time Clock</a>
+    <span id="crewNavLinks">
+      <a class="et-link" href="daily-entry.html">Log Work</a>
+      <a class="et-link" href="weld-report.html">Weld Report</a>
+      <a class="et-link" href="my-weld-log.html">My Weld Log</a>
+      <a class="et-link" href="crew-board.html">Crew Board</a>
+      <a class="et-link" href="dashboard.html">Office</a>
+    </span>
+    <span id="adminNavLinks" style="display:none;">
+      <a class="et-link" href="admin-setup.html">Setup</a>
+      <a class="et-link" href="approvals.html">Approvals</a>
+      <a class="et-link" href="quotes.html">Quotes</a>
+      <a class="et-link" href="parts-invoice.html">Parts and Services</a>
+      <a class="et-link" href="summary.html">Summary</a>
+      <a class="et-link" href="weld-log.html">Weld Log</a>
+      <a class="et-link" href="security.html">Security</a>
+    </span>
+  </nav>
+  <div class="et-user">
+    <span id="userName">Loading&hellip;</span>
+    <span id="adminBadge" class="admin-pill" style="display:none;">Admin</span>
+    <button class="et-logout" id="logoutBtn">Log Out</button>
+  </div>
+</header>
+
+<div class="tc-wrap">
+
+  <!-- Only an admin sees this. Everybody else is looking at their own clock and
+       there is nothing to choose. -->
+  <div class="tc-whose" id="whoseBar" hidden>
+    <label class="tc-whose-label" for="whoPick">Whose clock</label>
+    <select class="input tc-whose-pick" id="whoPick"></select>
+    <span class="tc-whose-note">Admins can correct a punch on any of these.</span>
+  </div>
+
+  <!-- The clock itself. One state, and only the buttons that make sense in it. -->
+  <section class="tc-clock" id="clockCard">
+    <div class="tc-now" id="nowClock">&nbsp;</div>
+    <div class="tc-state" id="stateLine">&nbsp;</div>
+    <div class="tc-since" id="sinceLine">&nbsp;</div>
+    <div class="tc-buttons" id="clockButtons"></div>
+    <p class="tc-msg" id="clockMsg"></p>
+  </section>
+
+  <section class="tc-card">
+    <div class="tc-card-head">
+      <h2 class="tc-card-title">Today</h2>
+      <span class="tc-card-total" id="todayTotal">&nbsp;</span>
+    </div>
+    <div id="todayList"></div>
+  </section>
+
+  <section class="tc-card">
+    <div class="tc-weeknav">
+      <button class="tc-nav-btn" id="prevWeek" type="button" aria-label="Previous week">&#8249;</button>
+      <div class="tc-week-label" id="weekLabel">&nbsp;</div>
+      <button class="tc-nav-btn" id="nextWeek" type="button" aria-label="Next week">&#8250;</button>
+    </div>
+
+    <div id="weekDays"></div>
+
+    <!-- What payroll actually needs: two numbers and what they come to. -->
+    <div class="tc-payroll" id="payrollBox"></div>
+  </section>
+
+  <p class="tc-foot" id="footNote"></p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-client.js?v=20260929a"></script>
+<script src="timeclock.js?v=20260929a"></script>
+<div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
+</body>
+</html>

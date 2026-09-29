@@ -18,6 +18,10 @@ let bidItemsByJob = {};   // job_id -> rows from job_bid_items
 let openBidJobId = null; // which lump sum job has its bid panel open
 let weldersList = [];
 let helpersList = [];
+/* The office. Nobody here files a ticket or a weld report -- they are paid for
+   the time on the clock, not for hours against a job -- so they are their own
+   list rather than welders with the job columns blanked out. */
+let officeList = [];
 
 function esc(str) {
   const div = document.createElement('div');
@@ -166,7 +170,7 @@ function jf(label, inner, cls) {
  * stays editable in there -- a rate corrected on an old job still has to reach
  * the week it was worked.
  */
-const archiveOpen = { jobs: false, welders: false, helpers: false };
+const archiveOpen = { jobs: false, welders: false, helpers: false, office: false };
 
 function archiveFolderHtml(kind, rows, rowsHtml, noun) {
   const box = document.getElementById(kind + 'Archive');
@@ -209,6 +213,7 @@ document.addEventListener('click', (e) => {
   archiveOpen[kind] = !archiveOpen[kind];
   if (kind === 'jobs') renderJobs();
   else if (kind === 'welders') renderWelders();
+  else if (kind === 'office') renderOffice();
   else renderHelpers();
 });
 
@@ -692,45 +697,47 @@ onList('weldersTable', 'click', async (e) => {
     return;
   }
   const saveBtn = e.target.closest('[data-action="save-password"]');
-  if (saveBtn) {
-    const panel = e.target.closest('[data-profile-id]');
-    const welderId = panel.dataset.profileId;
-    const input = panel.querySelector('.pw-input');
-    const statusEl = panel.querySelector('.pw-status');
-    const newPassword = input.value;
-
-    if (newPassword.length < 6) {
-      statusEl.textContent = 'Password must be at least 6 characters.';
-      statusEl.className = 'pw-status pw-err';
-      return;
-    }
-
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving...';
-    statusEl.textContent = '';
-
-    try {
-      const { data: { session } } = await sb.auth.getSession();
-      const res = await fetch(ADMIN_SET_PASSWORD_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ welderId, newPassword })
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to set password');
-
-      statusEl.textContent = 'Password set. They can log in with it now.';
-      statusEl.className = 'pw-status pw-ok';
-      saveBtn.textContent = 'Save';
-      saveBtn.disabled = false;
-    } catch (err) {
-      statusEl.textContent = 'Could not set password: ' + err.message;
-      statusEl.className = 'pw-status pw-err';
-      saveBtn.textContent = 'Save';
-      saveBtn.disabled = false;
-    }
-  }
+  if (saveBtn) await saveNewPassword(e.target.closest('[data-profile-id]'), saveBtn);
 });
+
+/* Setting somebody's password by hand. Shared, because the office table needs
+   exactly the same thing and a second copy of it is a second place to fix. */
+async function saveNewPassword(panel, saveBtn) {
+  const welderId = panel.dataset.profileId;
+  const input = panel.querySelector('.pw-input');
+  const statusEl = panel.querySelector('.pw-status');
+  const newPassword = input.value;
+
+  if (newPassword.length < 6) {
+    statusEl.textContent = 'Password must be at least 6 characters.';
+    statusEl.className = 'pw-status pw-err';
+    return;
+  }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+  statusEl.textContent = '';
+
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(ADMIN_SET_PASSWORD_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ welderId, newPassword })
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to set password');
+
+    statusEl.textContent = 'Password set. They can log in with it now.';
+    statusEl.className = 'pw-status pw-ok';
+  } catch (err) {
+    statusEl.textContent = 'Could not set password: ' + err.message;
+    statusEl.className = 'pw-status pw-err';
+  } finally {
+    saveBtn.textContent = 'Save';
+    saveBtn.disabled = false;
+  }
+}
 
 /* Saving a classification. Change rather than blur: a select is done the moment
    it closes, and the two crew tables listen for blur only, which a select never
@@ -757,8 +764,14 @@ document.addEventListener('change', (e) => {
 
 async function loadWelders() {
   const { data } = await sb.from('profiles').select('*').order('full_name');
-  weldersList = data || [];
+  const all = data || [];
+  // One fetch, two tables. An office person in the welders table would be
+  // offered a bill rate and a classification, neither of which means anything
+  // for somebody who is not billed to a customer.
+  weldersList = all.filter(p => p.pay_kind !== 'office');
+  officeList = all.filter(p => p.pay_kind === 'office');
   renderWelders();
+  renderOffice();
 }
 
 onList('weldersTable', 'blur', async (e) => {
@@ -940,6 +953,225 @@ function wireCompanyInfo() {
   // loading them alongside would race and render an empty dropdown half the time.
   await loadRateSheets();
   await Promise.all([loadJobs(), loadWelders(), loadHelpers(), loadCompanyInfo(), loadOneDrive()]);
+})();
+
+
+// ---------- The office ----------
+//
+// Office staff are not welders with the job columns left blank. They are paid
+// for the time they are here, clocked in and out on the Time Clock page, and
+// billed to nobody -- there is no job, no per diem, no bill rate and no
+// classification, so none of those appear on this table.
+//
+// Overtime is not set anywhere: it is over forty hours in the Monday-to-Sunday
+// week at one and a half, worked out from the punches every time the clock is
+// asked. There is no box for it because there is no decision to make.
+
+function officeRowHtml(p) {
+  return `
+    <div class="p-row office-row-grid${p.active === false ? ' off' : ''}" data-profile-id="${p.id}">
+      ${jf('Name', nameCell(`<input class="cell-in strong office-name" value="${escAttr(p.full_name)}" placeholder="Name">`, p))}
+      ${jf('Pay / hr', `<div class="c rate"><span class="rd">$</span><input class="cell-in num office-pay" value="${escAttr(p.pay_rate)}"></div>`)}
+      ${jf('QuickBooks employee #', `<input class="cell-in office-qb" value="${escAttr(p.qb_employee_id || '')}" placeholder="Not linked"
+        title="The employee id in QuickBooks Payroll. Their rate, W-4 and filing status stay there; this is only the link.">`)}
+      ${jf('Admin', `<span class="c">${p.role === 'admin' ? '<span class="admin-tag">Admin</span>' : ''}</span>`)}
+      ${jf(p.active === false ? 'Bring back' : 'Active', `<div class="c"><button type="button" class="toggle2${p.active === false ? '' : ' ton'}" data-action="toggle-office-active"
+        title="${p.active === false
+          ? 'Put this person back on the clock.'
+          : 'Archive this person when they no longer work here. Their punches and their pay stay exactly as they are.'}"><span class="tk2"></span></button></div>`, 'jt-sw')}
+      ${jf('Password', `<span class="c"><button type="button" class="pw-btn" data-action="toggle-password">${passwordEditId === p.id ? 'Cancel' : 'Set password'}</button></span>`)}
+    </div>
+    ${passwordEditId === p.id ? `
+      <div class="pw-panel" data-profile-id="${p.id}">
+        <label class="field-label">New password for ${esc(p.full_name)}</label>
+        <div class="pw-panel-row">
+          <input type="text" class="input pw-input" placeholder="At least 6 characters" autocomplete="off">
+          <button type="button" class="btn2 btn2-solid small" data-action="save-password">Save</button>
+        </div>
+        <p class="pw-note">They can log in with this right away — no email or link needed. Tell them the new password directly.</p>
+        <p class="pw-status"></p>
+      </div>` : ''}
+  `;
+}
+
+function renderOffice() {
+  const table = document.getElementById('officeTable');
+  if (!table) return;
+  const live = officeList.filter(p => p.active !== false);
+  const put = officeList.filter(p => p.active === false);
+  document.getElementById('officeCount').textContent = live.length;
+  table.innerHTML = live.length
+    ? live.map(officeRowHtml).join('')
+    : '<p class="empty-state2">Nobody on the clock yet. Add your office staff here and they log their own time.</p>';
+  archiveFolderHtml('office', put, put.map(officeRowHtml).join(''), 'office staff');
+}
+
+onList('officeTable', 'click', async (e) => {
+  const archBtn = e.target.closest('[data-action="toggle-office-active"]');
+  if (archBtn) {
+    const row = e.target.closest('[data-profile-id]');
+    const p = officeList.find(x => x.id === row.dataset.profileId);
+    if (!p) return;
+    const was = p.active !== false;
+    p.active = !was;
+    renderOffice();
+    const { data, error } = await sb.from('profiles')
+      .update({ active: p.active }).eq('id', p.id).select('active, archived_at').maybeSingle();
+    if (error || !data) {
+      p.active = was;
+      renderOffice();
+      alert('That did not change.\n\n' + ((error && error.message) || 'Nothing was saved.'));
+      return;
+    }
+    p.archived_at = data.archived_at;
+    renderOffice();
+    return;
+  }
+
+  const toggleBtn = e.target.closest('[data-action="toggle-password"]');
+  if (toggleBtn) {
+    const row = e.target.closest('[data-profile-id]');
+    passwordEditId = passwordEditId === row.dataset.profileId ? null : row.dataset.profileId;
+    renderOffice();
+    return;
+  }
+
+  const saveBtn = e.target.closest('[data-action="save-password"]');
+  if (saveBtn) await saveNewPassword(e.target.closest('[data-profile-id]'), saveBtn);
+});
+
+onList('officeTable', 'blur', async (e) => {
+  const row = e.target.closest('[data-profile-id]');
+  if (!row) return;
+  const id = row.dataset.profileId;
+  const p = officeList.find(x => x.id === id);
+  if (!p) return;
+
+  let patch = null;
+  if (e.target.classList.contains('office-name')) patch = { full_name: e.target.value.trim() };
+  else if (e.target.classList.contains('office-pay')) patch = { pay_rate: num(e.target.value) };
+  else if (e.target.classList.contains('office-qb')) patch = { qb_employee_id: e.target.value.trim() || null };
+  if (!patch) return;
+
+  const was = { ...p };
+  Object.assign(p, patch);
+  const { error } = await sb.from('profiles').update(patch).eq('id', id);
+  if (error) {
+    // The rate drives what the week is worth. Never leave a number on screen
+    // that did not save.
+    Object.assign(p, was);
+    renderOffice();
+    alert('That did not save.\n\n' + error.message);
+    return;
+  }
+  renderOffice();
+}, true);
+
+// ---------- Add somebody to the office ----------
+//
+// Always with a password the office sets, never an emailed link: this is
+// somebody who starts on Monday and needs to be able to clock in on Monday,
+// and Gilbert hands them the login himself.
+//
+// admin-create-welder makes the account, because it is the only thing holding
+// the service role that can create one. What it writes is a plain employee
+// profile; the shape of an office person is set straight afterwards, from here,
+// where an admin's own row-level security allows it:
+//
+//   pay_kind             office     -- not a welder, not a helper
+//   submits_weld_report  false      -- never chased for a weld report
+//   submits_time         false      -- never chased for a time ticket either;
+//                                     their time comes off the clock
+//   hide_from_crew_board true       -- the crew board is who is on a job today
+//   bill_rate            0          -- billed to nobody
+(function wireAddOffice() {
+  const panel = document.getElementById('officeInvite');
+  const openBtn = document.getElementById('addOfficeBtn');
+  if (!panel || !openBtn) return;
+
+  const nameEl = document.getElementById('ofName');
+  const emailEl = document.getElementById('ofEmail');
+  const passwordEl = document.getElementById('ofPassword');
+  const payEl = document.getElementById('ofPay');
+  const qbEl = document.getElementById('ofQb');
+  const msgEl = document.getElementById('ofMsg');
+  const sendBtn = document.getElementById('ofAdd');
+
+  function say(text, kind) {
+    msgEl.className = 'wi-msg' + (kind ? ' ' + kind : '');
+    msgEl.textContent = text;
+  }
+  function close() {
+    panel.hidden = true;
+    nameEl.value = emailEl.value = passwordEl.value = payEl.value = qbEl.value = '';
+    say('');
+  }
+
+  openBtn.addEventListener('click', () => {
+    if (panel.hidden) { panel.hidden = false; say(''); nameEl.focus(); }
+    else close();
+  });
+  document.getElementById('ofCancel').addEventListener('click', close);
+
+  sendBtn.addEventListener('click', async () => {
+    const fullName = nameEl.value.trim();
+    const email = emailEl.value.trim();
+    const password = passwordEl.value;
+    const payRate = payEl.value.trim();
+    const qbId = qbEl.value.trim();
+
+    if (!fullName) { say('Enter their name.', 'err'); nameEl.focus(); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      say('Enter the email address they will sign in with.', 'err'); emailEl.focus(); return;
+    }
+    if (password.length < 6) {
+      say('Password must be at least 6 characters.', 'err'); passwordEl.focus(); return;
+    }
+    if (payRate === '' || !(Number(payRate) > 0)) {
+      say('Enter their hourly rate.', 'err'); payEl.focus(); return;
+    }
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Adding...';
+    say('');
+
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const res = await fetch(ADMIN_CREATE_WELDER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ fullName, email, password, payRate, billRate: '0' })
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Could not add them.');
+
+      const newId = json.profile && json.profile.id;
+      if (!newId) throw new Error('The account was made but the portal did not get an id back. Refresh and set them up on their row.');
+
+      const { error: shapeErr } = await sb.from('profiles').update({
+        pay_kind: 'office',
+        submits_weld_report: false,
+        submits_time: false,
+        hide_from_crew_board: true,
+        bill_rate: 0,
+        qb_employee_id: qbId || null,
+      }).eq('id', newId);
+      // The login works either way. Say plainly which half did not, rather than
+      // leaving somebody who looks added but shows up as a welder.
+      if (shapeErr) throw new Error('The login was created, but they were not set up as office staff: '
+        + shapeErr.message + ' - fix it on their row and they are done.');
+
+      await loadWelders();
+      say(fullName + ' can sign in as ' + json.email + ' with the password you just set. '
+        + 'They land on the Time Clock and nothing else.', 'ok');
+      passwordEl.value = '';
+    } catch (err) {
+      say(String(err.message || err), 'err');
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Add to the office';
+    }
+  });
 })();
 
 

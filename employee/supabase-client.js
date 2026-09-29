@@ -214,3 +214,61 @@ checkBuild();
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') checkBuild();
 });
+
+
+/* ---------------------------------------------------------------------------
+   THE OFFICE DOOR
+   ---------------------------------------------------------------------------
+   Every page in here was built for somebody who works on a job: log your hours
+   against it, report your welds on it, see the crew on it. Alexis does none of
+   that. She is paid for the time she is at the desk, and the only screen that
+   means anything to her is the clock.
+
+   Left alone she would land on Log Work like everybody else, be offered a job
+   picker for jobs she has never been to, and file a ticket that would sit in
+   Approvals waiting to be billed to a customer who owes nothing for it. So
+   office staff get taken to the clock and kept there.
+
+   Not a security control -- row-level security is what stops anybody reaching
+   another person's data, and it does not care which page they are on. This is
+   only about not putting the wrong screen in front of somebody.
+
+   Admins are exempt: Gilbert needs every page, and he needs to be able to open
+   the clock to correct a punch. */
+const OFFICE_HOME = 'timeclock.html';
+
+async function sendOfficeStaffToTheClock() {
+  const page = (window.location.pathname.split('/').pop() || '').toLowerCase();
+  // The sign-in pages have no profile to read yet, and bouncing off them would
+  // interrupt setting a password.
+  if (!page || page === 'login.html' || page === 'set-password.html') return;
+  if (page === OFFICE_HOME) return;
+
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return;
+    const { data: p } = await sb.from('profiles')
+      .select('role, pay_kind').eq('id', session.user.id).maybeSingle();
+    if (!p || p.role === 'admin' || p.pay_kind !== 'office') return;
+    // replace, not href: the back button should not drop her straight back on
+    // a page she cannot use.
+    window.location.replace(OFFICE_HOME);
+  } catch (_) {
+    /* offline, or the profile could not be read. Leave the page alone rather
+       than strand somebody on a redirect that cannot resolve. */
+  }
+}
+
+sendOfficeStaffToTheClock();
+
+/* Where somebody belongs when they have just signed in. Used by login.js so
+   office staff are not shown Log Work for the half second before the door
+   above moves them. */
+async function landingPageFor(userId) {
+  try {
+    const { data: p } = await sb.from('profiles')
+      .select('role, pay_kind').eq('id', userId).maybeSingle();
+    if (p && p.role !== 'admin' && p.pay_kind === 'office') return OFFICE_HOME;
+  } catch (_) { /* fall through to the ordinary landing */ }
+  return 'daily-entry.html';
+}

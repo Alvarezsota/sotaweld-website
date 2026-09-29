@@ -42,13 +42,13 @@
         return;
       }
 
-      window.location.href = 'daily-entry.html';
+      window.location.href = await landingPageFor(session.user.id);
     });
     return;
   }
 
   if (session) {
-    window.location.href = 'daily-entry.html';
+    window.location.href = await landingPageFor(session.user.id);
     return;
   }
 
@@ -89,7 +89,8 @@
       console.warn('Could not check two-step status; continuing with password only', err);
     }
 
-    window.location.href = 'daily-entry.html';
+    const { data: { user } } = await sb.auth.getUser();
+    window.location.href = user ? await landingPageFor(user.id) : 'daily-entry.html';
   });
 
   function showMfaStep() {
@@ -127,7 +128,8 @@
         return;
       }
 
-      window.location.href = 'daily-entry.html';
+      const { data: { user } } = await sb.auth.getUser();
+      window.location.href = user ? await landingPageFor(user.id) : 'daily-entry.html';
     });
   }
 })();

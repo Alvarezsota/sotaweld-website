@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sota-build" content="20260927c">
+<meta name="sota-build" content="20260929a">
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>Setup | State of the Arc Welding</title>
 <meta name="robots" content="noindex">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dark-theme.css?v=20260927c">
-<link rel="stylesheet" href="admin-setup.css?v=20260927c">
+<link rel="stylesheet" href="dark-theme.css?v=20260929a">
+<link rel="stylesheet" href="admin-setup.css?v=20260929a">
 </head>
 <body>
 
@@ -26,6 +26,7 @@
     <a class="et-link" href="dashboard.html">Office</a>
     <a class="et-link on" href="admin-setup.html">Setup</a>
     <a class="et-link" href="approvals.html">Approvals</a>
+    <a class="et-link" href="timeclock.html">Time Clock</a>
     <a class="et-link" href="quotes.html">Quotes</a>
     <a class="et-link" href="parts-invoice.html">Parts and Services</a>
     <a class="et-link" href="summary.html">Summary</a>
@@ -158,6 +159,48 @@
         <div id="weldersArchive"></div>
       </div>
 
+      <!-- The office. Paid for the time they are here rather than for hours
+           against a job, so no bill rate, no per diem and no classification --
+           and no weld report or time ticket ever chased out of them. Their
+           hours come off the Time Clock page, which is the only page they see. -->
+      <div class="people-group">
+        <div class="pg-head">
+          <span class="pg-title">Office <span class="pg-count" id="officeCount">0</span></span>
+          <button class="btn2 btn2-solid small" id="addOfficeBtn">+ Add office staff</button>
+        </div>
+
+        <div class="welder-invite" id="officeInvite" hidden>
+          <div class="wi-grid">
+            <label class="field-label" for="ofName">Name</label>
+            <input class="input" id="ofName" placeholder="Full name" autocomplete="off">
+            <label class="field-label" for="ofEmail">Email</label>
+            <input class="input" id="ofEmail" type="email" placeholder="name@example.com" autocomplete="off">
+            <label class="field-label" for="ofPassword">Password</label>
+            <input class="input" id="ofPassword" type="text" placeholder="At least 6 characters" autocomplete="off">
+            <label class="field-label" for="ofPay">Pay / hr</label>
+            <input class="input num" id="ofPay" inputmode="decimal" placeholder="15">
+            <label class="field-label" for="ofQb">QuickBooks employee #</label>
+            <input class="input" id="ofQb" placeholder="Optional &mdash; links them to payroll" autocomplete="off">
+          </div>
+          <p class="wi-msg" id="ofMsg"></p>
+          <div class="wi-actions">
+            <button class="btn2 btn2-solid" id="ofAdd">Add to the office</button>
+            <button class="btn2 btn2-ghost" id="ofCancel">Cancel</button>
+          </div>
+        </div>
+
+        <p class="pg-note">Office staff clock in and out on the
+           <a href="timeclock.html">Time Clock</a> page &mdash; that is the only page they see.
+           Anything over 40 hours in the Monday-to-Sunday week is paid at time and a half;
+           there is nothing to set for it. The QuickBooks employee number links them to their
+           payroll record, where their W-4, Social Security number and filing status stay.</p>
+        <div class="p-head office-row-grid">
+          <span>Name</span><span class="c">Pay / hr</span><span>QuickBooks employee #</span><span class="c">Admin</span><span class="c">Active</span><span></span>
+        </div>
+        <div id="officeTable"></div>
+        <div id="officeArchive"></div>
+      </div>
+
       <div class="people-group">
         <div class="pg-head">
           <span class="pg-title">Helpers <span class="pg-count" id="helperCount">0</span></span>
@@ -174,8 +217,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-client.js?v=20260927c"></script>
-<script src="admin-setup.js?v=20260927c"></script>
+<script src="supabase-client.js?v=20260929a"></script>
+<script src="admin-setup.js?v=20260929a"></script>
 <div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
 </body>
 </html>

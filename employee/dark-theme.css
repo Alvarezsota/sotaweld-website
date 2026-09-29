@@ -51,6 +51,11 @@ a { color: inherit; }
    place that decides. */
 #adminNavLinks { display: contents; }
 
+/* The Time Clock page groups the crew's tabs the same way, so it can take them
+   off the nav for somebody who works at a desk. Same span, same trap: left as
+   an inline box its links overlap the row above on a phone. */
+#crewNavLinks { display: contents; }
+
 /* Each tab is drawn as its own object rather than as a word in a row of words.
    Six pixels of gap between two unbordered labels reads as one long line of
    text, and the eye has to find the word breaks before it can find the link.

@@ -81,6 +81,10 @@
 /* Name, Pay, Bill, Margin, Classification, Admin, Active, Password. The Active
    column is what takes a man who no longer works here out of every picker. */
 .welders-row-grid { grid-template-columns: 2.2fr .8fr .8fr .8fr 1.9fr .7fr .8fr 110px; }
+/* Name, Pay, QuickBooks employee #, Admin, Active, Password. No bill rate, no
+   margin, no classification: an office person is not billed to anybody, so
+   there is nothing on those columns to put. */
+.office-row-grid { grid-template-columns: 2.2fr .8fr 1.9fr .7fr .8fr 110px; }
 /* The headers now carry the row grid class rather than falling back on the
    six-column default above, so the labels sit over the fields they name. The
    grid comes from the two rules above this line; nothing more is needed here. */
