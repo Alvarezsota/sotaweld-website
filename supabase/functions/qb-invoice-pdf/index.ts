@@ -19,6 +19,7 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { attachInvoicePdf, buildPartsInvoicePdf, buildQuotePdfFor } from '../_shared/invoice-pdf-data.ts';
+import { fileQuotePdfDetached } from '../_shared/quote-filing.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -79,6 +80,23 @@ Deno.serve(async (req) => {
       ? await buildQuotePdfFor(db as never, String(quoteId))
       : await buildPartsInvoicePdf(db as never, String(invoiceId));
     if (!out.ok) return json({ ok: false, error: out.error }, 422);
+
+    /* Every quote PDF in the portal comes through here -- the download button,
+       send-quote and quote-outlook-draft both fetch the document from this
+       function rather than drawing their own -- so filing it here covers the
+       first render and every revision after it, in one place.
+
+       Not awaited. The office pressed a button and is waiting on a download;
+       Microsoft is not on that path. fileQuotePdfDetached swallows its own
+       failures and logs them, so a drive that is disconnected or slow costs
+       nothing but a null in onedrive_item_id. */
+    if (quoteId && out.filedAs) {
+      // Its own copy of the bytes. The same array is about to become the body
+      // of the response below, and the upload outlives that response; handing
+      // both the one buffer is the sort of thing that works until the day the
+      // runtime decides a body it has finished with is a buffer it can reuse.
+      fileQuotePdfDetached(db as never, String(quoteId), out.filedAs, new Uint8Array(out.pdf));
+    }
 
     return new Response(out.pdf, {
       headers: {

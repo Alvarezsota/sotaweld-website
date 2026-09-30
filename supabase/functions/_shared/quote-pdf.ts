@@ -36,6 +36,30 @@ export function quotePdfFileName(quoteNo: string, customer: string): string {
   return `Quote ${quoteNo || 'draft'} - ${who}.pdf`.slice(0, 120);
 }
 
+/* The name the same document is FILED under on the company OneDrive.
+ *
+ * Deliberately not the name above. That one is what the customer receives, and
+ * it leads with the word Quote and the company it went to, which is what you
+ * want on an attachment sitting in somebody's inbox. The Quotes folder wants
+ * the opposite: the quote number first, so a folder listing sorts into the
+ * order the quotes were written, which is how the office has been naming them
+ * by hand. Changing the customer-facing name to match would rename every
+ * attachment that has already gone out, so the two are kept apart on purpose.
+ *
+ * The description is job_name -- the only short, always-present line on the
+ * quote. It is NOT NULL on desk_quotes, so the fallback is for a row saved
+ * blank rather than a column that can be missing.
+ */
+export function quoteFilingName(quoteNo: string, jobName: string): string {
+  const no = (quoteNo || '').replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
+  const what = (jobName || '').replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
+  if (!no && !what) return 'Quote (unnumbered).pdf';
+  if (!no) return `${what}.pdf`.slice(0, 120);
+  if (!what) return `${no}.pdf`;
+  // Trimmed to fit, and never left ending on a space or a dash.
+  return `${no} - ${what}`.slice(0, 116).replace(/[\s-]+$/, '') + '.pdf';
+}
+
 export async function buildQuotePdf(
   p: QuotePayload, company: CompanyBlock, assets: PdfAssets,
 ): Promise<Uint8Array> {

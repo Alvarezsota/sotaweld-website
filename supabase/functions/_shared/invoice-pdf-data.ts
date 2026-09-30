@@ -13,7 +13,7 @@
 // A document that restates the bill has to be drawn from the bill.
 
 import { buildInvoicePdf, type CompanyBlock, type InvoicePayload, type QuoteSection } from './invoice-pdf.ts';
-import { buildQuotePdf, quotePdfFileName } from './quote-pdf.ts';
+import { buildQuotePdf, quoteFilingName, quotePdfFileName } from './quote-pdf.ts';
 
 type Db = {
   rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
@@ -218,8 +218,11 @@ export type QbInvoiceFacts = {
   DocNumber?: string;
 };
 
+/* filedAs is the name the document goes into the OneDrive folder under, which
+   is not the name it downloads as -- see quoteFilingName. Only the quote sets
+   it; the invoice builders leave it off, because invoices are not filed yet. */
 export type PdfResult =
-  | { ok: true; pdf: Uint8Array; filename: string }
+  | { ok: true; pdf: Uint8Array; filename: string; filedAs?: string }
   | { ok: false; error: string };
 
 const addrLines = (a?: Record<string, unknown>): string => {
@@ -427,6 +430,7 @@ export async function buildQuotePdfFor(db: Db, quoteId: string): Promise<PdfResu
       ok: true,
       pdf,
       filename: quotePdfFileName(String(q.quote_no ?? ''), String(q.customer_name ?? '')),
+      filedAs: quoteFilingName(String(q.quote_no ?? ''), String(q.job_name ?? '')),
     };
   } catch (err) {
     return { ok: false, error: `the quote could not be drawn: ${(err as Error).message}` };
