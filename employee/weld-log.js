@@ -895,6 +895,56 @@ document.getElementById('emailDateInput').addEventListener('change', (e) => {
   loadEmailCustomers(e.target.value);
 });
 
+/* Who is saved against each customer.
+ *
+ * This list used to be two <option>s typed into the HTML -- Mel and Raquel at
+ * Rocking Double S -- which meant every new name was a code change, and the
+ * page could not say which company a name belonged to. It is the same roster
+ * the invoice CC picker already keeps, so it is read from there: one list,
+ * maintained in one place, and a name added for an invoice shows up here.
+ *
+ * Grouped by customer on purpose. "mpalmer@rdbls.com" on its own tells you
+ * nothing about whose daily log it belongs on, and these are customers' own
+ * people -- sending one company's log to another company's man is not a typo
+ * you get to take back.
+ */
+async function loadCcPresets() {
+  const sel = document.getElementById('emailCcPreset');
+  if (!sel) return;
+  try {
+    const { data, error } = await sb.from('qb_customer_billing')
+      .select('qb_customer_name, cc_roster')
+      .order('qb_customer_name');
+    if (error) throw error;
+
+    const groups = (data || [])
+      .map((r) => ({
+        name: (r.qb_customer_name || '').trim(),
+        people: (Array.isArray(r.cc_roster) ? r.cc_roster : [])
+          .filter((p) => p && p.email),
+      }))
+      .filter((g) => g.name && g.people.length);
+
+    if (!groups.length) return;   // leave the placeholder standing
+
+    sel.innerHTML = '<option value="">Pick to add\u2026</option>'
+      + groups.map((g) => `<optgroup label="${escAttr(g.name)}">`
+          + g.people.map((p) => {
+              // The name where there is one, so he is picking a person rather
+              // than parsing an address. The address stays visible: two people
+              // at one company can share a first name and never an inbox.
+              const label = (p.name || '').trim()
+                ? `${(p.name || '').trim()} — ${p.email}`
+                : p.email;
+              return `<option value="${escAttr(p.email)}">${esc(label)}</option>`;
+            }).join('')
+          + '</optgroup>').join('');
+  } catch {
+    /* The typed-in placeholder still works and CC is still a free-text box.
+       A roster that will not load must not take the send away. */
+  }
+}
+
 document.getElementById('emailCcPreset').addEventListener('change', (e) => {
   const email = e.target.value;
   if (!email) return;
@@ -998,6 +1048,7 @@ document.getElementById('newReportBtn').addEventListener('click', () => {
 
   document.getElementById('emailDateInput').value = todayIso();
   document.getElementById('emailToInput').value = currentUser.email;
+  loadCcPresets();
 
   // loadWeek fills jobsById, and without it every report resolves to
   // Unassigned -- so the customer list is built after it, not before.
