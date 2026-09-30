@@ -395,24 +395,11 @@ const deduct = [
 
 // ---------- Workers' comp notice ----------
 const wc = [
-  ...title(`${SEC.wc}. Workers’ Compensation Notice`, 'Texas employers must tell every new employee, at hire, whether they carry workers’ compensation insurance.'),
-  p([bold('Office checks one box and fills in the details:')]),
-  p([bold('☐  The Company HAS workers’ compensation insurance')], { spacing: { before: 120, after: 0 } }),
-  fields([rowW(['Insurance Carrier', 4080], ['Policy Number', 3000], ['Coverage Dates', 3000])]),
-  bullet('If you are hurt on the job, workers’ comp can pay for your medical care and part of your lost wages, no matter who was at fault.'),
-  bullet([bold('Report any work injury to the Company within 30 days'), t(` (Company policy: the same shift — see Section ${SEC.injury}). File a claim with the Texas Division of Workers’ Compensation within 1 year of the injury.`)]),
-  bullet([t('You may keep your common-law right to sue the Company instead of being covered by workers’ comp. To do that, you must notify the Company '), bold('in writing within 5 days'), t(' of starting work.')]),
-  p([bold('☐  The Company does NOT have workers’ compensation insurance')], { spacing: { before: 200, after: 60 } }),
-  bullet('This means workers’ compensation benefits are not available to you.'),
-  bullet('You keep your right to sue the Company if you are hurt on the job because of the Company’s negligence.'),
-  bullet('Occupational injury benefit plan:   ☐ The Company provides one (details attached)   ☐ None'),
-  h2('Free help'),
-  p([t('Texas Department of Insurance, Division of Workers’ Compensation: '), bold('1-800-252-7031')], { spacing: { after: 40 } }),
-  p([t('Office of Injured Employee Counsel (free help for injured workers): '), bold('1-866-393-6432')]),
+  ...title(`${SEC.wc}. Workers’ Compensation Notice`, 'Texas requires us to tell you this in writing when you are hired.'),
+  p([t(`${CO} carries workers’ compensation insurance.`, { bold: true, size: 24 })], { spacing: { before: 160, after: 160 } }),
+  p([t('If you are hurt on the job, report it to your supervisor '), bold('immediately'), t(` (Section ${SEC.injury}).`)]),
   p('The official state workers’ compensation notice is posted at: ______________________________'),
   sigAs('Employee Signature — I received this notice'),
-  spacer(),
-  note([t('Office: ', { bold: true }), t('check with your carrier or the TDI-DWC website that this notice matches the current required wording and posters. Non-subscribers must also file DWC Form-005 with the state every year.')]),
   brk(),
 ];
 
@@ -453,20 +440,18 @@ const rules = [
 // ---------- Injury reporting ----------
 const step = (n, runs) => p([bold(`${n}.  `), ...runs], { spacing: { after: 100 } });
 const injury = [
-  ...title(`${SEC.injury}. Injury Reporting`, 'Report every injury — even small ones — the same shift.'),
+  ...title(`${SEC.injury}. Injury Reporting`, 'Report every injury — even small ones — to your supervisor immediately.'),
   step(1, [bold('Emergency? Call 911 first.'), t(' Then call your supervisor.')]),
-  step(2, [bold('Tell your supervisor right away and before the end of your shift.'), t(' This includes cuts, burns, arc flash / “welder’s flash,” metal in the eye, strains and near misses.')]),
+  step(2, [bold('Tell your supervisor immediately.'), t(' This includes cuts, burns, arc flash / “welder’s flash,” metal in the eye, strains and near misses.')]),
   step(3, [bold('Get care.'), t(' Use the first aid kit and eyewash for minor injuries. For anything more, the Company will direct you to the clinic listed below.')]),
   step(4, [bold('Fill out the Injury & Incident Report'), t(` (Section ${SEC.incident}) with your supervisor within 24 hours.`)]),
   step(5, [bold('Post-accident drug and alcohol test'), t(` may be required (Section ${SEC.ua}).`)]),
   h2('Who to call'),
   grid(['Contact', 'Name / Location', 'Phone'], [3600, 4080, 2400], [
     ['Your supervisor', '', ''], ['Office — Gilbert Alvarez', CO, PHONE], ['Clinic for work injuries', '', ''],
-    ['Nearest emergency room', '', ''], ['Workers’ comp claim line (if covered)', '', ''], ['Poison Control', 'National hotline', '1-800-222-1222'],
+    ['Nearest emergency room', '', ''], ['Poison Control', 'National hotline', '1-800-222-1222'],
   ]),
-  h2('Why same-shift reporting matters'),
-  p('Texas law gives you 30 days to report a work injury, but late reports make it harder to get treatment covered and to fix the hazard. That’s why Company policy is the same shift.'),
-  note([t('No retaliation. ', { bold: true }), t('The Company will not punish you for reporting an injury, filing a workers’ compensation claim or raising a safety concern. Texas law and federal OSHA protect these rights.')]),
+  note([t('No retaliation. ', { bold: true }), t('The Company will not punish you for reporting an injury or raising a safety concern.')]),
   sigAs('Employee Signature — I understand how to report an injury'),
   p([t('Office: report to OSHA any work-related death within 8 hours, and any in-patient hospitalization, amputation or loss of an eye within 24 hours.', { size: 17, color: GREY, italics: true })], { spacing: { before: 100 } }),
   brk(),
