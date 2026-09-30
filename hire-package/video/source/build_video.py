@@ -182,7 +182,7 @@ def assemble(frames, clips, dest):
     subprocess.run([FFMPEG, '-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', os.path.join(OUT, 'frames.txt'),
                     '-i', os.path.join(OUT, 'narration.wav'),
                     '-vf', f'fps={FPS},format=yuv420p', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-tune', 'stillimage',
-                    '-c:a', 'aac', '-b:a', '160k', '-shortest', '-movflags', '+faststart', dest], check=True)
+                    '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11', '-ar', '48000', '-ac', '2', '-c:a', 'aac', '-b:a', '192k',  # standard phone/TV loudness, 48 kHz stereo '-shortest', '-movflags', '+faststart', dest], check=True)
     return t
 
 if __name__ == '__main__':
