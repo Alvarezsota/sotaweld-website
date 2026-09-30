@@ -1138,7 +1138,13 @@ submitBtn.addEventListener('click', async () => {
     showCheckNotice(startBoardCountdown);
   } catch (err) {
     console.error(err);
-    alert('Something went wrong saving. Please try again or contact the office.');
+    // The database refuses a report for a day with no hours on it, and it says
+    // exactly what to do about it. "Something went wrong" throws that away and
+    // leaves a man pressing the button again, which is what he was doing when
+    // the page's own gate was the only one and his phone had an old copy of it.
+    const said = String((err && (err.message || err.hint)) || '')
+      .replace(/^.*?(?:ERROR|error):\s*/i, '').trim();
+    alert(said || 'Something went wrong saving. Please try again or contact the office.');
   }
   submitBtn.disabled = false;
   submitBtn.textContent = 'Submit Weld Report';
