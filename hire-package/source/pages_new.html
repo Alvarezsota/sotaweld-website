@@ -32,19 +32,19 @@
  <h1>{{#}}. Safety Cards &amp; Welding Certifications</h1><div class="sub">Bring your cards and certs. The office will copy them. Many customer sites won't let you through the gate without current cards.</div>
  <h2 style="margin-top:4px">Safety training cards</h2>
  <table class="grid">
-  <tr><th style="width:34%">Card</th><th>Card / ID #</th><th style="width:13%">Issued</th><th style="width:13%">Expires</th><th style="width:11%">Copy (office)</th></tr>
-  <tr><td>OSHA 10-Hour</td><td></td><td></td><td></td><td>☐</td></tr>
-  <tr><td>OSHA 30-Hour</td><td></td><td></td><td></td><td>☐</td></tr>
-  <tr><td>H2S Clear / H2S Awareness</td><td></td><td></td><td></td><td>☐</td></tr>
-  <tr><td>SafeLand / PEC Basic Orientation</td><td></td><td></td><td></td><td>☐</td></tr>
-  <tr><td>TWIC</td><td></td><td></td><td></td><td>☐</td></tr>
-  <tr><td>First Aid / CPR</td><td></td><td></td><td></td><td>☐</td></tr>
-  <tr><td>Forklift / Telehandler</td><td></td><td></td><td></td><td>☐</td></tr>
-  <tr><td>Rigging / Signal Person</td><td></td><td></td><td></td><td>☐</td></tr>
-  <tr><td>Confined Space</td><td></td><td></td><td></td><td>☐</td></tr>
-  <tr><td>Fall Protection</td><td></td><td></td><td></td><td>☐</td></tr>
-  <tr><td>Pipeline Operator Qualification (OQ)</td><td></td><td></td><td></td><td>☐</td></tr>
-  <tr><td>Other:</td><td></td><td></td><td></td><td>☐</td></tr>
+  <tr><th style="width:34%">Card</th><th>Card / ID #</th><th style="width:13%">Issued</th><th style="width:13%">Expires</th><th style="width:11%" class="oh">OFFICE:<br>Copied</th></tr>
+  <tr><td>OSHA 10-Hour</td><td></td><td></td><td></td><td class="oc">☐</td></tr>
+  <tr><td>OSHA 30-Hour</td><td></td><td></td><td></td><td class="oc">☐</td></tr>
+  <tr><td>H2S Clear / H2S Awareness</td><td></td><td></td><td></td><td class="oc">☐</td></tr>
+  <tr><td>SafeLand / PEC Basic Orientation</td><td></td><td></td><td></td><td class="oc">☐</td></tr>
+  <tr><td>TWIC</td><td></td><td></td><td></td><td class="oc">☐</td></tr>
+  <tr><td>First Aid / CPR</td><td></td><td></td><td></td><td class="oc">☐</td></tr>
+  <tr><td>Forklift / Telehandler</td><td></td><td></td><td></td><td class="oc">☐</td></tr>
+  <tr><td>Rigging / Signal Person</td><td></td><td></td><td></td><td class="oc">☐</td></tr>
+  <tr><td>Confined Space</td><td></td><td></td><td></td><td class="oc">☐</td></tr>
+  <tr><td>Fall Protection</td><td></td><td></td><td></td><td class="oc">☐</td></tr>
+  <tr><td>Pipeline Operator Qualification (OQ)</td><td></td><td></td><td></td><td class="oc">☐</td></tr>
+  <tr><td>Other:</td><td></td><td></td><td></td><td class="oc">☐</td></tr>
  </table>
  <h2>Welding certifications</h2>
  <table class="grid">
@@ -55,9 +55,10 @@
   <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
  </table>
  <p class="small" style="margin-top:6px">Keep your certs active: under AWS and ASME rules a welder qualification lapses if you go more than 6 months without welding in that process.</p>
- <h2>Office use — weld test at State of the Arc</h2>
- <div class="f"><div><span>Test Date</span></div><div><span>Process / Position</span></div><div><span>Result: ☐ Pass &nbsp; ☐ Fail</span></div><div><span>Tested By</span></div></div>
  <div class="f sig"><div style="--w:5"><span>Employee Signature — the cards and certs listed are mine and current</span></div><div style="--w:3.2"><span>Printed Name</span></div><div style="--w:1.8"><span>Date</span></div></div>
+ <div class="office"><div class="ob"><span>OFFICE USE ONLY — DO NOT WRITE IN THIS BOX</span><span>Weld test at State of the Arc</span></div>
+ <div class="f"><div><span>Test Date</span></div><div><span>Process / Position</span></div><div><span>Result: ☐ Pass &nbsp; ☐ Fail</span></div><div><span>Tested By</span></div></div>
+ </div>
  <div class="foot"><span>10234 West 64th Street, Odessa, TX 79764 · (432) 248-1455</span><span>Section {{#}}</span></div>
 </div>
 
@@ -175,7 +176,8 @@
  </table>
  <div class="note"><b>No retaliation.</b> The Company will not punish you for reporting an injury or raising a safety concern.</div>
  <div class="f sig"><div style="--w:5"><span>Employee Signature — I understand how to report an injury</span></div><div style="--w:3.2"><span>Printed Name</span></div><div style="--w:1.8"><span>Date</span></div></div>
- <p class="small" style="margin-top:4px">Office: report to OSHA any work-related death within 8 hours, and any in-patient hospitalization, amputation or loss of an eye within 24 hours.</p>
+ <div class="office"><div class="ob"><span>OFFICE USE ONLY — DO NOT WRITE IN THIS BOX</span></div><p style="margin:6px 0 2px;font-size:9pt">report to OSHA any work-related death within 8 hours, and any in-patient hospitalization, amputation or loss of an eye within 24 hours.</p>
+ </div>
  <div class="foot"><span>10234 West 64th Street, Odessa, TX 79764 · (432) 248-1455</span><span>Section {{#}}</span></div>
 </div>
 
@@ -196,13 +198,14 @@
  <p class="row">Treatment: &nbsp; ☐ First aid only &nbsp; ☐ Clinic &nbsp; ☐ Emergency room &nbsp; ☐ Refused treatment</p>
  <p class="row" style="margin-top:4px">Post-accident drug / alcohol test done: &nbsp; ☐ Yes &nbsp; ☐ No</p>
  <div class="f"><div style="--w:5"><span>Employee Signature</span></div><div style="--w:1.8"><span>Date</span></div><div style="--w:5"><span>Supervisor Signature</span></div><div style="--w:1.8"><span>Date</span></div></div>
- <h2>Office use</h2>
+ <div class="office"><div class="ob"><span>OFFICE USE ONLY — DO NOT WRITE IN THIS BOX</span><span>Claim &amp; OSHA follow-up</span></div>
  <table class="grid">
   <tr><td style="width:55%">Reported to workers' comp carrier (date / claim #)</td><td></td></tr>
   <tr><td>DWC Form-001 to carrier — required if more than 1 day of lost time; due within 8 days</td><td></td></tr>
   <tr><td>OSHA recordable? / Reported to OSHA if serious (date)</td><td></td></tr>
   <tr><td>Corrective action taken / by whom</td><td></td></tr>
  </table>
+ </div>
  <div class="foot"><span>10234 West 64th Street, Odessa, TX 79764 · (432) 248-1455</span><span>Section {{#}}</span></div>
 </div>
 

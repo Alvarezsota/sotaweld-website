@@ -10,7 +10,9 @@ const ADDR = '10234 West 64th Street, Odessa, TX 79764';
 const PHONE = '(432) 248-1455';
 const EMAIL = 'g.alvarez@sotaweld.com';
 const GOLD = 'B8860B', DARK = '1F1F1F', GREY = '666666';
-const W = 10080; // content width (letter, 0.75in margins)
+let W = 10080; // content width (letter, 0.75in margins); narrowed while building office boxes
+// Scale column widths so they always add up to the current content width.
+const fit = (ws) => { const s = ws.reduce((a, b) => a + b, 0); const r = ws.map((w) => Math.floor(w * W / s)); r[r.length - 1] += W - r.reduce((a, b) => a + b, 0); return r; };
 
 const logo = fs.readFileSync(require('path').join(__dirname, 'sota-logo.png'));
 
@@ -54,9 +56,37 @@ function fields(rows) {
 }
 // every row must sum to W; build helpers so it always does
 const row = (...labels) => { const w = Math.floor(W / labels.length); return labels.map((l, i) => [l, i === labels.length - 1 ? W - w * (labels.length - 1) : w]); };
-const rowW = (...pairs) => pairs; // explicit widths
+const rowW = (...pairs) => { const ws = fit(pairs.map(([, w]) => w)); return pairs.map(([l], i) => [l, ws[i]]); }; // relative widths
 const sig = () => fields([rowW(['Employee / Applicant Signature', 5040], ['Printed Name', 3240], ['Date', 1800])]);
 const spacer = (after = 120) => new Paragraph({ spacing: { after }, children: [] });
+
+// Shaded, dashed box with a black banner so new hires know not to write in it.
+const dashed = { style: BorderStyle.DASHED, size: 12, color: '444444' };
+function officeBox(title, make) {
+  const outer = W;
+  W = outer - 320;
+  const kids = make();
+  W = outer;
+  return new Table({
+    width: { size: outer, type: WidthType.DXA }, columnWidths: [outer],
+    borders: { top: dashed, bottom: dashed, left: dashed, right: dashed, insideHorizontal: none, insideVertical: none },
+    rows: [
+      new TableRow({ children: [new TableCell({
+        width: { size: outer, type: WidthType.DXA }, shading: { type: ShadingType.CLEAR, fill: '1F1F1F', color: 'auto' },
+        margins: { top: 40, bottom: 40, left: 160, right: 160 },
+        children: [new Paragraph({ tabStops: [{ type: TabStopType.RIGHT, position: outer - 320 }], children: [
+          t('OFFICE USE ONLY — DO NOT WRITE IN THIS BOX', { bold: true, color: 'FFFFFF', size: 17 }),
+          ...(title ? [t(`\t${title}`, { color: 'DDDDDD', size: 17 })] : []),
+        ] })],
+      })] }),
+      new TableRow({ children: [new TableCell({
+        width: { size: outer, type: WidthType.DXA }, shading: { type: ShadingType.CLEAR, fill: 'E6E6E6', color: 'auto' },
+        margins: { top: 60, bottom: 60, left: 160, right: 160 },
+        children: [...kids, new Paragraph({ spacing: { after: 0 }, children: [] })],
+      })] }),
+    ],
+  });
+}
 
 // Section numbers come from this order, so pages can be added or moved freely.
 const ORDER = ['offer', 'info', 'ua', 'fcra', 'bgauth', 'refs', 'dl', 'certs', 'i9', 'tax', 'dd', 'deduct', 'wc', 'rules', 'injury', 'incident', 'ppe', 'hazcom', 'ack'];
@@ -113,11 +143,11 @@ const info = [
     rowW(['Name', 4320], ['Relationship', 2400], ['Phone', 3360]),
     rowW(['Second Contact Name', 4320], ['Relationship', 2400], ['Phone', 3360]),
   ]),
-  h2('Position (office use)'),
-  fields([
+  spacer(),
+  officeBox('Position', () => [fields([
     rowW(['Job Title', 4320], ['Pay Rate', 2400], ['Hourly / Salary', 3360]),
     rowW(['Welding Certifications Held', 6720], ['Shirt / Boot Size', 3360]),
-  ]),
+  ])]),
   h2('Direct Deposit'),
   p([t('Want your pay deposited straight to your bank? Fill out the '), bold(`Direct Deposit Authorization in Section ${SEC.dd}`), t('.')], { spacing: { after: 0 } }),
   sig(),
@@ -142,8 +172,7 @@ const ua = [
   p([t('I consent to drug and alcohol testing as described above and authorize the collection site, laboratory and Medical Review Officer to release the results to '), t(CO), t('.')]),
   sig(),
   spacer(),
-  h2('Office use'),
-  fields([rowW(['Collection Site', 4320], ['Date Collected', 2880], ['Result (Neg / Non-Neg)', 2880])]),
+  officeBox('Drug test result', () => [fields([rowW(['Collection Site', 4320], ['Date Collected', 2880], ['Result (Neg / Non-Neg)', 2880])])]),
   brk(),
 ];
 
@@ -199,9 +228,9 @@ const refs = [
   fields(refRows),
   p([t('I authorize '), t(CO), t(' to contact the employers and references listed above (except any I marked “No”) about my work history, skills, safety record and whether they would rehire me. I release them and the Company from liability for any information given in good faith.')], { spacing: { before: 200, after: 0 } }),
   sig(),
-  h2('Office use — call log'),
-  (() => {
-    const cw = [1440, 1920, 1200, 5520];
+  spacer(),
+  officeBox('Reference call log', () => [(() => {
+    const cw = fit([1440, 1920, 1200, 5520]);
     const c = (txt, w, head) => new TableCell({ width: { size: w, type: WidthType.DXA }, margins: { top: 50, bottom: 50, left: 120, right: 120 },
       shading: head ? { type: ShadingType.CLEAR, fill: '333333', color: 'auto' } : undefined,
       children: [new Paragraph({ spacing: { after: 0 }, children: [t(txt, { size: 18, ...(head ? { bold: true, color: 'FFFFFF' } : {}) })] })] });
@@ -210,7 +239,7 @@ const refs = [
     return new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: cw,
       rows: [new TableRow({ tableHeader: true, children: hdr.map((h, i) => c(h, cw[i], true)) }),
         ...who.map((w) => new TableRow({ children: [c(w, cw[0]), c('', cw[1]), c('☐ Y ☐ N', cw[2]), c('', cw[3])] }))] });
-  })(),
+  })()]),
   brk(),
 ];
 
@@ -229,8 +258,7 @@ const dl = [
   p([t('I authorize '), t(CO), t(' to obtain my motor vehicle record (MVR) now and periodically while I am employed, for insurance and safety purposes. I will tell my supervisor '), bold('within 24 hours'), t(' if my license is suspended, revoked or expires, or if I receive a moving violation. I will not drive a company vehicle without a valid license.')]),
   sig(),
   spacer(),
-  h2('Office use'),
-  fields([rowW(['DL Copy on File (Y/N)', 3360], ['MVR Ordered (date)', 3360], ['Approved to Drive (Y/N)', 3360])]),
+  officeBox('Driver approval', () => [fields([rowW(['DL Copy on File (Y/N)', 3360], ['MVR Ordered (date)', 3360], ['Approved to Drive (Y/N)', 3360])])]),
   brk(),
 ];
 
@@ -281,7 +309,7 @@ const tax = [
   bullet([bold('Texas state withholding — none. '), t('Texas has no state income tax, so there is no state withholding form.')]),
   bullet([bold('Form W-2 — you receive this from us. '), t('Every January, the Company mails you a W-2 showing what you earned and what was withheld the year before. Please keep your mailing address current so it reaches you.')]),
   spacer(),
-  note([t('Office reminder: ', { bold: true }), t('report every new hire to the Texas Attorney General’s Employer New Hire Reporting program within 20 days of the start date (employer.oag.texas.gov). Most payroll services, including QuickBooks Payroll, file this for you.')]),
+  officeBox('', () => [p([t('report every new hire to the Texas Attorney General’s Employer New Hire Reporting program within 20 days of the start date (employer.oag.texas.gov). Most payroll services, including QuickBooks Payroll, file this for you.', { size: 19 })], { spacing: { before: 40, after: 0 } })]),
   brk(),
 ];
 
@@ -303,8 +331,8 @@ const dd = [
   note([t('Attach a VOIDED CHECK or a direct-deposit letter from your bank. ', { bold: true }), t('A deposit slip is not accepted — its numbers can differ.')]),
   p('I authorize State of the Arc Welding & Services LLC and its bank or payroll provider to deposit my pay into the account(s) above and, if a deposit is made in error, to reverse or correct that entry. This authorization stays in effect until I give the Company written notice to change or cancel it, allowing reasonable time (usually one to two pay periods) to act on it. Until the first direct deposit goes through, I may be paid by check. If an account is closed or the numbers are wrong, I will tell the office right away.', { spacing: { before: 160, after: 0 } }),
   fields([rowW(['Employee Signature', 5040], ['Printed Name', 3240], ['Date', 1800])]),
-  h2('Office use'),
-  fields([row('Entered in Payroll By', 'Date Entered', 'First Pay Date on Deposit')]),
+  spacer(),
+  officeBox('Payroll entry', () => [fields([row('Entered in Payroll By', 'Date Entered', 'First Pay Date on Deposit')])]),
   brk(),
 ];
 
@@ -317,7 +345,7 @@ function grid(headers, widths, rows, { size = 18, minH = 360 } = {}) {
     children: [new Paragraph({ spacing: { after: 0 }, children: Array.isArray(txt) ? txt : [t(txt, { size, ...(head ? { bold: true, color: 'FFFFFF' } : {}) })] })],
   });
   return new Table({
-    width: { size: W, type: WidthType.DXA }, columnWidths: widths,
+    width: { size: W, type: WidthType.DXA }, columnWidths: (widths = fit(widths)),
     rows: [
       ...(headers ? [new TableRow({ tableHeader: true, children: headers.map((h, i) => cell(h, widths[i], true)) })] : []),
       ...rows.map((r) => new TableRow({ height: { value: minH, rule: 'atLeast' }, children: r.map((c, i) => cell(c, widths[i], false)) })),
@@ -359,14 +387,14 @@ const cards = ['OSHA 10-Hour', 'OSHA 30-Hour', 'H2S Clear / H2S Awareness', 'Saf
 const certs = [
   ...title(`${SEC.certs}. Safety Cards & Welding Certifications`, 'Bring your cards and certs. The office will copy them. Many customer sites won’t let you through the gate without current cards.'),
   h2('Safety training cards'),
-  grid(['Card', 'Card / ID #', 'Issued', 'Expires', 'Copy (office)'], [3480, 2640, 1320, 1320, 1320], cards.map((c) => [c, '', '', '', '☐']), { minH: 320 }),
+  grid(['Card', 'Card / ID #', 'Issued', 'Expires', 'OFFICE: Copied'], [3480, 2640, 1320, 1320, 1320], cards.map((c) => [c, '', '', '', '☐']), { minH: 320 }),
   h2('Welding certifications'),
   grid(['Code (AWS D1.1, ASME IX, API 1104…)', 'Process (SMAW, GTAW…)', 'Position', 'Material / Thickness or Pipe Range', 'Test Date', 'Issued By'],
     [2040, 1560, 1080, 2280, 1320, 1800], [1, 2, 3, 4].map(() => ['', '', '', '', '', ''])),
   p([t('Keep your certs active: under AWS and ASME rules a welder qualification lapses if you go more than 6 months without welding in that process.', { size: 17, color: GREY, italics: true })], { spacing: { before: 80 } }),
-  h2('Office use — weld test at State of the Arc'),
-  fields([row('Test Date', 'Process / Position', 'Result: ☐ Pass  ☐ Fail', 'Tested By')]),
   sigAs('Employee Signature — the cards and certs listed are mine and current'),
+  spacer(),
+  officeBox('Weld test at State of the Arc', () => [fields([row('Test Date', 'Process / Position', 'Result: ☐ Pass  ☐ Fail', 'Tested By')])]),
   brk(),
 ];
 
@@ -453,7 +481,8 @@ const injury = [
   ]),
   note([t('No retaliation. ', { bold: true }), t('The Company will not punish you for reporting an injury or raising a safety concern.')]),
   sigAs('Employee Signature — I understand how to report an injury'),
-  p([t('Office: report to OSHA any work-related death within 8 hours, and any in-patient hospitalization, amputation or loss of an eye within 24 hours.', { size: 17, color: GREY, italics: true })], { spacing: { before: 100 } }),
+  spacer(),
+  officeBox('', () => [p([t('report to OSHA any work-related death within 8 hours, and any in-patient hospitalization, amputation or loss of an eye within 24 hours.', { size: 18 })], { spacing: { before: 40, after: 0 } })]),
   brk(),
 ];
 
@@ -476,13 +505,13 @@ const incident = [
   p('Treatment:   ☐ First aid only   ☐ Clinic   ☐ Emergency room   ☐ Refused treatment', { spacing: { before: 200, after: 60 } }),
   p('Post-accident drug / alcohol test done:   ☐ Yes   ☐ No', { spacing: { after: 0 } }),
   fields([rowW(['Employee Signature', 3600], ['Date', 1440], ['Supervisor Signature', 3600], ['Date', 1440])]),
-  h2('Office use'),
-  grid(null, [5520, 4560], [
+  spacer(),
+  officeBox('Claim & OSHA follow-up', () => [grid(null, [5520, 4560], [
     ['Reported to workers’ comp carrier (date / claim #)', ''],
     ['DWC Form-001 to carrier — required if more than 1 day of lost time; due within 8 days', ''],
     ['OSHA recordable? / Reported to OSHA if serious (date)', ''],
     ['Corrective action taken / by whom', ''],
-  ]),
+  ])]),
   brk(),
 ];
 
@@ -540,8 +569,7 @@ const ack = [
   spacer(),
   sig(),
   spacer(120),
-  h2('Office checklist (completed by employer)'),
-  (() => {
+  officeBox('New hire checklist', () => [(() => {
     const items = [
       ['Offer letter signed and returned', ''],
       ['Employee Information sheet', ''],
@@ -565,18 +593,17 @@ const ack = [
       ['Hazard communication training completed', ''],
       ['Texas new-hire report filed (within 20 days)', ''],
     ];
-    const cw = [720, 6480, 2880];
+    const cw = fit([720, 6480, 2880]);
     const c = (txt, w, o = {}) => new TableCell({ width: { size: w, type: WidthType.DXA }, margins: { top: 30, bottom: 30, left: 120, right: 120 }, ...o,
       children: [new Paragraph({ spacing: { after: 0 }, children: [t(txt, { size: 19, ...(o.bold ? { bold: true, color: 'FFFFFF' } : {}) })] })] });
     const hdr = { shading: { type: ShadingType.CLEAR, fill: '333333', color: 'auto' }, bold: true };
     return new Table({
       width: { size: W, type: WidthType.DXA }, columnWidths: cw,
-      rows: [new TableRow({ tableHeader: true, children: [c('✓', 720, hdr), c('Item', 6480, hdr), c('Date / Initials', 2880, hdr)] }),
-        ...items.map(([s]) => new TableRow({ children: [c('☐', 720), c(s, 6480), c('', 2880)] }))],
+      rows: [new TableRow({ tableHeader: true, children: [c('✓', cw[0], hdr), c('Item', cw[1], hdr), c('Date / Initials', cw[2], hdr)] }),
+        ...items.map(([s]) => new TableRow({ children: [c('☐', cw[0]), c(s, cw[1]), c('', cw[2])] }))],
     });
   })(),
-  spacer(),
-  p([t('Keep the I-9 and the drug test results in their own files, separate from the personnel file. Keep I-9s for 3 years after hire or 1 year after employment ends, whichever is later.', { size: 18, color: GREY, italics: true })]),
+  p([t('Keep the I-9 and the drug test results in their own files, separate from the personnel file. Keep I-9s for 3 years after hire or 1 year after employment ends, whichever is later.', { size: 18, color: GREY, italics: true })])]),
 ];
 
 const doc = new Document({
