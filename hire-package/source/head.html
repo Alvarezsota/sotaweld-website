@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>New Hire Package</title>
+<style>
+@page { size: letter; margin: 0.6in 0.75in 0.7in; }
+* { box-sizing: border-box; }
+body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; color: #1f1f1f; margin: 0; line-height: 1.4; }
+.page { page-break-after: always; position: relative; min-height: 9.6in; }
+.page:last-child { page-break-after: auto; }
+.top { display: flex; justify-content: space-between; font-size: 8pt; color: #666; border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-bottom: 18px; }
+.top b { color: #444; }
+.foot { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; font-size: 7.5pt; color: #777; border-top: 1px solid #ddd; padding-top: 4px; }
+h1 { font-size: 17pt; margin: 0 0 2px; }
+.sub { font-size: 9.5pt; color: #666; font-style: italic; border-bottom: 2.5px solid #B8860B; padding-bottom: 6px; margin-bottom: 14px; }
+h2 { font-size: 12pt; color: #B8860B; margin: 16px 0 6px; }
+p { margin: 0 0 8px; }
+ul { margin: 0 0 8px; padding-left: 20px; } li { margin-bottom: 4px; }
+ul.box { list-style: none; padding-left: 0; } ul.box li::before { content: "\2610"; font-size: 13pt; margin-right: 8px; }
+.f { display: flex; gap: 14px; margin-bottom: 4px; }
+.f > div { flex: var(--w, 1); }
+.f > div::before { content: ""; display: block; height: 24px; border-bottom: 1px solid #999; }
+.f > div span { display: block; font-size: 7.5pt; color: #666; margin-top: 2px; }
+.note { background: #FFF6DD; border-left: 5px solid #B8860B; padding: 9px 13px; margin: 10px 0; }
+.sig { margin-top: 14px; }
+table { width: 100%; border-collapse: collapse; font-size: 9.2pt; }
+th { background: #333; color: #fff; text-align: left; padding: 6px 8px; vertical-align: top; }
+th small { display: block; font-weight: normal; font-size: 7.5pt; }
+td { border: 1px solid #bbb; padding: 5px 8px; vertical-align: top; }
+td ul { margin: 0; padding-left: 14px; }
+.cover { text-align: center; }
+.cover img { width: 210px; margin: 30px 0 14px; }
+.cover .big { font-size: 28pt; font-weight: bold; }
+.cover .co { font-size: 13pt; color: #B8860B; font-weight: bold; margin-bottom: 26px; }
+.left { text-align: left; }
+.small { font-size: 8.5pt; color: #666; font-style: italic; }
+.digits { display: flex; gap: 0; margin: 4px 0 2px; }
+.digits i { width: 23px; height: 28px; border: 1px solid #999; border-right: none; }
+.digits i:last-child { border-right: 1px solid #999; }
+.lbl { font-size: 7.5pt; color: #666; margin-bottom: 10px; }
+.acct { border: 1px solid #ccc; border-radius: 4px; padding: 8px 14px 4px; margin-bottom: 12px; }
+.acct h3 { margin: 0 0 2px; font-size: 10.5pt; }
+.tape { border: 2px dashed #bbb; height: 1.55in; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; font-size: 9.5pt; text-align: center; margin: 6px 0 10px; }
+.tight .f > div::before { height: 20px; }
+.tight .f { margin-bottom: 2px; }
+.tight .acct { padding: 6px 14px 2px; margin-bottom: 8px; }
+.tight h2 { margin: 10px 0 4px; }
+.tight td { padding: 3px 8px; }
+p.row { margin: 12px 0 4px; }
+.grid td { height: 25px; }
+.tight .grid td { height: 21px; }
+.cols { display: flex; gap: 22px; } .cols > div { flex: 1; }
+.cols ul { padding-left: 16px; font-size: 9.6pt; }
+ol.steps { padding-left: 20px; } ol.steps li { margin-bottom: 7px; }
+[data-key=ack] td { padding: 2px 8px; font-size: 8.8pt; height: auto; }
+</style></head><body>
