@@ -14,6 +14,7 @@ OUT = os.path.dirname(HERE)
 CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
 EMPLOYER = 'State of the Arc Welding & Services LLC'
 ADDRESS = '10234 West 64th Street, Odessa, TX 79764'
+EIN = '99-1328746'
 
 ORDER = [
     'cover', 'offer', 'info', 'ua', 'fcra', 'bgauth', 'refs', 'dl', 'certs',
@@ -88,11 +89,13 @@ def fill(page, suffix_to_value):
 for p in base:
     t = p.get_text()
     if 'Employee’s Withholding Certificate' in t and 'Form' in t and 'W-4' in t:
-        fill(p, {'f1_12': f'{EMPLOYER}\n{ADDRESS}'})
+        fill(p, {'f1_12': f'{EMPLOYER}\n{ADDRESS}', 'f1_14': EIN})
     if 'Employment Eligibility Verification' in t and 'Section 2. Employer Review' in t:
         fill(p, {'Employers Business or Org Name': EMPLOYER,
                  'Employers Business or Org Address': ADDRESS})
 
+# The package is printed, so flatten the forms: filled values become part of the page.
+base.bake()
 base.save(f'{OUT}/SOTA-New-Hire-Package.pdf', garbage=3, deflate=True)
 out = pymupdf.open(f'{OUT}/SOTA-New-Hire-Package.pdf')
 print(f'{html_pages} package pages + official forms = {len(out)} pages, '
