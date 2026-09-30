@@ -55,6 +55,14 @@
   const errorMsg = document.getElementById('errorMsg');
   const loginBtn = document.getElementById('loginBtn');
 
+  // Put out by the door guard rather than by logging out. Say why, once --
+  // otherwise it reads as the app having dropped him for no reason.
+  const putOut = sessionStorage.getItem('sotaSignedOutReason');
+  if (putOut) {
+    sessionStorage.removeItem('sotaSignedOutReason');
+    errorMsg.textContent = putOut;
+  }
+
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     errorMsg.textContent = '';
@@ -67,7 +75,10 @@
     const { error } = await sb.auth.signInWithPassword({ email, password });
 
     if (error) {
-      errorMsg.textContent = 'Incorrect email or password.';
+      const closed = /banned|disabled|blocked/i.test(String(error.message || ''));
+      errorMsg.textContent = closed
+        ? 'Your access has been turned off. Call the office on (432) 248-1455.'
+        : 'Incorrect email or password.';
       loginBtn.disabled = false;
       loginBtn.textContent = 'Log In';
       return;

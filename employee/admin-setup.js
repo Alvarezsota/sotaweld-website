@@ -625,6 +625,7 @@ let passwordEditId = null;
 const ADMIN_SET_PASSWORD_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/admin-set-password';
 const ADMIN_INVITE_WELDER_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/admin-invite-welder';
 const ADMIN_CREATE_WELDER_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/admin-create-welder';
+const ADMIN_SET_ACTIVE_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/admin-set-active';
 const ONEDRIVE_START_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/onedrive-oauth-start';
 const ONEDRIVE_DISCONNECT_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/onedrive-disconnect';
 
@@ -676,15 +677,15 @@ onList('weldersTable', 'click', async (e) => {
     const was = p.active !== false;
     p.active = !was;
     renderWelders();
-    const { data, error } = await sb.from('profiles')
-      .update({ active: p.active }).eq('id', p.id).select('active, archived_at').maybeSingle();
-    if (error || !data) {
+    try {
+      const saved = await setPersonActive(p.id, p.active);
+      p.archived_at = saved.archived_at;
+    } catch (err) {
       p.active = was;
       renderWelders();
-      alert('That welder did not change.\n\n' + ((error && error.message) || 'Nothing was saved.'));
+      alert('That welder did not change.\n\n' + err.message);
       return;
     }
-    p.archived_at = data.archived_at;
     renderWelders();
     return;
   }
@@ -699,6 +700,25 @@ onList('weldersTable', 'click', async (e) => {
   const saveBtn = e.target.closest('[data-action="save-password"]');
   if (saveBtn) await saveNewPassword(e.target.closest('[data-profile-id]'), saveBtn);
 });
+
+/* Archiving somebody, or bringing them back.
+ *
+ * Not a column any more. Archiving used to set profiles.active and stop there,
+ * which left the man's login working -- Jose Franco was archived by mistake on
+ * 15 September and carried on filing tickets for a fortnight. The account has
+ * to close with the row, and only the service role can touch an account, so it
+ * goes through admin-set-active. That function does both or neither. */
+async function setPersonActive(personId, active) {
+  const { data: { session } } = await sb.auth.getSession();
+  const res = await fetch(ADMIN_SET_ACTIVE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+    body: JSON.stringify({ personId, active })
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json.ok) throw new Error(json.error || 'Nothing was changed.');
+  return json.profile;
+}
 
 /* Setting somebody's password by hand. Shared, because the office table needs
    exactly the same thing and a second copy of it is a second place to fix. */
@@ -1015,15 +1035,15 @@ onList('officeTable', 'click', async (e) => {
     const was = p.active !== false;
     p.active = !was;
     renderOffice();
-    const { data, error } = await sb.from('profiles')
-      .update({ active: p.active }).eq('id', p.id).select('active, archived_at').maybeSingle();
-    if (error || !data) {
+    try {
+      const saved = await setPersonActive(p.id, p.active);
+      p.archived_at = saved.archived_at;
+    } catch (err) {
       p.active = was;
       renderOffice();
-      alert('That did not change.\n\n' + ((error && error.message) || 'Nothing was saved.'));
+      alert('That did not change.\n\n' + err.message);
       return;
     }
-    p.archived_at = data.archived_at;
     renderOffice();
     return;
   }

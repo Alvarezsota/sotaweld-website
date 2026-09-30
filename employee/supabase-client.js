@@ -234,10 +234,14 @@ document.addEventListener('visibilitychange', () => {
    only about not putting the wrong screen in front of somebody.
 
    Admins are exempt: Gilbert needs every page, and he needs to be able to open
-   the clock to correct a punch. */
+   the clock to correct a punch.
+
+   This also turns away anybody who has been archived -- see below. Two
+   different jobs, one place, because it is the one file every page loads and
+   both have to happen before a screen is drawn. */
 const OFFICE_HOME = 'timeclock.html';
 
-async function sendOfficeStaffToTheClock() {
+async function guardTheDoor() {
   const page = (window.location.pathname.split('/').pop() || '').toLowerCase();
   // The sign-in pages have no profile to read yet, and bouncing off them would
   // interrupt setting a password.
@@ -248,7 +252,25 @@ async function sendOfficeStaffToTheClock() {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return;
     const { data: p } = await sb.from('profiles')
-      .select('role, pay_kind').eq('id', session.user.id).maybeSingle();
+      .select('role, pay_kind, active').eq('id', session.user.id).maybeSingle();
+
+    /* Archived, and still holding a session.
+     *
+     * Archiving now closes the account, so he cannot sign in again -- but a
+     * token already in his phone stays valid until it expires, and until then
+     * every screen would keep loading. The database refuses his writes either
+     * way; this is so he is told why instead of watching Submit fail.
+     *
+     * Checked here rather than on one page because it is the one file every
+     * page loads, and the page he happens to open should not decide it. */
+    if (p && p.active === false) {
+      await sb.auth.signOut().catch(() => {});
+      sessionStorage.setItem('sotaSignedOutReason',
+        'Your access has been turned off. Call the office on (432) 248-1455.');
+      window.location.replace('login.html');
+      return;
+    }
+
     if (!p || p.role === 'admin' || p.pay_kind !== 'office') return;
     // replace, not href: the back button should not drop her straight back on
     // a page she cannot use.
@@ -259,7 +281,7 @@ async function sendOfficeStaffToTheClock() {
   }
 }
 
-sendOfficeStaffToTheClock();
+guardTheDoor();
 
 /* Where somebody belongs when they have just signed in. Used by login.js so
    office staff are not shown Log Work for the half second before the door
