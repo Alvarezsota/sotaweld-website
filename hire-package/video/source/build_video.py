@@ -3,15 +3,24 @@ import hashlib, html, json, os, subprocess, sys, wave
 import numpy as np
 import soundfile as sf
 import imageio_ffmpeg
-from script import SLIDES
+import importlib
+# Which script to build: SCRIPT=script (English, default) or SCRIPT=script_es (Spanish).
+_mod = importlib.import_module(os.environ.get('SCRIPT', 'script'))
+SLIDES = _mod.SLIDES
+UI = {'do_this': '✓ DO THIS', 'wwyd': 'WHAT WOULD<br>YOU DO?', 'do_label': 'Do this:',
+      'lbl_name': 'EXAMPLE FUEL GAS', 'lbl_maker': 'Made by: Example Gas Co. · 555-0100', 'lbl_signal': 'DANGER',
+      'lbl_hazard': 'Extremely flammable gas.<br>Contains gas under pressure; may explode if heated.',
+      'lbl_prec': 'Keep away from heat, sparks and open flames. Store in a well-ventilated place. Close valve after each use.',
+      **getattr(_mod, 'UI', {})}
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, 'out'); os.makedirs(OUT, exist_ok=True)
+OUT = os.path.join(HERE, getattr(_mod, 'OUT_DIR', 'out')); os.makedirs(OUT, exist_ok=True)
 FONTS = '/home/user/sotaweld-website/employee/fonts'
 LOGO = '/home/user/sotaweld-website/employee/sota-logo.png'
 CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
-VOICE = os.environ.get('VOICE', 'af_heart')
+VOICE = os.environ.get('VOICE', getattr(_mod, 'VOICE', 'af_heart'))
+LANG = getattr(_mod, 'LANG', 'en-us')
 FPS = 30
 LEAD_IN, GAP, TAIL = 0.6, 0.45, 0.9      # seconds: before a slide's first line, between lines, after a slide
 SR = 24000
@@ -46,8 +55,8 @@ def visual_html(slide, step_i):
         answering = any(st[0] for st in slide['steps'][:step_i + 1])
         icon = f'<svg viewBox="0 0 200 200" class="icon sm">{ICONS[v[9:]]}</svg>'
         if answering:
-            return f'<div class="scn">{icon}<div class="dothis">✓ DO THIS</div></div>'
-        return f'<div class="scn"><div class="q">?</div><div class="wwyd">WHAT WOULD<br>YOU DO?</div></div>'
+            return f'<div class="scn">{icon}<div class="dothis">{UI["do_this"]}</div></div>'
+        return f'<div class="scn"><div class="q">?</div><div class="wwyd">{UI["wwyd"]}</div></div>'
     if v.startswith('icon:'):
         return f'<svg viewBox="0 0 200 200" class="icon">{ICONS[v[5:]]}</svg>'
     if v == 'pictos':
@@ -59,11 +68,11 @@ def visual_html(slide, step_i):
         f = LABEL_FOCUS.get(step_i)
         on = lambda k: 'on' if f in (None, 'all', k) else 'off'
         return f'''<div class="label">
-          <div class="lp {on('name')}"><b>EXAMPLE FUEL GAS</b><br><small>Made by: Example Gas Co. · 555-0100</small></div>
+          <div class="lp {on('name')}"><b>{UI["lbl_name"]}</b><br><small>{UI["lbl_maker"]}</small></div>
           <div class="lrow"><img src="file://{HERE}/ghs/flamme.svg" class="{on('hazard')}"><img src="file://{HERE}/ghs/bottle.svg" class="{on('hazard')}">
-            <div class="sig {on('signal')}">DANGER</div></div>
-          <div class="lp {on('hazard')}">Extremely flammable gas.<br>Contains gas under pressure; may explode if heated.</div>
-          <div class="lp {on('precaution')}"><small>Keep away from heat, sparks and open flames. Store in a well-ventilated place. Close valve after each use.</small></div>
+            <div class="sig {on('signal')}">{UI["lbl_signal"]}</div></div>
+          <div class="lp {on('hazard')}">{UI["lbl_hazard"]}</div>
+          <div class="lp {on('precaution')}"><small>{UI["lbl_prec"]}</small></div>
         </div>'''
     raise ValueError(v)
 
@@ -121,7 +130,7 @@ def slide_html(si, slide, step_i):
     else:
         cur = len(bullets) - 1 if slide['steps'][step_i][0] else -1
         situation = f'<div class="sit">{disp(slide["situation"])}</div>' if slide.get('situation') else ''
-        dolabel = '<div class="dolabel">Do this:</div>' if situation and bullets else ''
+        dolabel = f'<div class="dolabel">{UI["do_label"]}</div>' if situation and bullets else ''
         lis = ''.join(f'<li class="{"cur" if i == cur else ""}">{disp(b)}</li>' for i, b in enumerate(bullets))
         body = f'''<div class="top"><span><img src="file://{LOGO}">State of the Arc Welding &amp; Services</span><span class="k">{disp(slide['kicker'])}</span></div>
           <div class="left"><h1>{disp(slide['title'])}</h1><div class="rule"></div>{situation}{dolabel}<ul class="{'sc' if situation else ''}">{lis}</ul></div>
@@ -149,7 +158,7 @@ def narrate():
             text = step[1]
             wav = os.path.join(OUT, 'tts_' + hashlib.md5(f'{VOICE}|{text}'.encode()).hexdigest()[:16] + '.wav')
             if not os.path.exists(wav):
-                a, sr = k.create(text, voice=VOICE, speed=1.0, lang='en-us')
+                a, sr = k.create(text, voice=VOICE, speed=1.0, lang=LANG)
                 assert sr == SR
                 sf.write(wav, a, sr)
             clips.append(wav)
@@ -192,6 +201,6 @@ if __name__ == '__main__':
     if only == 'frames':
         print(len(frames), 'frames'); sys.exit()
     clips = narrate()
-    dest = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, 'HazCom-Training.mp4')
+    dest = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, getattr(_mod, 'OUTPUT', 'HazCom-Training.mp4'))
     t = assemble(frames, clips, dest)
     print(f'{dest}: {t/60:.1f} min, {len(frames)} steps')
