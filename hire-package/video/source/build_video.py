@@ -179,10 +179,11 @@ def assemble(frames, clips, dest):
     peak = np.abs(full).max(); full = full / peak * 0.89 if peak > 0 else full
     sf.write(os.path.join(OUT, 'narration.wav'), full, SR)
     open(os.path.join(OUT, 'frames.txt'), 'w').write('ffconcat version 1.0\n' + '\n'.join(concat) + '\n')
+    # Audio: normalized to standard phone/TV loudness, 48 kHz stereo.
     subprocess.run([FFMPEG, '-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', os.path.join(OUT, 'frames.txt'),
                     '-i', os.path.join(OUT, 'narration.wav'),
                     '-vf', f'fps={FPS},format=yuv420p', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-tune', 'stillimage',
-                    '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11', '-ar', '48000', '-ac', '2', '-c:a', 'aac', '-b:a', '192k',  # standard phone/TV loudness, 48 kHz stereo '-shortest', '-movflags', '+faststart', dest], check=True)
+                    '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11', '-ar', '48000', '-ac', '2', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', dest], check=True)
     return t
 
 if __name__ == '__main__':
