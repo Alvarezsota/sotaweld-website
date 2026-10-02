@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="sota-build" content="20261002g">
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<title>JSA | State of the Arc Welding</title>
+<meta name="robots" content="noindex">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dark-theme.css?v=20261002g">
+<link rel="stylesheet" href="jsa.css?v=20261002g">
+</head>
+<body>
+
+<header class="et-nav">
+  <div class="et-nav-left">
+    <img src="../assets/img/logo.jpeg" alt="Logo">
+    <span class="et-wordmark">State of the Arc</span>
+  </div>
+  <nav class="et-links" id="navLinks">
+    <span id="crewNavLinks">
+      <a class="et-link" href="daily-entry.html">Log Work</a>
+      <a class="et-link" href="weld-report.html">Weld Report</a>
+      <a class="et-link on" href="jsa.html">JSA</a>
+      <a class="et-link" href="my-weld-log.html">My Weld Log</a>
+      <a class="et-link" href="crew-board.html">Crew Board</a>
+      <a class="et-link" href="timeclock.html">Time Clock</a>
+    </span>
+    <span id="adminNavLinks" style="display:none;">
+      <a class="et-link" href="admin-setup.html">Setup</a>
+      <a class="et-link" href="approvals.html">Approvals</a>
+      <a class="et-link" href="quotes.html">Quotes</a>
+      <a class="et-link" href="parts-invoice.html">Parts and Services</a>
+      <a class="et-link" href="summary.html">Summary</a>
+      <a class="et-link" href="weld-log.html">Weld Log</a>
+      <a class="et-link" href="security.html">Security</a>
+    </span>
+  </nav>
+  <div class="et-user">
+    <span class="live-dot" id="liveDot" title="Not live"></span>
+    <span id="userName">Loading&hellip;</span>
+    <span id="adminBadge" class="admin-pill" style="display:none;">Admin</span>
+    <button class="et-logout" id="logoutBtn">Log Out</button>
+  </div>
+</header>
+
+<div class="jsa-wrap">
+
+  <!-- Which sheet we are on. Change the job or the day and the sheet for that
+       job and day is what loads -- a new one if there isn't one yet, the one
+       already going if there is. -->
+  <section class="jsa-card jsa-head">
+    <div class="jsa-grid">
+      <label class="jsa-field jsa-f-date"><span>Day</span>
+        <input type="date" class="input" id="jsaDate"></label>
+      <label class="jsa-field jsa-f-job"><span>Job</span>
+        <select class="input" id="jsaJob"></select></label>
+      <label class="jsa-field jsa-f-site"><span>Site / facility</span>
+        <input type="text" class="input" id="jsaSite" placeholder="How the client calls it"></label>
+      <label class="jsa-field"><span>Crew lead</span>
+        <select class="input" id="jsaLead"></select></label>
+      <label class="jsa-field"><span>Start</span>
+        <input type="time" class="input" id="jsaStart" value="07:00"></label>
+      <label class="jsa-field"><span>Stop</span>
+        <input type="time" class="input" id="jsaEnd" value="17:00"></label>
+      <label class="jsa-field jsa-f-wide"><span>Weather and heat index</span>
+        <input type="text" class="input" id="jsaWeather" placeholder="Clear, 98&deg;, light wind out of the south"></label>
+      <label class="jsa-field jsa-f-wide"><span>What we are doing today</span>
+        <textarea class="input" id="jsaScope" rows="2" placeholder="The scope of work this JSA covers"></textarea></label>
+    </div>
+    <p class="jsa-carried" id="carriedNote" hidden></p>
+    <p class="jsa-status" id="statusLine"></p>
+  </section>
+
+  <!-- The four steps EH2's plan asks for, in one table: break the job down,
+       name the hazard of each step, say how it is controlled. The dropdown
+       fills the last two columns from the library so nobody starts from a
+       blank sheet -- and then he still has to read it and make it today's. -->
+  <section class="jsa-card">
+    <div class="jsa-card-head">
+      <h2 class="jsa-card-title">Steps, hazards and controls</h2>
+      <span class="jsa-count" id="stepCount"></span>
+    </div>
+
+    <div class="jsa-picker">
+      <select class="input" id="hazPick">
+        <option value="">Add a hazard from the list&hellip;</option>
+      </select>
+      <button type="button" class="btn2 btn2-line" id="addBlankStep">Blank row</button>
+    </div>
+    <p class="jsa-hint">Pick a hazard and the control comes with it, straight out of
+      EH2's safety plan. Read it, change what is different today, and write the step
+      it belongs to. A hazard that needs a permit ticks the permit below on its own.</p>
+
+    <div id="stepList"></div>
+  </section>
+
+  <section class="jsa-card">
+    <div class="jsa-card-head">
+      <h2 class="jsa-card-title">PPE for this work</h2>
+    </div>
+    <p class="jsa-hint">The top row is required everywhere on site. Tick what else
+      today's work needs.</p>
+    <div class="jsa-ticks" id="ppeList"></div>
+  </section>
+
+  <section class="jsa-card">
+    <div class="jsa-card-head">
+      <h2 class="jsa-card-title">High risk work permits</h2>
+    </div>
+    <p class="jsa-hint">EH2 wants the permit handed in <b>with</b> this JSA, not after it.
+      Anything ticked here needs its permit filled out and signed before the work starts.</p>
+    <div class="jsa-ticks" id="permitList"></div>
+  </section>
+
+  <section class="jsa-card">
+    <div class="jsa-card-head">
+      <h2 class="jsa-card-title">If something goes wrong</h2>
+    </div>
+    <div class="jsa-grid">
+      <label class="jsa-field"><span>Muster point</span>
+        <input type="text" class="input" id="emMuster"></label>
+      <label class="jsa-field"><span>Nearest hospital</span>
+        <input type="text" class="input" id="emHospital"></label>
+      <label class="jsa-field"><span>Site safety rep</span>
+        <input type="text" class="input" id="emRep"></label>
+      <label class="jsa-field"><span>His number</span>
+        <input type="tel" class="input" id="emRepPhone"></label>
+      <label class="jsa-field jsa-f-wide"><span>Who calls 911, and from where</span>
+        <input type="text" class="input" id="emCaller"></label>
+    </div>
+  </section>
+
+  <!-- Everybody who is going to do the work signs it. The crew lead holds the
+       phone and it goes down the line. A name typed in by hand is kept, so the
+       EH2 rep is typed once and picked from then on. -->
+  <section class="jsa-card">
+    <div class="jsa-card-head">
+      <h2 class="jsa-card-title">Signatures</h2>
+      <span class="jsa-count" id="sigCount"></span>
+    </div>
+
+    <div class="jsa-sign-new">
+      <div class="jsa-grid">
+        <label class="jsa-field jsa-f-wide"><span>Who is signing</span>
+          <select class="input" id="sigWho"></select></label>
+        <label class="jsa-field jsa-new-name" hidden><span>Name</span>
+          <input type="text" class="input" id="sigName" placeholder="Printed name"></label>
+        <label class="jsa-field jsa-new-name" hidden><span>Company</span>
+          <input type="text" class="input" id="sigCompany" placeholder="Who he works for"></label>
+        <label class="jsa-field jsa-new-name" hidden><span>Title or craft</span>
+          <input type="text" class="input" id="sigCraft" placeholder="Welder, safety rep, operator&hellip;"></label>
+      </div>
+      <p class="jsa-hint jsa-new-name" hidden>Typed in once. Next time he is in the list.</p>
+
+      <div class="jsa-pad-head">
+        <span class="jsa-pad-label">Sign here with your finger</span>
+        <button type="button" class="jsa-pad-clear" id="padClear">Clear</button>
+      </div>
+      <canvas class="jsa-pad" id="sigPad" width="1040" height="320"></canvas>
+
+      <div class="jsa-sign-actions">
+        <button type="button" class="btn2 btn2-solid" id="sigAdd">Add this signature</button>
+      </div>
+      <p class="jsa-msg" id="sigMsg"></p>
+    </div>
+
+    <div id="sigList"></div>
+  </section>
+
+  <section class="jsa-card jsa-ack-card">
+    <label class="jsa-ack">
+      <input type="checkbox" id="stopWork">
+      <span>Every man on this crew has been told he has <b>stop work authority</b> &mdash;
+        if the scope changes or a new hazard shows up, work stops, this JSA gets
+        changed, and it is re-signed and re-approved before anybody carries on.</span>
+    </label>
+  </section>
+
+  <div class="jsa-actions">
+    <button type="button" class="btn2 btn2-line" id="saveBtn">Save</button>
+    <button type="button" class="btn2 btn2-solid" id="submitBtn">Hand it in</button>
+    <button type="button" class="btn2 btn2-line" id="printBtn">Print / email PDF</button>
+    <button type="button" class="btn2 btn2-ghost" id="blankBtn">Blank form</button>
+  </div>
+  <p class="jsa-msg" id="formMsg"></p>
+
+  <section class="jsa-card">
+    <div class="jsa-card-head">
+      <h2 class="jsa-card-title">The last 30 days</h2>
+    </div>
+    <div id="recentList"></div>
+  </section>
+
+  <p class="jsa-foot">EH2 wants this in before work starts in the morning, and reviewed
+    no later than the Daily Work Coordination Meeting. Keep a copy on you while you work
+    and put the original in the JSA bin in the construction trailer.</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase-client.js?v=20261002g"></script>
+<script src="jsa.js?v=20261002g"></script>
+<div class="et-support"><b>Need help?</b> Call the office on <a href="tel:+14322481455">(432)&nbsp;248-1455</a> or email <a href="mailto:g.alvarez@sotaweld.com">g.alvarez@sotaweld.com</a><br>State of the Arc Welding &amp; Services LLC &middot; Odessa, TX</div>
+</body>
+</html>

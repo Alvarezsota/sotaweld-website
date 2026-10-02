@@ -1,0 +1,211 @@
+/* The JSA is filled out standing in a caliche lot at seven in the morning, on a
+   phone, with gloves half off. Same ground as the clock: big targets, one
+   column, nothing that needs two hands. The one thing that cannot be small is
+   the signature pad -- a man signing with his finger needs room to do it. */
+
+.jsa-wrap { max-width: 820px; margin: 0 auto; padding: 18px 14px 60px; }
+
+.jsa-card {
+  background: var(--steel-850); border: 1px solid var(--line);
+  border-radius: 14px; padding: 16px 16px 18px; margin-bottom: 16px;
+}
+.jsa-head { border-left: 3px solid var(--molten); }
+
+.jsa-card-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin-bottom: 10px;
+}
+.jsa-card-title {
+  margin: 0; font-size: 13px; font-weight: 800;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--dim);
+}
+.jsa-count { font-size: 12px; color: var(--dim2); font-weight: 700; }
+
+/* ----------------------------------------------------------------- the head */
+
+.jsa-grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.jsa-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.jsa-field > span {
+  font-size: 11px; font-weight: 700; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--dim);
+}
+.jsa-f-wide { grid-column: 1 / -1; }
+.jsa-field textarea.input { resize: vertical; min-height: 56px; }
+
+@media (max-width: 560px) {
+  .jsa-grid { grid-template-columns: 1fr; }
+  /* Start and stop are the one pair worth keeping side by side on a phone --
+     they are four characters each and they mean nothing apart. */
+  .jsa-grid > .jsa-field:nth-child(5),
+  .jsa-grid > .jsa-field:nth-child(6) { grid-column: span 1; }
+}
+
+.jsa-carried {
+  margin: 12px 0 0; padding: 9px 12px; border-radius: 10px;
+  background: var(--gold-soft); border: 1px solid rgba(233,162,59,.3);
+  color: var(--molten-2); font-size: 13px; line-height: 1.45;
+}
+.jsa-status { margin: 10px 0 0; font-size: 13px; color: var(--dim); min-height: 1.2em; }
+.jsa-status.is-in { color: var(--ok); font-weight: 700; }
+
+.jsa-hint { margin: 0 0 12px; font-size: 13px; color: var(--dim2); line-height: 1.5; }
+.jsa-hint b { color: var(--dim); }
+
+/* -------------------------------------------------------------- the picker */
+
+.jsa-picker { display: flex; gap: 10px; margin-bottom: 10px; }
+.jsa-picker .input { flex: 1 1 auto; min-width: 0; }
+.jsa-picker .btn2 { flex: 0 0 auto; white-space: nowrap; }
+
+/* --------------------------------------------------------------- the steps */
+
+.jsa-step {
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--steel-800); padding: 12px; margin-bottom: 10px;
+}
+.jsa-step-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 10px;
+}
+.jsa-step-no {
+  font-size: 11px; font-weight: 800; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--molten);
+}
+.jsa-step-kill {
+  background: none; border: 1px solid var(--line); color: var(--dim2);
+  border-radius: 8px; padding: 4px 10px; font: inherit; font-size: 12px;
+  font-weight: 700; cursor: pointer;
+}
+.jsa-step-kill:hover { color: var(--danger); border-color: var(--edge); }
+
+.jsa-step-rows { display: flex; flex-direction: column; gap: 10px; }
+.jsa-step-row { display: flex; flex-direction: column; gap: 5px; }
+.jsa-step-row > span {
+  font-size: 11px; font-weight: 700; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--dim);
+}
+.jsa-step-row textarea.input { resize: vertical; min-height: 52px; }
+.jsa-step-permit {
+  margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--molten);
+}
+
+/* ------------------------------------------------------- PPE and permits */
+
+.jsa-ticks { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 560px) { .jsa-ticks { grid-template-columns: 1fr; } }
+
+.jsa-tick {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 11px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--steel-800);
+  font-size: 14px; line-height: 1.4; cursor: pointer;
+}
+.jsa-tick input { margin: 2px 0 0; width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--molten); }
+.jsa-tick.is-on { border-color: var(--molten); background: var(--gold-soft); }
+/* Minimum PPE is not a choice -- the plan says it is worn everywhere but the
+   office and a controlled break area. It shows ticked and will not come off. */
+.jsa-tick.is-fixed { opacity: .85; cursor: default; }
+.jsa-tick-why { display: block; font-size: 12px; color: var(--dim2); margin-top: 2px; }
+
+/* ----------------------------------------------------------- signature pad */
+
+.jsa-sign-new {
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--steel-800); padding: 13px; margin-bottom: 14px;
+}
+/* These three boxes only exist for a name that is not in the list yet, so
+   display:flex has to be beaten the same way the clock's picker beat it. */
+.jsa-new-name[hidden] { display: none; }
+
+.jsa-pad-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin: 14px 0 6px;
+}
+.jsa-pad-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--dim);
+}
+.jsa-pad-clear {
+  background: none; border: 1px solid var(--line); color: var(--dim2);
+  border-radius: 8px; padding: 4px 10px; font: inherit; font-size: 12px;
+  font-weight: 700; cursor: pointer;
+}
+.jsa-pad {
+  display: block; width: 100%; height: 160px;
+  background: #F4F6F9; border: 1px solid var(--edge); border-radius: 10px;
+  /* Without this the browser scrolls the page instead of drawing a line. */
+  touch-action: none; -webkit-tap-highlight-color: transparent;
+}
+.jsa-sign-actions { display: flex; gap: 10px; margin-top: 12px; }
+.jsa-sign-actions .btn2 { flex: 1 1 auto; min-height: 46px; }
+
+.jsa-sig {
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--steel-800); padding: 10px 12px; margin-bottom: 8px;
+}
+.jsa-sig-mark {
+  flex: 0 0 120px; height: 46px; background: #F4F6F9;
+  border-radius: 8px; border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.jsa-sig-mark img { max-width: 100%; max-height: 100%; }
+.jsa-sig-who { flex: 1 1 auto; min-width: 0; }
+.jsa-sig-name { font-size: 15px; font-weight: 700; }
+.jsa-sig-sub { font-size: 12px; color: var(--dim2); margin-top: 2px; }
+.jsa-sig-kill {
+  flex: 0 0 auto; background: none; border: 1px solid var(--line);
+  color: var(--dim2); border-radius: 8px; padding: 5px 10px;
+  font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.jsa-sig-kill:hover { color: var(--danger); border-color: var(--edge); }
+
+/* ------------------------------------------------------------- the pledge */
+
+.jsa-ack-card { border-left: 3px solid var(--ok); }
+.jsa-ack {
+  display: flex; align-items: flex-start; gap: 12px;
+  font-size: 14px; line-height: 1.5; cursor: pointer;
+}
+.jsa-ack input { margin: 2px 0 0; width: 22px; height: 22px; flex: 0 0 auto; accent-color: var(--ok); }
+.jsa-ack b { color: var(--text); }
+
+/* ------------------------------------------------------------- the buttons */
+
+.jsa-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 2px; }
+.jsa-actions .btn2 { flex: 1 1 150px; min-height: 48px; }
+
+.jsa-msg { margin: 10px 0 18px; font-size: 13px; min-height: 1.2em; color: var(--dim); }
+.jsa-msg-ok  { color: var(--ok); font-weight: 700; }
+.jsa-msg-err { color: var(--danger); font-weight: 700; }
+
+/* ------------------------------------------------------------ what is done */
+
+.jsa-row {
+  display: flex; align-items: center; gap: 12px;
+  border-bottom: 1px solid var(--line); padding: 11px 2px;
+  cursor: pointer;
+}
+.jsa-row:last-child { border-bottom: none; }
+.jsa-row:hover { background: var(--steel-800); }
+.jsa-row-day { flex: 0 0 96px; font-size: 14px; font-weight: 700; }
+.jsa-row-job { flex: 1 1 auto; min-width: 0; font-size: 14px; color: var(--dim); }
+.jsa-row-job span { display: block; font-size: 12px; color: var(--dim2); }
+.jsa-row-tag {
+  flex: 0 0 auto; font-size: 11px; font-weight: 800;
+  letter-spacing: .1em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line);
+  color: var(--dim2);
+}
+.jsa-row-tag.is-in { color: var(--ok); border-color: rgba(87,201,140,.4); }
+
+.jsa-foot {
+  margin: 20px 2px 0; font-size: 12px; color: var(--dim2); line-height: 1.6;
+}
+
+/* Printing goes through a window of its own -- see jsa.js -- so there is no
+   print stylesheet here on purpose. The sheet the client gets should not be
+   this page with the navigation hidden. */
