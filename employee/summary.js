@@ -789,6 +789,69 @@ function creditCrew() {
   ].filter(p => p.id && p.name);
 }
 
+/* Turn a man's days on one job in one week from hourly to piece.
+ *
+ * A welder's own line lives on daily_entries; a helper's lives on his row of
+ * daily_entry_helpers, so the two are found differently and both have to move
+ * or the helper keeps drawing hours on a day the welder beside him does not.
+ *
+ * for_job_id as well as job_id: yard and shop time booked FOR this job is this
+ * job's cost and would otherwise keep paying by the hour. That is the same rule
+ * cost_job_id follows in v_work_lines.
+ */
+async function stopHoursPaying(kind, personId, jobId) {
+  const from = ymd(weekStart);
+  const to = ymd(addDays(weekStart, 6));
+
+  const { data: entries, error: findErr } = await sb.from('daily_entries')
+    .select('id, welder_id')
+    .gte('entry_date', from).lte('entry_date', to)
+    .or(`job_id.eq.${jobId},for_job_id.eq.${jobId}`);
+  if (findErr) return { error: findErr.message };
+  if (!(entries || []).length) return null;
+
+  if (kind === 'welder') {
+    const mine = entries.filter(e => e.welder_id === personId).map(e => e.id);
+    if (!mine.length) return null;
+    const { error } = await sb.from('daily_entries')
+      .update({ pay_mode: 'piece' }).in('id', mine);
+    return error ? { error: error.message } : null;
+  }
+
+  const { error } = await sb.from('daily_entry_helpers')
+    .update({ pay_mode: 'piece' })
+    .eq('helper_id', personId)
+    .in('daily_entry_id', entries.map(e => e.id));
+  return error ? { error: error.message } : null;
+}
+
+// The other direction, for when a credit comes off. Same rule, same places.
+async function startHoursPayingAgain(kind, personId, jobId) {
+  const from = ymd(weekStart);
+  const to = ymd(addDays(weekStart, 6));
+
+  const { data: entries, error: findErr } = await sb.from('daily_entries')
+    .select('id, welder_id')
+    .gte('entry_date', from).lte('entry_date', to)
+    .or(`job_id.eq.${jobId},for_job_id.eq.${jobId}`);
+  if (findErr) return { error: findErr.message };
+  if (!(entries || []).length) return null;
+
+  if (kind === 'welder') {
+    const mine = entries.filter(e => e.welder_id === personId).map(e => e.id);
+    if (!mine.length) return null;
+    const { error } = await sb.from('daily_entries')
+      .update({ pay_mode: 'hourly' }).in('id', mine);
+    return error ? { error: error.message } : null;
+  }
+
+  const { error } = await sb.from('daily_entry_helpers')
+    .update({ pay_mode: 'hourly' })
+    .eq('helper_id', personId)
+    .in('daily_entry_id', entries.map(e => e.id));
+  return error ? { error: error.message } : null;
+}
+
 function creditsHtml(it) {
   const rows = pieceCredits[it.bid_item_id] || [];
   const pay = Number(payPriceByItem[it.bid_item_id] ?? it.pay_price ?? 0);
@@ -817,7 +880,10 @@ function creditsHtml(it) {
       </select>
       <input class="input pc-newqty" type="number" step="any" min="0" placeholder="How many">
       <button type="button" class="btn2 btn2-ghost small" data-action="add-credit">Credit</button>
-    </div>` : ''}
+    </div>
+    <label class="pc-sweep"><input type="checkbox" class="pc-sweep-box" checked>
+      Stop his hours on this job paying him this week
+    </label>` : ''}
     ${pay ? '' : '<div class="pc-warn">No price per piece on this line yet &mdash; set one on the Setup page or these credits pay nothing.</div>'}
   </div>`;
 }
@@ -916,13 +982,37 @@ function wireBidBox(jobId) {
       if (!(qty > 0)) { alert('How many did he build?'); return; }
       const [kind, personId] = who.split(':');
 
+      const sweep = box.querySelector('.pc-sweep-box');
+
       addBtn.disabled = true; addBtn.textContent = 'Saving';
       const { error } = await sb.from('bid_piece_credits').insert({
         bid_item_id: itemId, week_start: ymd(weekStart),
         person_kind: kind, person_id: personId, qty
       });
+      if (error) {
+        addBtn.disabled = false; addBtn.textContent = 'Credit';
+        alert('Could not credit that: ' + error.message); return;
+      }
+
+      /* The usual case, in one tick instead of opening every day of his week.
+         Crediting a man for what he fabricated and then leaving his hours
+         paying as well pays him twice, and catching that means opening each
+         ticket by hand -- five days times four men is twenty edits for the one
+         thing he already said by crediting them.
+
+         Only his days on THIS job in THIS week move. A day he spent on another
+         job is nothing to do with this bid, and the per-day control on
+         Approvals is still there for the Wednesday he was on site work. */
+      if (sweep && sweep.checked) {
+        const moved = await stopHoursPaying(kind, personId, jobId);
+        if (moved && moved.error) {
+          alert('He was credited, but his hours on this job are still paying him.\n\n'
+            + moved.error + '\n\nSet those days to "the piece" on Approvals, '
+            + 'or he is paid twice for the same work.');
+        }
+      }
+
       addBtn.disabled = false; addBtn.textContent = 'Credit';
-      if (error) { alert('Could not credit that: ' + error.message); return; }
       // The week's pay changes the moment this lands, so the figures above have
       // to be re-read, not just this box.
       await loadWeek();
@@ -941,6 +1031,28 @@ function wireBidBox(jobId) {
           alert('That credit was not removed.' + (error ? '\n\n' + error.message : ''));
           return;
         }
+
+        /* Taking the last credit off has to put his hours back, or he is left
+           on a job with nothing paying him at all -- no pieces and no hours --
+           which is the one failure here nobody would spot, because a man with
+           no pay simply does not appear. */
+        const row2 = pieceCredits[itemId] || [];
+        const dropped = row2.find(r => r.id === row.getAttribute('data-credit'));
+        if (dropped) {
+          await loadPieceCredits(jobId);
+          const stillCredited = Object.values(pieceCredits).flat().some(
+            r => r.person_kind === dropped.person_kind && r.person_id === dropped.person_id);
+          if (!stillCredited) {
+            const back = await startHoursPayingAgain(
+              dropped.person_kind, dropped.person_id, jobId);
+            if (back && back.error) {
+              alert('The credit came off, but his days on this job are still set to '
+                + 'the piece, so nothing is paying him.\n\n' + back.error
+                + '\n\nSet them back to "the hour" on Approvals.');
+            }
+          }
+        }
+
         await loadWeek();
         await loadBidStatus(jobId);
       }));

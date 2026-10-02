@@ -280,3 +280,8 @@
 .pc-add .pc-person { flex: 1 1 150px; }
 .pc-add .pc-newqty { flex: 0 1 110px; }
 .pc-warn { margin-top: 8px; font-size: 11px; color: var(--molten); }
+.pc-sweep {
+  display: flex; align-items: center; gap: 7px; margin-top: 8px;
+  font-size: 12px; color: var(--dim); cursor: pointer;
+}
+.pc-sweep input { accent-color: var(--molten); }
