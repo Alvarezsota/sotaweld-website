@@ -19,7 +19,8 @@ let bidItemsByJob = {};   // job_id -> rows from job_bid_items
    the bid lines above: those are what the customer gets charged, this is what
    the job has cost, and running them together is how the two get confused. */
 let spendByJob = {};      // job_id -> row from job_spend, or null while loading
-let openBidJobId = null; // which lump sum job has its bid panel open
+let openBidJobId = null;   // which job has its price panel open
+let openLinesJobId = null; // and which of those has the line items unfolded
 let weldersList = [];
 let helpersList = [];
 /* The office. Nobody here files a ticket or a weld report -- they are paid for
@@ -257,22 +258,41 @@ function renderJobs() {
   archiveFolderHtml('jobs', put, put.map(jobRowHtml).join(''), 'jobs');
 }
 
-// ---------- Bid items ----------
-// What you bid, entered once per job. Works on ANY job, hourly or lump sum:
-//   - lump sum: the Summary page bills it by marking how many of each line got
-//     finished in a given week.
-//   - hourly: the lines are how the crew says which of that customer's bids they
-//     were on, so several bids under one customer stay separated.
+// ---------- The price on a job ----------
+//
+// One figure, and the days coming off it. That is the whole of it, and it is
+// the first thing on the panel because it is the only thing most jobs need.
+//
+// It did not used to be. The panel opened on a Description / Qty / Price-each
+// table with the price box buried underneath it, so pricing a job meant
+// scrolling past a per-piece grid to reach the one box that mattered. Gilbert
+// said it twice -- "I just need to put a price and when a welder logs his day
+// it deducts from the price of the lump sum. No changing back and forth."
+// He was right, and the numbers agreed: across every live job there were five
+// bid lines, two of them blank, and not one day's work had ever been tagged to
+// any of them.
+//
+// So the lines are still here -- a job genuinely billed off line items needs
+// them, and the Summary page invoices a lump sum job by marking off how many
+// got finished -- but they are folded away behind a link, where something used
+// by one job in thirty belongs.
 function bidPanelHtml(job) {
   const open = openBidJobId === job.id;
   const items = bidItemsByJob[job.id];
+  const linesOpen = openLinesJobId === job.id;
   const contract = (items || []).reduce((a, i) => a + Number(i.qty_bid || 0) * Number(i.unit_price || 0), 0);
+  const spend = spendByJob[job.id];
 
   if (!open) {
+    // The strip carries the answer, so most of the time the panel never has to
+    // be opened at all: what it was bid at, and what is left.
+    const bid = job.bid_amount == null ? null : Number(job.bid_amount);
+    const left = (spend && spend.remaining != null) ? Number(spend.remaining) : null;
     return `<div class="bid-strip" data-job-id="${job.id}">
-      <button type="button" class="bid-toggle" data-action="open-bid">Bid items${
-        items ? ` (${items.length})` : ''}</button>
-      ${items && items.length ? `<span class="bid-strip-total">Contract ${moneyFmt(contract)}</span>` : ''}
+      <button type="button" class="bid-toggle" data-action="open-bid">${
+        bid == null ? 'Set a price' : `Price ${moneyFmt(bid)}`}</button>
+      ${left == null ? '' : `<span class="bid-strip-total${left < 0 ? ' is-over' : ''}">${
+        left < 0 ? `${moneyFmt(Math.abs(left))} over` : `${moneyFmt(left)} left`}</span>`}
     </div>`;
   }
 
@@ -288,25 +308,34 @@ function bidPanelHtml(job) {
 
   return `<div class="bid-panel" data-job-id="${job.id}">
     <div class="bid-panel-head">
-      <span>Bid items &mdash; ${esc(job.name)}</span>
+      <span>Price &mdash; ${esc(job.name)}</span>
       <button type="button" class="bid-toggle" data-action="close-bid">Close</button>
     </div>
-    ${items === undefined ? '<p class="empty-state2">Loading&hellip;</p>' : `
-      <div class="bid-line bid-line-head">
-        <span>Description</span><span class="c">Qty</span><span>Unit</span><span class="c">Price each</span><span class="c">Line total</span><span></span>
-      </div>
-      ${rows || '<p class="empty-state2">Nothing bid yet. Add the first line below.</p>'}
-      <div class="bid-panel-foot">
-        <button type="button" class="btn2 btn2-solid small" data-action="add-bid">+ Add bid line</button>
-        <span class="bid-contract">Contract total ${moneyFmt(contract)}</span>
-      </div>
-      ${bidAmountHtml(job)}
-      ${spendHtml(job)}
-      <p class="bid-panel-note">${job.billing_type === 'flat'
-        ? `Enter what you bid here once. Each week on the Summary page you mark how many of each
-           line got finished, and that is what the customer is invoiced.`
-        : `This job bills by the hour, so these lines are not invoiced off &mdash; they show up as a
-           picker on Log Work so the crew can say which of this customer's bids they were on.`}</p>`}
+
+    ${bidAmountHtml(job)}
+    ${spendHtml(job)}
+
+    <div class="bid-lines-fold">
+      <button type="button" class="bid-lines-toggle" data-action="toggle-lines">
+        ${linesOpen ? '&#9662;' : '&#9656;'} Bill this one off line items instead${
+          items && items.length ? ` (${items.length})` : ''}
+      </button>
+      ${!linesOpen ? '' : (items === undefined ? '<p class="empty-state2">Loading&hellip;</p>' : `
+        <div class="bid-line bid-line-head">
+          <span>Description</span><span class="c">Qty</span><span>Unit</span><span class="c">Price each</span><span class="c">Line total</span><span></span>
+        </div>
+        ${rows || '<p class="empty-state2">Nothing bid yet. Add the first line below.</p>'}
+        <div class="bid-panel-foot">
+          <button type="button" class="btn2 btn2-solid small" data-action="add-bid">+ Add bid line</button>
+          <span class="bid-contract">Contract total ${moneyFmt(contract)}</span>
+        </div>
+        <p class="bid-panel-note">${job.billing_type === 'flat'
+          ? `Only for a job the customer is invoiced line by line. Each week on the Summary page you
+             mark how many of each got finished, and that is what goes on the invoice. If you are
+             just working to a lump sum, leave this alone &mdash; the price above is all you need.`
+          : `This job bills by the hour, so these lines are never invoiced off. They only show up as a
+             picker on Log Work so the crew can say which of this customer's bids they were on.`}</p>`)}
+    </div>
   </div>`;
 }
 
@@ -391,6 +420,13 @@ async function loadJobs() {
     sb.from('quote_desk_state').select('state').eq('id', 1).maybeSingle()
   ]);
   jobsList = jobRes.data || [];
+
+  /* The burn for every job that has a price on it, so the strip can say what is
+     left without the panel being opened. Only jobs with a bid_amount, which is
+     a handful -- the rest have nothing to measure against and cost a round trip
+     for an em dash. Not awaited: the rows draw straight away and each figure
+     lands as it comes back. */
+  jobsList.filter((j) => j.bid_amount != null).forEach((j) => { loadJobSpend(j.id); });
 
   // A desk company carries qbCustomerId, which is what a job is linked by, so
   // the two line up without anything new being stored. A company with no
@@ -610,7 +646,15 @@ onList('jobsTable', 'click', async (e) => {
     return;
   }
   const closeBid = e.target.closest('[data-action="close-bid"]');
-  if (closeBid) { openBidJobId = null; renderJobs(); return; }
+  if (closeBid) { openBidJobId = null; openLinesJobId = null; renderJobs(); return; }
+
+  const toggleLines = e.target.closest('[data-action="toggle-lines"]');
+  if (toggleLines) {
+    const jobId = toggleLines.closest('[data-job-id]').dataset.jobId;
+    openLinesJobId = openLinesJobId === jobId ? null : jobId;
+    renderJobs();
+    return;
+  }
 
   const addBid = e.target.closest('[data-action="add-bid"]');
   if (addBid) {
