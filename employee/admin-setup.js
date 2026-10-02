@@ -18,7 +18,8 @@ let bidItemsByJob = {};   // job_id -> rows from job_bid_items
 /* What has gone out in wages against a job, from job_spend(). Kept apart from
    the bid lines above: those are what the customer gets charged, this is what
    the job has cost, and running them together is how the two get confused. */
-let spendByJob = {};      // job_id -> row from job_spend, or null while loading
+let spendByJob = {};      // job_id -> row from job_burn, or null while loading
+let costsByJob = {};      // job_id -> rows from job_materials (money out, not a logged day)
 let openBidJobId = null;   // which job has its price panel open
 let openLinesJobId = null; // and which of those has the line items unfolded
 let weldersList = [];
@@ -315,6 +316,7 @@ function bidPanelHtml(job) {
 
     ${bidAmountHtml(job)}
     ${spendHtml(job)}
+    ${costPanelHtml(job)}
 
     <div class="bid-lines-fold">
       <button type="button" class="bid-lines-toggle" data-action="toggle-lines">
@@ -394,6 +396,8 @@ function spendHtml(job) {
         <span class="bs-sub">${esc(Number(s.hours || 0).toLocaleString())} hrs &middot; ${esc(s.people || 0)} ${Number(s.people) === 1 ? 'man' : 'men'}</span></div>
       <div><span class="bs-lbl">Per diem</span><span class="bs-val">${moneyFmt(s.per_diem_paid)}</span>
         <span class="bs-sub">one a man a day</span></div>
+      <div><span class="bs-lbl">Material</span><span class="bs-val">${moneyFmt(s.material_paid)}</span>
+        <span class="bs-sub">${Number(s.material_paid) ? 'what the steel cost' : 'none entered'}</span></div>
       <div><span class="bs-lbl">Spent</span><span class="bs-val bs-strong">${moneyFmt(spent)}</span>
         <span class="bs-sub">${s.first_day ? esc(s.first_day) + ' to ' + esc(s.last_day) : 'nothing logged yet'}</span></div>
       <div><span class="bs-lbl">${left != null && left < 0 ? 'Over bid' : 'Left of bid'}</span>
@@ -401,15 +405,91 @@ function spendHtml(job) {
         <span class="bs-sub">${pct == null ? 'enter a bid amount' : esc(pct) + '% of the bid spent'}</span></div>
     </div>
     ${pct == null ? '' : `<div class="bs-bar"><div class="bs-bar-fill" style="width:${Math.min(100, Math.max(0, pct))}%"></div></div>`}
-    <p class="bid-spend-note">Wages and per diem only. Steel, consumables and equipment are not costed
-       per job in here &mdash; those come off the QuickBooks side.</p>
+    <p class="bid-spend-note">Wages and per diem off the logged days, plus anything on the list
+       below. Steel bought on the company card and never written down here is not in it.</p>
   </div>`;
 }
 
 async function loadJobSpend(jobId) {
-  const { data, error } = await sb.rpc('job_spend', { p_job: jobId });
-  spendByJob[jobId] = error ? null : ((Array.isArray(data) ? data[0] : data) || null);
+  const [burn, costs] = await Promise.all([
+    sb.rpc('job_burn', { p_job: jobId }),
+    sb.from('job_materials').select('*').eq('job_id', jobId)
+      .order('bought_on', { ascending: false }).order('created_at', { ascending: false }),
+  ]);
+  spendByJob[jobId] = burn.error ? null
+    : ((Array.isArray(burn.data) ? burn.data[0] : burn.data) || null);
+  if (!costs.error) costsByJob[jobId] = costs.data || [];
   renderJobs();
+}
+
+/* Money out that never came through a logged day.
+ *
+ * Two kinds, and the difference is the whole point of this list. Steel bought
+ * for the job -- only on the jobs where we buy it, which is why the switch
+ * exists. And a man paid for what he built instead of for his hours.
+ *
+ * Armando is the second kind. He has an hourly rate like everybody else and
+ * works to it on most jobs; on P66 Viper he was paid by the piece. That is a
+ * fact about the job, not about the man, so nothing on his profile changes and
+ * there is no mode to switch him in and out of. His rate stays $50 and the
+ * pieces land here. */
+const COST_KINDS = [
+  ['labour',   'A man paid for what he built'],
+  ['material', 'Material we bought'],
+  ['other',    'Something else'],
+];
+
+function costRowsHtml(job) {
+  const rows = costsByJob[job.id];
+  if (rows === undefined) return '<p class="bid-spend-wait">Loading&hellip;</p>';
+  if (!rows.length) {
+    return `<p class="empty-state2">Nothing yet. Add what you paid out that did not
+      come off somebody's timesheet &mdash; steel, or a man paid by the piece.</p>`;
+  }
+  return rows.map((r) => {
+    const each = r.unit_price == null ? '' :
+      `${Number(r.qty || 0)} &times; ${moneyFmt(r.unit_price)}`;
+    return `<div class="cost-line" data-cost-id="${r.id}">
+      <input type="date" class="cell-in cost-date" value="${escAttr(r.bought_on || '')}">
+      <select class="cell-in cost-kind">
+        ${COST_KINDS.map(([k, label]) =>
+          `<option value="${k}" ${r.kind === k ? 'selected' : ''}>${esc(label)}</option>`).join('')}
+      </select>
+      <input class="cell-in cost-who" value="${escAttr(r.paid_to || '')}" placeholder="Paid to">
+      <input class="cell-in cost-what" value="${escAttr(r.description || '')}" placeholder="What for">
+      <div class="c"><input class="cell-in num cost-qty" value="${escAttr(r.qty)}" title="How many"></div>
+      <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num cost-unit"
+        value="${escAttr(r.unit_price == null ? '' : r.unit_price)}" title="Each"></div>
+      <span class="c cost-amt" title="${escAttr(each)}">${moneyFmt(r.amount)}</span>
+      <button type="button" class="row-x" data-action="delete-cost">&times;</button>
+    </div>`;
+  }).join('');
+}
+
+function costPanelHtml(job) {
+  const rows = costsByJob[job.id] || [];
+  const out = rows.reduce((a, r) => a + Number(r.amount || 0), 0);
+  return `<div class="cost-panel">
+    <div class="cost-panel-head">
+      <span>Money out that is not a logged day</span>
+      <span class="cost-panel-total">${rows.length ? moneyFmt(out) : ''}</span>
+    </div>
+    <div class="cost-line cost-line-head">
+      <span>Date</span><span>What kind</span><span>Paid to</span><span>What for</span>
+      <span class="c">How many</span><span class="c">Each</span><span class="c">Amount</span><span></span>
+    </div>
+    ${costRowsHtml(job)}
+    <div class="cost-panel-foot">
+      <button type="button" class="btn2 btn2-line small" data-action="add-cost">+ Add a line</button>
+      <label class="cost-mat-switch">
+        <input type="checkbox" class="job-material-counts" ${job.material_counts ? 'checked' : ''}>
+        <span>I buy the material on this job</span>
+      </label>
+    </div>
+    <p class="bid-panel-note">Everything on this list comes off the price, the same as a
+      logged day does. A man paid by the piece goes here &mdash; his hourly rate on his own
+      profile is left alone, because how he is paid is a fact about the job, not about him.</p>
+  </div>`;
 }
 
 function moneyFmt(n) {
@@ -576,6 +656,65 @@ onList('jobsTable', 'change', async (e) => {
   Object.assign(job, patch);
 });
 
+/* A ledger line, saved once -- when you leave the row, not the box.
+ *
+ * It saved on every field's blur to begin with, and every save redrew the job
+ * list. So typing 3 into How many and tabbing to Each destroyed the Each box
+ * mid-keystroke and the price per piece never landed: the row kept 3, lost the
+ * 1300, and reported the job as costing nothing. The same trap the week panel
+ * documents -- do not redraw under somebody's hands.
+ *
+ * focusout with relatedTarget is the fix. Moving between boxes inside the row
+ * saves nothing and redraws nothing; leaving the row saves it once, with both
+ * numbers in hand.
+ *
+ * amount is qty x each whenever an each price is given, and whatever you typed
+ * when it is not. "Three platforms at $1,300" is how Gilbert says it, so that
+ * is what the row holds -- 3, 1300, 3900 -- with the arithmetic on screen
+ * instead of in his head. */
+onList('jobsTable', 'focusout', async (e) => {
+  const line = e.target.closest('[data-cost-id]');
+  if (!line) return;
+  // Still inside the same row: he is only moving along it.
+  if (e.relatedTarget && line.contains(e.relatedTarget)) return;
+
+  const jobId = line.closest('[data-job-id]').dataset.jobId;
+  const id = line.dataset.costId;
+  const row = (costsByJob[jobId] || []).find(r => r.id === id);
+  if (!row) return;
+
+  const val = (cls) => {
+    const el = line.querySelector('.' + cls);
+    return el ? el.value : '';
+  };
+  const qty  = num(val('cost-qty'));
+  const unit = val('cost-unit').trim();
+
+  const patch = {
+    bought_on:   val('cost-date') || null,
+    kind:        val('cost-kind') || 'labour',
+    paid_to:     val('cost-who').trim() || null,
+    description: val('cost-what').trim(),
+    qty,
+    unit_price:  unit === '' ? null : num(unit),
+    amount:      unit === '' ? num(row.amount) : Math.round(qty * num(unit) * 100) / 100,
+  };
+
+  // Nothing actually moved -- do not write, and above all do not redraw.
+  const same = Object.keys(patch).every(k =>
+    String(patch[k] ?? '') === String(row[k] ?? ''));
+  if (same) return;
+
+  const { error } = await sb.from('job_materials').update(patch).eq('id', id);
+  if (error) { alert('Could not save that: ' + error.message); return; }
+  Object.assign(row, patch);
+  // The burn moved, so re-read it rather than leave a stale figure sitting
+  // above the line that just changed.
+  delete spendByJob[jobId];
+  renderJobs();
+  loadJobSpend(jobId);
+}, true);
+
 onList('jobsTable', 'blur', async (e) => {
   const row = e.target.closest('[data-job-id]');
   if (!row) return;
@@ -653,6 +792,16 @@ onList('jobsTable', 'blur', async (e) => {
   renderJobs();
 }, true);
 
+onList('jobsTable', 'change', async (e) => {
+  if (!e.target.classList.contains('job-material-counts')) return;
+  const jobId = e.target.closest('[data-job-id]').dataset.jobId;
+  const job = jobsList.find(j => j.id === jobId);
+  const on = e.target.checked;
+  const { error } = await sb.from('jobs').update({ material_counts: on }).eq('id', jobId);
+  if (error) { e.target.checked = !on; alert('Could not save that: ' + error.message); return; }
+  if (job) job.material_counts = on;
+});
+
 onList('jobsTable', 'click', async (e) => {
   const openBid = e.target.closest('[data-action="open-bid"]');
   if (openBid) {
@@ -675,6 +824,37 @@ onList('jobsTable', 'click', async (e) => {
     const jobId = toggleLines.closest('[data-job-id]').dataset.jobId;
     openLinesJobId = openLinesJobId === jobId ? null : jobId;
     renderJobs();
+    return;
+  }
+
+  const addCost = e.target.closest('[data-action="add-cost"]');
+  if (addCost) {
+    const jobId = addCost.closest('[data-job-id]').dataset.jobId;
+    const { data, error } = await sb.from('job_materials')
+      .insert({ job_id: jobId, kind: 'labour', qty: 1, amount: 0 }).select().single();
+    if (error) { alert('Could not add that line: ' + error.message); return; }
+    (costsByJob[jobId] = costsByJob[jobId] || []).unshift(data);
+    renderJobs();
+    return;
+  }
+
+  const delCost = e.target.closest('[data-action="delete-cost"]');
+  if (delCost) {
+    const line = delCost.closest('[data-cost-id]');
+    const jobId = line.closest('[data-job-id]').dataset.jobId;
+    const id = line.dataset.costId;
+    const row = (costsByJob[jobId] || []).find(r => r.id === id);
+    if (!confirm(`Take "${row ? (row.description || 'this line') : 'this line'}" off the job?`)) return;
+    const { data: gone, error } = await sb.from('job_materials').delete().eq('id', id).select('id');
+    if (error) { alert('Could not delete: ' + error.message); return; }
+    if (!gone || gone.length === 0) {
+      alert('That line could not be deleted.\n\nNothing was removed, so it is still there.');
+      return;
+    }
+    costsByJob[jobId] = (costsByJob[jobId] || []).filter(r => r.id !== id);
+    delete spendByJob[jobId];
+    renderJobs();
+    loadJobSpend(jobId);
     return;
   }
 
