@@ -64,6 +64,26 @@
 // to attach and none is attempted.
 //
 // ---------------------------------------------------------------------------
+// AND SO DOES THE LETTERHEAD INVOICE
+// ---------------------------------------------------------------------------
+//
+// A parts invoice gets the other document: the same bill drawn on our
+// letterhead, every line, quantity, unit and price, which is the one a customer
+// can check the work against.
+//
+// It is drawn HERE, immediately after the number is written back, and that is
+// the point of it. It used to be drawn by the browser after this call returned,
+// off whatever number the row happened to be holding -- which before a push is
+// our counter's proposal, not QuickBooks' answer. One went out as No. 3064 for
+// an invoice QuickBooks numbered 3065, and had to be rebuilt and re-attached by
+// hand. Drawing it at the moment the number is assigned, by the code that
+// assigns it, is the only arrangement where the two cannot differ.
+//
+// Same rule as the crew sheet: it cannot un-create the invoice, so it is never
+// allowed to fail the push. The reason is written to parts_invoices
+// .invoice_pdf_error and the Parts and Services page offers to draw it again.
+//
+// ---------------------------------------------------------------------------
 // THE INVOICE NUMBER
 // ---------------------------------------------------------------------------
 //
@@ -74,6 +94,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { attachToInvoice, buildBackupForJobWeek } from "../_shared/invoice-backup-data.ts";
+import { attachInvoicePdf } from "../_shared/invoice-pdf-data.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -953,6 +974,40 @@ Deno.serve(async (req) => {
       detail: `${isParts ? "Parts cut" : payload.job_name} -> ${payload.customer_name} as invoice ${assigned ?? "(unnumbered)"} by ${me?.full_name ?? who.user.email}`.slice(0, 780),
     });
 
+    // ---- the letterhead invoice ---------------------------------------------
+    // Drawn now, with the number that is now on the row -- QuickBooks' own, if
+    // it assigned something other than what we proposed.
+    //
+    // Everything here is best effort. The invoice exists on their books and the
+    // number is written down; a document that would not draw cannot be allowed
+    // to undo either, and reporting it as a failed push would have him push a
+    // second invoice. The failure is recorded on the row and said out loud in
+    // the answer, and Parts and Services offers to draw it again without going
+    // anywhere near QuickBooks' invoice.
+    let invoicePdf: Record<string, unknown> = { attached: false };
+    if (kind === "parts") {
+      try {
+        const drew = await attachInvoicePdf(db as never, rowId, { tokens: t });
+        invoicePdf = drew.ok
+          ? { attached: true, filename: drew.filename, replaced: drew.replaced }
+          : { attached: false, error: drew.error };
+      } catch (err) {
+        invoicePdf = {
+          attached: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+      if (!invoicePdf.attached) {
+        // The row already carries the reason; this is so it shows up in the
+        // push log next to the invoice it belongs to.
+        await db.from("qb_push_log").insert({
+          job_week_id: null, action: "attach_invoice_pdf", status: "error",
+          qb_invoice_id: String(inv.Id), intuit_tid: null,
+          detail: String(invoicePdf.error ?? "unknown").slice(0, 780),
+        });
+      }
+    }
+
     // ---- the crew sheet -----------------------------------------------------
     // Everything below is best effort. The invoice is already on their books.
     // A week, and only a week. Parts and desk invoices have no hours behind
@@ -988,6 +1043,7 @@ Deno.serve(async (req) => {
       qb_invoice_id: String(inv.Id),
       doc_number: assigned,
       backup,
+      invoice_pdf: kind === "parts" ? invoicePdf : undefined,
       proposed_number: payload.invoice_no ?? null,
       number_changed_by_quickbooks: Boolean(assigned && assigned !== payload.invoice_no),
       total: Number(inv.TotalAmt),
@@ -999,7 +1055,10 @@ Deno.serve(async (req) => {
       note: "Created in QuickBooks and not sent. Review it there before sending."
         + (kind !== "week" ? "" : (backup.attached
             ? " The crew sheet is attached to it and will go out with it."
-            : " The crew sheet could not be attached -- the invoice is fine; open the sheet from Approvals.")),
+            : " The crew sheet could not be attached -- the invoice is fine; open the sheet from Approvals."))
+        + (kind !== "parts" ? "" : (invoicePdf.attached
+            ? " The invoice on our letterhead is attached to it and will go out with it."
+            : " The letterhead invoice could not be attached -- the bill is fine; draw it again from Parts and Services.")),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

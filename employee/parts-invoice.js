@@ -154,6 +154,18 @@ async function refreshNextInvoiceNo() {
 
 /* --- the list ------------------------------------------------------------- */
 
+/* An invoice over on QuickBooks with no letterhead document on it.
+ *
+ * Both ways that happens are the same job to put right. The drawing failed, and
+ * says why; or nothing ever tried, which is every invoice entered after the
+ * fact -- marked synced against a real QuickBooks invoice, qb_pushed_at never
+ * set, because it was billed over there before it was written up here. Those
+ * must never be pushed, and nothing here pushes: the button draws the document
+ * and puts it on the invoice that already exists. */
+function missingPdf(inv) {
+  return Boolean(inv.qb_invoice_id) && !inv.invoice_pdf_attached_at;
+}
+
 function statusPill(inv) {
   if (inv.status === 'synced') return '<span class="pi-pill pi-synced">In QuickBooks</span>';
   if (inv.status === 'ready') return '<span class="pi-pill pi-ready">Finished</span>';
@@ -181,17 +193,22 @@ function renderList() {
           <div class="pi-row-cust">${esc(inv.qb_customer_name)}</div>
           <div class="pi-row-meta">${esc(dateLabel(inv.invoice_date))}
             · ${count} line${count === 1 ? '' : 's'}${inv.po_number ? ' · PO ' + esc(inv.po_number) : ''}</div>
-          ${inv.qb_invoice_id && inv.invoice_pdf_error ? `
-            <div class="pi-row-warn">The letterhead invoice is not attached in QuickBooks.
-              Do not send it until it is.
+          ${missingPdf(inv) ? `
+            <div class="pi-row-warn">${inv.invoice_pdf_error
+                ? 'The letterhead invoice is not attached in QuickBooks. Do not send it until it is.'
+                : 'There is no letterhead invoice on this one in QuickBooks.'}
               <button class="btn2 btn2-line small" data-attach="${escAttr(inv.id)}">Attach it</button>
-              <span class="pi-row-why">${esc(inv.invoice_pdf_error)}</span></div>` : ''}
+              ${inv.invoice_pdf_error
+                ? `<span class="pi-row-why">${esc(inv.invoice_pdf_error)}</span>`
+                : '<span class="pi-row-why">It was never drawn. Attaching draws it and puts it '
+                  + 'on the invoice that is already there -- nothing is pushed.</span>'}</div>` : ''}
         </div>
         <div class="pi-row-side">
           <div class="pi-row-total">${money(total)}</div>
           <div class="pi-row-btns">
             <button class="btn2 btn2-line small" data-preview="${escAttr(inv.id)}">Preview</button>
-            <button class="btn2 btn2-ghost small" data-pdf="${escAttr(inv.id)}">Invoice PDF</button>
+            <button class="btn2 btn2-ghost small" data-pdf="${escAttr(inv.id)}">${
+              inv.qb_invoice_id ? 'Invoice PDF' : 'Draft PDF'}</button>
             ${inv.status === 'synced'
               ? ''
               : `<button class="btn2 btn2-ghost small" data-edit="${escAttr(inv.id)}">Edit</button>`}
@@ -821,6 +838,13 @@ document.addEventListener('change', (e) => {
    sends its own invoice and that stays the bill of record -- this is the one a
    customer can actually check the work against.
 
+   Before it has been pushed this hands back a DRAFT: watermarked, and with no
+   number anywhere on it. The number in the row at that point came off our own
+   counter and QuickBooks has the last word on it -- one went out drawn as 3064
+   for an invoice QuickBooks numbered 3065. A draft that says it is a draft can
+   be shown to anybody; a number that turns out to be wrong cannot be taken
+   back. Push it and the real one is drawn, numbered and attached by itself.
+
    The function answers with PDF bytes, so the response is turned into a blob
    and handed to the browser rather than navigated to: a plain link would drop
    the Authorization header and come back a 401. */
@@ -865,9 +889,14 @@ async function downloadInvoicePdf(btn) {
   }
 }
 
-/* Putting the letterhead invoice on the QuickBooks invoice after an attach that
-   did not land. It normally happens by itself the moment the push succeeds; this
-   is the way back when it did not. */
+/* Putting the letterhead invoice on the QuickBooks invoice when it is not
+   already there. The push draws and attaches it the moment it has the number,
+   so this is the way back for the two cases that never went through one: a
+   drawing that failed, and an invoice entered after the fact.
+
+   It draws and attaches, and that is all. Nothing here pushes, so an invoice
+   that is already on their books cannot be billed a second time by pressing it.
+   Pressing it twice replaces the document rather than adding another. */
 async function attachInvoicePdf(btn) {
   const id = btn.dataset.attach;
   const was = btn.textContent;

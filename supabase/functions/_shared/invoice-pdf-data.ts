@@ -3,6 +3,11 @@
 // The figures come from parts_invoice_payload -- the same function the push
 // itself bills off -- so this document and the bill cannot disagree about money.
 //
+// The NUMBER follows the same rule, and that is what attachInvoicePdf below is
+// for: the document is drawn at the moment the number exists, by the push that
+// assigned it, and never before. Until then there is a draft with no number on
+// it. See buildPartsInvoicePdf.
+//
 // Terms, due date and billing address are read off the invoice QuickBooks
 // actually created, when the caller has it to hand. Nothing is invented when it
 // does not: see buildPartsInvoicePdf.
@@ -54,13 +59,23 @@ async function asset(url: string, required: boolean): Promise<Uint8Array | null>
    PUTTING IT ON THE QUICKBOOKS INVOICE
    ---------------------------------------------------------------------------
 
-   The token is READ, never refreshed. qb-push-invoice owns refreshing it, and
-   Intuit hands out a new refresh token every time one is used -- two functions
-   refreshing the same row means the loser of that race disconnects the portal
-   from QuickBooks. So when the access token is close to expiry this asks the
-   push function to do its own sync_invoice_no, which refreshes as a side effect
-   of work it does on every page load anyway, and then reads the fresh token.
-   One refresher, no race.
+   Two callers, one path.
+
+   The push calls it the moment it has written the number back, and hands over
+   the token it is already holding. That is the whole point of the change: the
+   document is drawn after the number exists, by the code that assigned it, so
+   the number on the page is the number on the bill and never a guess at what
+   the counter will hand out next.
+
+   The office calls it afterwards for an invoice whose drawing failed, or one
+   that was entered after the fact and never went through a push at all. There
+   is no token in hand there, so one is READ -- never refreshed. qb-push-invoice
+   owns refreshing it, and Intuit hands out a new refresh token every time one
+   is used; two functions refreshing the same row means the loser of that race
+   disconnects the portal from QuickBooks. So when the access token is close to
+   expiry this asks the push function to do its own sync_invoice_no, which
+   refreshes as a side effect of work it does on every page load anyway, and
+   then reads the fresh token. One refresher, no race.
 
    That call carries the CALLER'S authorization header, not the service key. The
    push checks for a signed-in admin and a service key is not a user, so it
@@ -71,7 +86,7 @@ async function asset(url: string, required: boolean): Promise<Uint8Array | null>
    this function has no use for. Forty lines duplicated against thirty kilobytes
    of dead weight in every cold start. */
 
-type Tokens = {
+export type Tokens = {
   access_token: string; refresh_token: string; expires_at: string;
   realm_id: string; environment: string;
 };
@@ -148,16 +163,86 @@ async function attachToInvoice(opts: {
   return { ok: true, attachable_id: String(entry.Attachable.Id) };
 }
 
+/* Takes any letterhead invoice already on the QuickBooks invoice back off it.
+ *
+ * This is what makes a re-run harmless. A push that is retried, a drawing that
+ * failed and is tried again, a number that QuickBooks changed -- each of those
+ * would otherwise leave the customer opening two documents and having to work
+ * out which one counts. The upload is an add, not a replace, so the old one has
+ * to go first.
+ *
+ * Only ours comes off. A drawing, a signed ticket or a purchase order somebody
+ * attached by hand stays exactly where it is, and so does the crew time sheet,
+ * which is named for what it is. Ours are the ones this module named, and the
+ * name carries the number, so one drawn as 3064 is still found and removed
+ * after the invoice turns out to be 3065.
+ *
+ * The delete failing stops the upload, the same rule the crew sheet follows:
+ * one stale document is better than two documents that disagree. */
+const OURS = /^Invoice\s.*\.pdf$/i;
+
+async function removeOldInvoicePdfs(opts: {
+  apiBase: string; realmId: string; accessToken: string; invoiceId: string;
+}): Promise<{ ok: true; removed: number } | { ok: false; error: string }> {
+  const headers = {
+    Authorization: `Bearer ${opts.accessToken}`,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+  const q = `select * from Attachable where AttachableRef.EntityRef.Value = '${opts.invoiceId}'`;
+  let look: Response;
+  try {
+    look = await fetch(
+      `${opts.apiBase}/v3/company/${opts.realmId}/query?query=${encodeURIComponent(q)}&minorversion=75`,
+      { method: 'GET', headers });
+  } catch (err) {
+    return { ok: false, error: `could not read the invoice's attachments: ${(err as Error).message}` };
+  }
+  if (!look.ok) {
+    return { ok: false, error: `could not read the invoice's attachments (${look.status})` };
+  }
+  const existing = (await look.json().catch(() => ({})))?.QueryResponse?.Attachable ?? [];
+  const ours = (existing as Record<string, unknown>[])
+    .filter((a) => OURS.test(String(a.FileName ?? '')));
+
+  let removed = 0;
+  for (const a of ours) {
+    const del = await fetch(`${opts.apiBase}/v3/company/${opts.realmId}/attachable?operation=delete&minorversion=75`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ Id: String(a.Id), SyncToken: String(a.SyncToken ?? '0') }),
+    }).catch(() => null);
+    if (!del || !del.ok) {
+      return {
+        ok: false,
+        error: `could not remove the letterhead invoice already on it (${del ? del.status : 'no answer'}). `
+             + `Nothing was uploaded, so the invoice still carries one document rather than two.`,
+      };
+    }
+    removed++;
+  }
+  return { ok: true, removed };
+}
+
 /**
  * Draws the invoice and puts it on the QuickBooks invoice, so the customer gets
  * it with the bill instead of it sitting here waiting to be remembered.
+ *
+ * Called with `tokens` by the push, which has just created the invoice and
+ * written its number back, and has a live token in hand. Called without them by
+ * the office, for an invoice that is already over there: a drawing that failed,
+ * or one of the older ones entered after the fact. Nothing is ever pushed from
+ * here -- an invoice that exists in QuickBooks is found by its qb_invoice_id and
+ * nothing else, so re-drawing one of those cannot bill a customer twice.
+ *
+ * Re-running it replaces what is there rather than adding to it.
  *
  * The outcome is written onto the row either way. Best effort with no record is
  * just "sometimes missing and nobody knows".
  */
 export async function attachInvoicePdf(
-  db: Db, partsInvoiceId: string, pushUrl: string, callerAuth: string,
-): Promise<{ ok: true; filename: string } | { ok: false; error: string }> {
+  db: Db, partsInvoiceId: string,
+  opts: { tokens?: Tokens; pushUrl?: string; callerAuth?: string },
+): Promise<{ ok: true; filename: string; replaced: number } | { ok: false; error: string }> {
   const { data: row } = await db.from('parts_invoices')
     .select('qb_invoice_id, qb_customer_id').eq('id', partsInvoiceId).maybeSingle();
   const inv = row as { qb_invoice_id?: string | null; qb_customer_id?: string } | null;
@@ -174,17 +259,22 @@ export async function attachInvoicePdf(
   };
 
   let t: Tokens;
-  try {
-    t = await liveTokenReadOnly(db, pushUrl, callerAuth);
-  } catch (err) {
-    const msg = (err as Error).message;
-    await note(msg);
-    return { ok: false, error: msg };
+  if (opts.tokens) {
+    t = opts.tokens;
+  } else {
+    try {
+      t = await liveTokenReadOnly(db, opts.pushUrl ?? '', opts.callerAuth ?? '');
+    } catch (err) {
+      const msg = (err as Error).message;
+      await note(msg);
+      return { ok: false, error: msg };
+    }
   }
 
   // Terms, due date and the billing address off the invoice QuickBooks actually
   // has, so the document that rides along cannot contradict the one it is
-  // stapled to.
+  // stapled to. DocNumber comes back with them, which is the number that ends
+  // up printed: QuickBooks' answer, not our proposal.
   let facts: QbInvoiceFacts = {};
   let termName: string | null = null;
   try {
@@ -200,6 +290,21 @@ export async function attachInvoicePdf(
 
   const drawn = await buildPartsInvoicePdf(db, partsInvoiceId, facts, termName);
   if (!drawn.ok) { await note(drawn.error); return { ok: false, error: drawn.error }; }
+  // Belt and braces on the rule this whole change exists to enforce. The row
+  // has a qb_invoice_id, so there is a number; if the drawing came out a draft
+  // anyway, something is wrong upstream and a draft is not what goes to a
+  // customer on a real invoice.
+  if (drawn.draft) {
+    const msg = 'the invoice drew as a draft even though it is on QuickBooks -- nothing was attached';
+    await note(msg);
+    return { ok: false, error: msg };
+  }
+
+  const gone = await removeOldInvoicePdfs({
+    apiBase: API_BASE(t.environment), realmId: t.realm_id, accessToken: t.access_token,
+    invoiceId: String(inv.qb_invoice_id),
+  });
+  if (!gone.ok) { await note(gone.error); return { ok: false, error: gone.error }; }
 
   const put = await attachToInvoice({
     apiBase: API_BASE(t.environment), realmId: t.realm_id, accessToken: t.access_token,
@@ -208,7 +313,7 @@ export async function attachInvoicePdf(
   if (!put.ok) { await note(put.error); return { ok: false, error: put.error }; }
 
   await note(null);
-  return { ok: true, filename: drawn.filename };
+  return { ok: true, filename: drawn.filename, replaced: gone.removed };
 }
 
 export type QbInvoiceFacts = {
@@ -219,7 +324,7 @@ export type QbInvoiceFacts = {
 };
 
 export type PdfResult =
-  | { ok: true; pdf: Uint8Array; filename: string }
+  | { ok: true; pdf: Uint8Array; filename: string; draft: boolean }
   | { ok: false; error: string };
 
 const addrLines = (a?: Record<string, unknown>): string => {
@@ -233,7 +338,9 @@ const addrLines = (a?: Record<string, unknown>): string => {
 
 export function invoicePdfFileName(invoiceNo: string, customer: string): string {
   const who = (customer || 'customer').replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
-  return `Invoice ${invoiceNo || 'draft'} - ${who}.pdf`.slice(0, 120);
+  // DRAFT in capitals, not "draft": this name is what somebody reads in their
+  // downloads folder a week later, deciding whether to send it on.
+  return `Invoice ${invoiceNo || 'DRAFT'} - ${who}.pdf`.slice(0, 120);
 }
 
 /**
@@ -246,6 +353,22 @@ export function invoicePdfFileName(invoiceNo: string, customer: string): string 
  * standing terms in qb_customer_billing, and the due date and address are left
  * blank rather than guessed. Blank is the honest answer: most customers here
  * have no terms set at all and some settle on pickup.
+ *
+ * ---------------------------------------------------------------------------
+ * NO NUMBER BEFORE QUICKBOOKS HAS GIVEN ONE
+ * ---------------------------------------------------------------------------
+ *
+ * An invoice with no qb_invoice_id draws as a DRAFT and carries no number at
+ * all, whatever is sitting in parts_invoices.invoice_no.
+ *
+ * That column is filled when the invoice is marked finished, off our own
+ * counter, and QuickBooks has the final say -- the push writes back whatever
+ * it actually assigned. So between "finished" and "pushed" the number in the
+ * row is a proposal. Invoice 4df5ccdb went out drawn as No. 3064 and came back
+ * from QuickBooks as 3065, and the document had to be rebuilt and re-attached
+ * by hand. Printing a proposal is what caused that, so a proposal is no longer
+ * printed: before the push there is no number on the page, and after it the
+ * number comes off the invoice QuickBooks created.
  */
 export async function buildPartsInvoicePdf(
   db: Db, partsInvoiceId: string, qb?: QbInvoiceFacts, termName?: string | null,
@@ -258,6 +381,14 @@ export async function buildPartsInvoicePdf(
   const base = data as (Record<string, unknown> & { error?: string }) | null;
   if (!base) return { ok: false, error: 'that invoice could not be found' };
   if (base.error) return { ok: false, error: String(base.error) };
+
+  // Read rather than inferred from status: the invoices entered after the fact
+  // are 'synced' with a real qb_invoice_id and were never pushed, and they are
+  // every bit as numbered as the ones that were.
+  const { data: rowData } = await db.from('parts_invoices')
+    .select('qb_invoice_id').eq('id', partsInvoiceId).maybeSingle();
+  const onQuickBooks = Boolean((rowData as { qb_invoice_id?: string | null } | null)?.qb_invoice_id);
+  const draft = !onQuickBooks;
 
   const { data: settingRows } = await db.from('app_settings')
     .select('key, value')
@@ -288,7 +419,10 @@ export async function buildPartsInvoicePdf(
   };
 
   const payload: InvoicePayload = {
-    invoice_no: String(qb?.DocNumber ?? base.invoice_no ?? '') || null,
+    draft,
+    // The number QuickBooks put on it, then the number we wrote back from the
+    // push -- and nothing at all until one of those exists.
+    invoice_no: draft ? null : (String(qb?.DocNumber ?? base.invoice_no ?? '') || null),
     transaction_date: String(base.transaction_date ?? ''),
     // Straight off the created invoice. Never guessed: most customers have no
     // terms set and some settle on pickup rather than in days.
@@ -317,6 +451,7 @@ export async function buildPartsInvoicePdf(
     return {
       ok: true,
       pdf,
+      draft,
       filename: invoicePdfFileName(String(payload.invoice_no ?? ''), String(payload.customer_name ?? '')),
     };
   } catch (err) {
@@ -426,6 +561,7 @@ export async function buildQuotePdfFor(db: Db, quoteId: string): Promise<PdfResu
     return {
       ok: true,
       pdf,
+      draft: false,
       filename: quotePdfFileName(String(q.quote_no ?? ''), String(q.customer_name ?? '')),
     };
   } catch (err) {

@@ -18,7 +18,7 @@
 // The fonts and logo arrive as bytes rather than being read off disk, so this
 // runs unchanged in Deno and in a local harness.
 //
-import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from 'https://esm.sh/pdf-lib@1.17.1';
+import { degrees, PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from 'https://esm.sh/pdf-lib@1.17.1';
 import fontkit from 'https://esm.sh/@pdf-lib/fontkit@1.1.1';
 
 export type InvoiceLine = {
@@ -27,6 +27,9 @@ export type InvoiceLine = {
 };
 export type InvoicePayload = {
   invoice_no?: string | null; transaction_date?: string; due_date?: string | null;
+  // No number has been assigned yet, so nothing on this page is a bill. See
+  // DRAFT below.
+  draft?: boolean;
   terms_label?: string | null; po_number?: string | null; quote_no?: string | null;
   customer_name?: string | null; bill_to_attn?: string | null;
   bill_email?: string | null; bill_address?: string | null; company_rep?: string | null;
@@ -106,6 +109,24 @@ const FOLD: Record<string, string> = {
 // meaning, and nothing downstream notices.
 const FRACTIONS = new Set('⅞⅛⅜⅝½¼¾⅓⅔'.split(''));
 
+/* Handed to embedFont, and the reason 4x4x1/4 prints as 4x4x1/4.
+ *
+ * pdf-lib lays text out through fontkit, which applies a font's OpenType
+ * features by default. Inter's contextual alternates turn an x standing
+ * between two digits into a multiplication sign, so a plate called out as
+ * 4x4x1/4 on the ticket reached the customer as 4×4×1/4 -- a glyph nobody
+ * typed, and not what a shop drawing says. The same feature swaps the hyphen
+ * in 22-1/2 for a case-height one.
+ *
+ * Gilbert's rule is that a part description prints the characters it was
+ * written with. So the whole family of substitutions is turned off rather
+ * than the one that was noticed: calt for the alternates, liga/clig/dlig/rlig
+ * for the ligatures behind them. Switching these off is the only thing
+ * standing between a description and the font deciding what it meant. */
+export const NO_LIGATURES = {
+  calt: false, liga: false, clig: false, dlig: false, rlig: false,
+} as const;
+
 export function makeSafe(fonts: PDFFont[]) {
   // pdf-lib does NOT throw on a glyph the font lacks -- widthOfTextAtSize
   // happily measures .notdef and the page gets a black box. Ask the embedded
@@ -163,9 +184,10 @@ export async function buildInvoicePdf(
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
 
-  const display = await doc.embedFont(assets.archivo, { subset: true });
-  const body    = await doc.embedFont(assets.inter, { subset: true });
-  const bold    = await doc.embedFont(assets.interBold, { subset: true });
+  const feat = { subset: true, features: NO_LIGATURES };
+  const display = await doc.embedFont(assets.archivo, feat);
+  const body    = await doc.embedFont(assets.inter, feat);
+  const bold    = await doc.embedFont(assets.interBold, feat);
   const safe = makeSafe([display, body, bold]);
 
   let logo: PDFImage | null = null;
@@ -184,9 +206,10 @@ export async function buildInvoicePdf(
   const text = (s: unknown, x: number, yy: number, size: number, font: PDFFont,
                 color = INK, opts: Record<string, unknown> = {}) =>
     page.drawText(safe(s), { x, y: yy, size, font, color, ...opts });
-  const right = (s: unknown, xr: number, yy: number, size: number, font: PDFFont, color = INK) => {
+  const right = (s: unknown, xr: number, yy: number, size: number, font: PDFFont,
+                 color = INK, opts: Record<string, unknown> = {}) => {
     const t = safe(s);
-    page.drawText(t, { x: xr - font.widthOfTextAtSize(t, size), y: yy, size, font, color });
+    page.drawText(t, { x: xr - font.widthOfTextAtSize(t, size), y: yy, size, font, color, ...opts });
   };
   const rule = (yy: number, color = RULE, thickness = 1, x = M_X, w = CONTENT) =>
     page.drawLine({ start: { x, y: yy }, end: { x: x + w, y: yy }, thickness, color });
@@ -235,9 +258,24 @@ export async function buildInvoicePdf(
     text(company.company_phone || '', hx, y - 34.5, 8.5, body, MUTE);
 
     // The word, hard right, in the display face.
-    const word = continued ? 'INVOICE  (CONT.)' : 'INVOICE';
+    const word = p.draft
+      ? (continued ? 'DRAFT  (CONT.)' : 'DRAFT')
+      : (continued ? 'INVOICE  (CONT.)' : 'INVOICE');
     right(word, M_X + CONTENT, y - 14, continued ? 15 : 22, display, INK);
-    right(`No. ${p.invoice_no || 'DRAFT'}`, M_X + CONTENT, y - 30, 10, bold, DEEP);
+    // A draft has no number and is not given one. Where the number goes it
+    // says why there isn't one, which is the whole point of the change: a
+    // number on this page before QuickBooks has issued one is a guess, and a
+    // guess that has already gone out as 3064 when the invoice turned out to
+    // be 3065.
+    if (p.draft) {
+      // No characterSpacing here: right() places the text by
+      // widthOfTextAtSize, which does not know about it, so a spaced string
+      // would hang past the margin by however much was added.
+      right('NOT AN INVOICE - NO NUMBER UNTIL IT IS SENT',
+            M_X + CONTENT, y - 30, 8, bold, DEEP);
+    } else {
+      right(`No. ${p.invoice_no || 'DRAFT'}`, M_X + CONTENT, y - 30, 10, bold, DEEP);
+    }
 
     y -= 46;
     rule(y, GOLD, 2);
@@ -376,7 +414,8 @@ export async function buildInvoicePdf(
   box(bandX, y - bandH, bandW, bandH, GWASH);
   page.drawRectangle({ x: bandX, y: y - bandH, width: bandW, height: bandH,
                        borderColor: GOLD, borderWidth: 1 });
-  text('TOTAL DUE', bandX + 14, y - 21, 9, bold, DEEP, { characterSpacing: 0.8 });
+  text(p.draft ? 'DRAFT TOTAL' : 'TOTAL DUE',
+       bandX + 14, y - 21, 9, bold, DEEP, { characterSpacing: 0.8 });
   // Right edge shared with the AMOUNT column above, so the grand total sits
   // under the column it is the sum of rather than 6pt inside it.
   right(money(p.expected_total ?? p.lines_total), COL.amtR, y - 23, 15, display, INK);
@@ -416,6 +455,14 @@ export async function buildInvoicePdf(
 
   /* ---------- footer on every page ---------- */
   pages.forEach((pg, i) => {
+    // Across every page, so no single sheet of a draft can be lifted out of
+    // the stack and read as a bill.
+    if (p.draft) {
+      pg.drawText(safe('DRAFT'), {
+        x: 96, y: 250, size: 130, font: display, color: GOLD,
+        opacity: 0.1, rotate: degrees(32),
+      });
+    }
     pg.drawLine({ start: { x: M_X, y: FOOT + 14 }, end: { x: M_X + CONTENT, y: FOOT + 14 },
                   thickness: 1, color: HAIR });
     const foot = safe(`${company.company_name || ''}  ·  ${company.company_phone || ''}`);
@@ -423,7 +470,9 @@ export async function buildInvoicePdf(
     const pn = safe(`Page ${i + 1} of ${pages.length}`);
     pg.drawText(pn, { x: M_X + CONTENT - body.widthOfTextAtSize(pn, 7.5),
                       y: FOOT + 2, size: 7.5, font: body, color: MUTE });
-    const inv = safe(`Invoice ${p.invoice_no || 'DRAFT'}`);
+    const inv = safe(p.draft
+      ? 'Draft - not an invoice'
+      : `Invoice ${p.invoice_no || 'DRAFT'}`);
     pg.drawText(inv, { x: (PAGE_W - body.widthOfTextAtSize(inv, 7.5)) / 2,
                        y: FOOT + 2, size: 7.5, font: body, color: MUTE });
   });
