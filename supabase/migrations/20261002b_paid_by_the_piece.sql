@@ -146,3 +146,33 @@ create index if not exists bid_piece_credits_person on public.bid_piece_credits 
 --
 -- The exact statements for items 4 to 7 were applied live and are recoverable
 -- from the database with pg_get_viewdef and pg_get_functiondef.
+
+-- ---------------------------------------------------------------------------
+-- 8. CORRECTION: the choice is per DAY, not per job
+-- ---------------------------------------------------------------------------
+-- The first cut of this made it a property of the job: a job paid by the piece,
+-- and every hour logged to it stopped paying. That was wrong. A bid job carries
+-- both -- the same man fabricates on Monday and Tuesday, does site work on
+-- Wednesday and is rained out on Thursday, and the first two are piece work
+-- while the last two are hours.
+--
+-- So daily_entries.pay_mode and daily_entry_helpers.pay_mode, 'hourly' or
+-- 'piece', set on the day's own ticket. v_work_lines zeroes the pay rate on a
+-- line whose own pay_mode is 'piece', not on a line whose job is flagged.
+--
+-- jobs.pay_basis survives as the DEFAULT a new ticket on that job starts with,
+-- which is all it should ever have been.
+--
+-- v_week_piece_pay and week_person_detail no longer filter on the job's flag
+-- either. A credit the office deliberately entered is a credit; gating it on a
+-- job-level setting means it silently stops paying the week that setting moves.
+--
+-- VERIFIED AGAIN
+-- ---------------------------------------------------------------------------
+-- Same snapshot, after the rework: 128 rows, $353,339.00, zero rows different.
+--
+-- And the day-level switch proved on a real ticket: Derrick Maynard's Monday
+-- 09-21, twelve hours at $70, flipped to piece. His week dropped by exactly
+-- $840.00 and nothing else moved -- his hours still read 81.0, so the day is
+-- still worked, still on the weld log, still proof he was there; his per diem
+-- was untouched at $700.00. Flipped back, and the week returned to the penny.
