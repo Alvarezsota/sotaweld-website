@@ -286,7 +286,8 @@ function bidPanelHtml(job) {
   if (!open) {
     // The strip carries the answer, so most of the time the panel never has to
     // be opened at all: what it was bid at, and what is left.
-    const bid = job.bid_amount == null ? null : Number(job.bid_amount);
+    const bid = (spend && spend.bid_amount != null) ? Number(spend.bid_amount)
+      : (job.bid_amount == null ? null : Number(job.bid_amount));
     const left = (spend && spend.remaining != null) ? Number(spend.remaining) : null;
     return `<div class="bid-strip" data-job-id="${job.id}">
       <button type="button" class="bid-toggle" data-action="open-bid">${
@@ -346,10 +347,20 @@ function bidPanelHtml(job) {
  * intention of ever splitting it up. This is the pot the burn below is measured
  * against, and a job can carry both without them meaning the same thing. */
 function bidAmountHtml(job) {
+  /* A price typed into the bid lines instead of this box is still a price, and
+     the burn now reads it either way. Say so, or the empty box looks like the
+     job has not been priced when it plainly has. */
+  const items = bidItemsByJob[job.id] || [];
+  const lines = items.reduce((a, i) => a + Number(i.qty_bid || 0) * Number(i.unit_price || 0), 0);
+  const fromLines = job.bid_amount == null && lines > 0;
+
   return `<div class="bid-amount-row">
-    <label class="bid-amount-lbl" title="What this job was bid at, as one figure. The spend below is measured against it.">Bid amount</label>
+    <label class="bid-amount-lbl" title="What this job was bid at. Everything paid out on it is measured against this.">Price</label>
     <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num job-bid-amount"
-      value="${escAttr(job.bid_amount == null ? '' : job.bid_amount)}" placeholder="Lump sum total"></div>
+      value="${escAttr(job.bid_amount == null ? '' : job.bid_amount)}"
+      placeholder="${fromLines ? moneyFmt(lines).replace('$', '') + ' from your lines' : 'What you bid the job at'}"></div>
+    ${fromLines ? `<span class="bid-amount-from">Using ${moneyFmt(lines)} from your bid lines.
+      Type a figure here to use that instead.</span>` : ''}
   </div>`;
 }
 

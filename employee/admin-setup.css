@@ -474,3 +474,7 @@ select.cell-in:disabled { cursor: default; background-image: none; }
   background: rgba(236,125,122,.12); border: 1px solid rgba(236,125,122,.4);
   color: var(--danger); font-size: 12px; font-weight: 600; line-height: 1.45;
 }
+
+/* A job priced on its bid lines rather than the lump box: the box is empty but
+   the job is priced, and silence there reads as "nobody has priced this". */
+.bid-amount-from { font-size: 11px; color: var(--dim2); flex-basis: 100%; margin-top: 4px; }
