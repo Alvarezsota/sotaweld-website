@@ -223,7 +223,11 @@
 .bid-panel { background: var(--steel-800); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: -3px 0 10px; }
 .bid-panel-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px;
   font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--molten-2); margin-bottom: 10px; }
-.bid-line { display: grid; grid-template-columns: 2.4fr .7fr .6fr .9fr .9fr 30px; gap: 8px; align-items: center; margin-bottom: 6px; }
+/* Description, Qty, Unit, Charge each, Pay each, Line total, delete. The pay
+   column was added beside the charge column on purpose: the gap between the
+   two is the shop's margin on that piece, and it only reads as a gap if they
+   sit next to each other. */
+.bid-line { display: grid; grid-template-columns: 2.2fr .6fr .5fr .85fr .85fr .85fr 30px; gap: 8px; align-items: center; margin-bottom: 6px; }
 .bid-line-head { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim2); font-weight: 700; padding: 0 9px; }
 .bid-line-head .c { text-align: center; }
 .bid-line-total { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 13px; }
