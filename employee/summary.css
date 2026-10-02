@@ -248,3 +248,35 @@
   .bid-input { font-size: 16px; padding: 11px 12px; }
   .bid-lbl { font-size: 11px; margin-bottom: 4px; }
 }
+
+/* ------------------------------------------------- who built these
+   Sits under its bid line because the question "who fabricated these" only
+   means anything next to which line it is about. Quieter ground than the bid
+   row above it: the row is what the customer is billed, this is what a man is
+   paid, and they should not read as one block. */
+.pc-box {
+  margin: -2px 0 10px; padding: 8px 10px;
+  background: rgba(255,255,255,.03); border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.pc-head {
+  font-size: 10px; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dim2); margin-bottom: 6px;
+}
+.pc-row {
+  display: grid; grid-template-columns: 1fr auto auto 24px; gap: 10px;
+  align-items: center; padding: 4px 0; font-size: 13px;
+}
+.pc-who { font-weight: 600; }
+.pc-qty { color: var(--dim); font-variant-numeric: tabular-nums; }
+.pc-amt { font-weight: 800; font-variant-numeric: tabular-nums; }
+.pc-x {
+  background: none; border: none; color: var(--dim2); font-size: 16px;
+  cursor: pointer; line-height: 1; padding: 0;
+}
+.pc-x:hover { color: var(--danger); }
+.pc-none { font-size: 12px; color: var(--dim2); font-style: italic; padding: 2px 0; }
+.pc-add { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.pc-add .pc-person { flex: 1 1 150px; }
+.pc-add .pc-newqty { flex: 0 1 110px; }
+.pc-warn { margin-top: 8px; font-size: 11px; color: var(--molten); }

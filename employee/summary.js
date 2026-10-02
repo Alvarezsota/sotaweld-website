@@ -739,6 +739,15 @@ function printCrew(kind) {
 
 // ---------- lump sum bid editor ----------
 
+/* Who fabricated what, this week, keyed by bid line.
+ *
+ * Separate from the qty-completed box beside it on purpose. That one is a
+ * statement to the customer -- four platforms are finished, bill them. This is
+ * a statement to a man about his cheque. They are usually the same number and
+ * they are not the same fact, and a correction to one is not a correction to
+ * the other. */
+let pieceCredits = {};   // bid_item_id -> rows for the week on screen
+
 async function loadBidStatus(jobId) {
   const job = (weekData.jobs || []).find(j => j.job_id === jobId);
   if (!job || job.billing_type !== 'flat') return;
@@ -746,7 +755,71 @@ async function loadBidStatus(jobId) {
   const { data, error } = await sb.rpc('get_job_bid_status', { p_job: jobId });
   if (error) { bidCache[jobId] = { error: error.message }; }
   else { bidCache[jobId] = data; }
+  await loadPieceCredits(jobId);
   renderBidBox(jobId);
+}
+
+let payPriceByItem = {};   // bid_item_id -> what a man is paid for one
+
+async function loadPieceCredits(jobId) {
+  pieceCredits = {};
+  payPriceByItem = {};
+  // pay_price is read straight off the item rather than out of
+  // get_job_bid_status, which is a billing view and knows nothing about what a
+  // man is paid. Two different questions, two different sources.
+  const { data: items } = await sb.from('job_bid_items')
+    .select('id, pay_price').eq('job_id', jobId);
+  (items || []).forEach(i => { payPriceByItem[i.id] = i.pay_price; });
+  const ids = (items || []).map(i => i.id);
+  if (!ids.length) return;
+  const { data } = await sb.from('bid_piece_credits')
+    .select('*').in('bid_item_id', ids).eq('week_start', ymd(weekStart));
+  (data || []).forEach(c => { (pieceCredits[c.bid_item_id] ||= []).push(c); });
+}
+
+/* Everybody who could be credited: the crew who worked this week. Drawn from
+   the week rather than the whole roster, because a man who was not here did not
+   fabricate anything, and offering him invites the wrong pick. */
+function creditCrew() {
+  return [
+    ...(weekData.welders || []).map(w => ({
+      kind: 'welder', id: w.welder_id, name: w.welder_name })),
+    ...(weekData.helpers || []).map(h => ({
+      kind: 'helper', id: h.helper_id, name: h.helper_name })),
+  ].filter(p => p.id && p.name);
+}
+
+function creditsHtml(it) {
+  const rows = pieceCredits[it.bid_item_id] || [];
+  const pay = Number(payPriceByItem[it.bid_item_id] ?? it.pay_price ?? 0);
+  const crew = creditCrew();
+  const taken = rows.map(r => r.person_kind + ':' + r.person_id);
+
+  const listed = rows.map(r => {
+    const who = crew.find(p => p.kind === r.person_kind && p.id === r.person_id);
+    return `<div class="pc-row" data-credit="${escAttr(r.id)}">
+      <span class="pc-who">${esc(who ? who.name : 'someone no longer on this week')}</span>
+      <span class="pc-qty">${esc(r.qty)} ${esc(it.unit || 'ea')}</span>
+      <span class="pc-amt">${pay ? money0(Number(r.qty) * pay) : 'no piece price set'}</span>
+      <button type="button" class="pc-x" data-action="drop-credit" title="Take this credit off">&times;</button>
+    </div>`;
+  }).join('');
+
+  const free = crew.filter(p => !taken.includes(p.kind + ':' + p.id));
+
+  return `<div class="pc-box" data-item="${escAttr(it.bid_item_id)}">
+    <div class="pc-head">Who built these${pay ? ` &middot; ${money0(pay)} each` : ''}</div>
+    ${listed || '<div class="pc-none">Nobody credited this week.</div>'}
+    ${free.length ? `<div class="pc-add">
+      <select class="input pc-person">
+        <option value="">Who&hellip;</option>
+        ${free.map(p => `<option value="${escAttr(p.kind + ':' + p.id)}">${esc(p.name)}${p.kind === 'helper' ? ' (helper)' : ''}</option>`).join('')}
+      </select>
+      <input class="input pc-newqty" type="number" step="any" min="0" placeholder="How many">
+      <button type="button" class="btn2 btn2-ghost small" data-action="add-credit">Credit</button>
+    </div>` : ''}
+    ${pay ? '' : '<div class="pc-warn">No price per piece on this line yet &mdash; set one on the Setup page or these credits pay nothing.</div>'}
+  </div>`;
 }
 
 function renderBidBox(jobId) {
@@ -780,7 +853,8 @@ function renderBidBox(jobId) {
       <div><div class="bid-lbl">Billed to date</div><input class="bid-input" value="${money0(it.billed_to_date)}" readonly></div>
       <div class="bid-remaining ${cls}">${left === 0 ? 'complete' : left < 0 ? num(-left) + ' over bid' : num(left) + ' ' + esc(it.unit) + ' left'}</div>
       <div><button class="btn2 btn2-ghost small bid-save" title="Save this line">Save</button></div>
-    </div>`;
+    </div>
+    ${creditsHtml(it)}`;
   }).join('');
 
   el.innerHTML = `
@@ -829,6 +903,47 @@ function wireBidBox(jobId) {
       await loadWeek();
       if (openRow) await loadBidStatus(openRow);
     });
+  });
+
+  el.querySelectorAll('.pc-box').forEach(box => {
+    const itemId = box.getAttribute('data-item');
+
+    const addBtn = box.querySelector('[data-action="add-credit"]');
+    if (addBtn) addBtn.addEventListener('click', async () => {
+      const who = box.querySelector('.pc-person').value;
+      const qty = Number(box.querySelector('.pc-newqty').value || 0);
+      if (!who) { alert('Pick who built them.'); return; }
+      if (!(qty > 0)) { alert('How many did he build?'); return; }
+      const [kind, personId] = who.split(':');
+
+      addBtn.disabled = true; addBtn.textContent = 'Saving';
+      const { error } = await sb.from('bid_piece_credits').insert({
+        bid_item_id: itemId, week_start: ymd(weekStart),
+        person_kind: kind, person_id: personId, qty
+      });
+      addBtn.disabled = false; addBtn.textContent = 'Credit';
+      if (error) { alert('Could not credit that: ' + error.message); return; }
+      // The week's pay changes the moment this lands, so the figures above have
+      // to be re-read, not just this box.
+      await loadWeek();
+      await loadBidStatus(jobId);
+    });
+
+    box.querySelectorAll('[data-action="drop-credit"]').forEach(x =>
+      x.addEventListener('click', async () => {
+        const row = x.closest('[data-credit]');
+        if (!confirm('Take this credit off? It comes straight off his pay for the week.')) return;
+        const { data: gone, error } = await sb.from('bid_piece_credits')
+          .delete().eq('id', row.getAttribute('data-credit')).select('id');
+        // A refused delete returns no error and no rows. Without checking, the
+        // credit vanishes off the screen and stays on his cheque.
+        if (error || !(gone || []).length) {
+          alert('That credit was not removed.' + (error ? '\n\n' + error.message : ''));
+          return;
+        }
+        await loadWeek();
+        await loadBidStatus(jobId);
+      }));
   });
 
   const addBtn = document.getElementById('niAdd-' + jobId);
