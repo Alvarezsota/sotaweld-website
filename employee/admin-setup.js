@@ -15,6 +15,10 @@ let ratePersonnel = {};       // sheet id -> personnel items, priced
 let crewClass = {};           // sheet id -> 'welder:<id>' -> rate_sheet_item_id
 let activeSheetId = null;
 let bidItemsByJob = {};   // job_id -> rows from job_bid_items
+/* What has gone out in wages against a job, from job_spend(). Kept apart from
+   the bid lines above: those are what the customer gets charged, this is what
+   the job has cost, and running them together is how the two get confused. */
+let spendByJob = {};      // job_id -> row from job_spend, or null while loading
 let openBidJobId = null; // which lump sum job has its bid panel open
 let weldersList = [];
 let helpersList = [];
@@ -296,12 +300,74 @@ function bidPanelHtml(job) {
         <button type="button" class="btn2 btn2-solid small" data-action="add-bid">+ Add bid line</button>
         <span class="bid-contract">Contract total ${moneyFmt(contract)}</span>
       </div>
+      ${bidAmountHtml(job)}
+      ${spendHtml(job)}
       <p class="bid-panel-note">${job.billing_type === 'flat'
         ? `Enter what you bid here once. Each week on the Summary page you mark how many of each
            line got finished, and that is what the customer is invoiced.`
         : `This job bills by the hour, so these lines are not invoiced off &mdash; they show up as a
            picker on Log Work so the crew can say which of this customer's bids they were on.`}</p>`}
   </div>`;
+}
+
+/* The bid as one figure.
+ *
+ * Separate from the line items on purpose. The lines are for billing -- so many
+ * platforms at so much each -- and a job can be bid as a single number with no
+ * intention of ever splitting it up. This is the pot the burn below is measured
+ * against, and a job can carry both without them meaning the same thing. */
+function bidAmountHtml(job) {
+  return `<div class="bid-amount-row">
+    <label class="bid-amount-lbl" title="What this job was bid at, as one figure. The spend below is measured against it.">Bid amount</label>
+    <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num job-bid-amount"
+      value="${escAttr(job.bid_amount == null ? '' : job.bid_amount)}" placeholder="Lump sum total"></div>
+  </div>`;
+}
+
+/* The burn.
+ *
+ * Wages out against the bid: every hour logged to this job at what that man is
+ * paid, welders and helpers, plus one per diem per man per day. Not the bill
+ * rate -- on a lump sum job nobody is being charged by the hour.
+ *
+ * Materials are NOT in it and the note says so. The portal records what
+ * material is charged to a customer, not what it cost to buy, so folding it in
+ * would mix a price into a column of costs and overstate the burn. */
+function spendHtml(job) {
+  const s = spendByJob[job.id];
+  if (s === undefined) return '<p class="bid-spend-wait">Working out what has been spent&hellip;</p>';
+  if (s === null) return '';
+
+  const spent = Number(s.spent || 0);
+  const bid = s.bid_amount == null ? null : Number(s.bid_amount);
+  const left = s.remaining == null ? null : Number(s.remaining);
+  const pct = s.pct_spent == null ? null : Number(s.pct_spent);
+  // Over the bid, or close enough to it to want telling.
+  const tone = pct == null ? '' : pct > 100 ? ' is-over' : pct >= 85 ? ' is-close' : '';
+
+  return `<div class="bid-spend${tone}">
+    <div class="bid-spend-head">Paid out against this job</div>
+    <div class="bid-spend-grid">
+      <div><span class="bs-lbl">Labour</span><span class="bs-val">${moneyFmt(s.labour_paid)}</span>
+        <span class="bs-sub">${esc(Number(s.hours || 0).toLocaleString())} hrs &middot; ${esc(s.people || 0)} ${Number(s.people) === 1 ? 'man' : 'men'}</span></div>
+      <div><span class="bs-lbl">Per diem</span><span class="bs-val">${moneyFmt(s.per_diem_paid)}</span>
+        <span class="bs-sub">one a man a day</span></div>
+      <div><span class="bs-lbl">Spent</span><span class="bs-val bs-strong">${moneyFmt(spent)}</span>
+        <span class="bs-sub">${s.first_day ? esc(s.first_day) + ' to ' + esc(s.last_day) : 'nothing logged yet'}</span></div>
+      <div><span class="bs-lbl">${left != null && left < 0 ? 'Over bid' : 'Left of bid'}</span>
+        <span class="bs-val bs-left">${bid == null ? '&mdash;' : moneyFmt(Math.abs(left))}</span>
+        <span class="bs-sub">${pct == null ? 'enter a bid amount' : esc(pct) + '% of the bid spent'}</span></div>
+    </div>
+    ${pct == null ? '' : `<div class="bs-bar"><div class="bs-bar-fill" style="width:${Math.min(100, Math.max(0, pct))}%"></div></div>`}
+    <p class="bid-spend-note">Wages and per diem only. Steel, consumables and equipment are not costed
+       per job in here &mdash; those come off the QuickBooks side.</p>
+  </div>`;
+}
+
+async function loadJobSpend(jobId) {
+  const { data, error } = await sb.rpc('job_spend', { p_job: jobId });
+  spendByJob[jobId] = error ? null : ((Array.isArray(data) ? data[0] : data) || null);
+  renderJobs();
 }
 
 function moneyFmt(n) {
@@ -469,7 +535,14 @@ onList('jobsTable', 'blur', async (e) => {
   if (!job) return;
 
   let patch = null;
-  if (e.target.classList.contains('job-name')) patch = { name: e.target.value.trim() };
+  if (e.target.classList.contains('job-bid-amount')) {
+    // Blank clears it. Number('') is 0, and a bid of zero is a different claim
+    // from no bid at all -- one says the job is worth nothing, the other says
+    // nobody has typed it in yet.
+    const raw = e.target.value.trim();
+    patch = { bid_amount: raw === '' ? null : num(raw) };
+  }
+  else if (e.target.classList.contains('job-name')) patch = { name: e.target.value.trim() };
   else if (e.target.classList.contains('job-operator')) patch = { operator: e.target.value.trim() };
   else if (e.target.classList.contains('job-pd')) patch = { per_diem: num(e.target.value) };
   else if (e.target.classList.contains('job-billrate')) patch = { bill_rate: e.target.value.trim() === '' ? null : num(e.target.value) };
@@ -482,7 +555,22 @@ onList('jobsTable', 'blur', async (e) => {
   if (!patch) return;
 
   Object.assign(job, patch);
-  await sb.from('jobs').update(patch).eq('id', id);
+  const { error } = await sb.from('jobs').update(patch).eq('id', id);
+
+  if ('bid_amount' in patch) {
+    // What is left of the bid is worked out against the figure in the box, so
+    // the moment the figure moves the panel beneath it is wrong until asked
+    // again. Never leave a remaining-balance on screen that the bid above it
+    // no longer supports.
+    if (error) {
+      alert('That bid amount did not save.\n\n' + error.message);
+      await loadJobs();
+      return;
+    }
+    delete spendByJob[id];
+    renderJobs();
+    loadJobSpend(id);
+  }
 }, true);
 
 // Bid line edits save on blur, same feel as the job cells above.
@@ -513,6 +601,12 @@ onList('jobsTable', 'click', async (e) => {
     openBidJobId = openBid.closest('[data-job-id]').dataset.jobId;
     renderJobs();
     if (bidItemsByJob[openBidJobId] === undefined) await loadBidItems(openBidJobId);
+    // Re-read the spend every time it is opened rather than caching it for the
+    // session: hours go on all day, and a burn figure from this morning is the
+    // kind of stale number somebody prices the next job off.
+    delete spendByJob[openBidJobId];
+    renderJobs();
+    loadJobSpend(openBidJobId);
     return;
   }
   const closeBid = e.target.closest('[data-action="close-bid"]');
