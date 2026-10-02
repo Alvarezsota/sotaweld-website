@@ -209,3 +209,7 @@
 /* Printing goes through a window of its own -- see jsa.js -- so there is no
    print stylesheet here on purpose. The sheet the client gets should not be
    this page with the navigation hidden. */
+
+.jsa-foot-tight { margin-top: 2px; margin-bottom: 18px; }
+.jsa-foot a { color: var(--molten); font-weight: 700; text-decoration: none; }
+.jsa-foot a:hover { text-decoration: underline; }
