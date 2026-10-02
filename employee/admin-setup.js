@@ -241,7 +241,6 @@ function jobRowHtml(j) {
           : 'Pick a customer for this job first. Jobs are grouped by their QuickBooks customer, so there is nothing to group by until one is set.'}"
         ${j.qb_customer_id ? '' : 'disabled'}><span class="tk2"></span></button></div>`, 'jt-sw')}
       ${jf('Lump sum', `<div class="c"><button type="button" class="toggle2${j.billing_type === 'flat' ? ' ton' : ''}" data-action="toggle-flat" title="Lump sum job — bid as a price instead of billed by the hour. Bill it off bid line items on the Summary page."><span class="tk2"></span></button></div>`, 'jt-sw')}
-      ${jf('Piece by default', `<div class="c"><button type="button" class="toggle2${j.pay_basis === 'bid' ? ' ton' : ''}" data-action="toggle-paybasis" title="What a new day's ticket on this job starts as. Off: paid by the hour. On: paid by the piece. It is only the default \u2014 each day is set on its own ticket, because the same man fabricates one day and does site work or stands down the next."><span class="tk2"></span></button></div>`, 'jt-sw')}
       ${jf('Track hours', `<div class="c"><button type="button" class="toggle2${j.track_hours ? ' ton' : ''}" data-action="toggle-hours" title="Track hours on this job's daily log"><span class="tk2"></span></button></div>`, 'jt-sw')}
       ${jf(j.active ? 'Active' : 'Bring back', `<div class="c"><button type="button" class="toggle2${j.active ? ' ton' : ''}" data-action="toggle-active"
         title="${j.active ? 'Archive this job when it is finished. It leaves the welders\u2019 picker and moves to the folder below; nothing already worked or billed changes.' : 'Put this job back in the welders\u2019 picker.'}"><span class="tk2"></span></button></div>`, 'jt-sw')}
@@ -282,8 +281,7 @@ function bidPanelHtml(job) {
       <input class="cell-in bid-desc" value="${escAttr(i.description)}" placeholder="What you bid">
       <div class="c"><input class="cell-in num bid-qty" value="${escAttr(i.qty_bid)}" title="How many you bid"></div>
       <input class="cell-in bid-unit" value="${escAttr(i.unit)}" placeholder="ea">
-      <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num bid-price" value="${escAttr(i.unit_price)}" title="What the customer is charged for one"></div>
-      <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num bid-paypay" value="${escAttr(i.pay_price == null ? '' : i.pay_price)}" placeholder="&mdash;" title="What the man who builds one is paid, where this job pays by the piece"></div>
+      <div class="c pd-cell"><span class="pd-dollar">$</span><input class="cell-in num bid-price" value="${escAttr(i.unit_price)}" title="Price each"></div>
       <span class="c bid-line-total">${moneyFmt(Number(i.qty_bid || 0) * Number(i.unit_price || 0))}</span>
       <button type="button" class="row-x" data-action="delete-bid">&times;</button>
     </div>`).join('');
@@ -295,7 +293,7 @@ function bidPanelHtml(job) {
     </div>
     ${items === undefined ? '<p class="empty-state2">Loading&hellip;</p>' : `
       <div class="bid-line bid-line-head">
-        <span>Description</span><span class="c">Qty</span><span>Unit</span><span class="c">Charge each</span><span class="c" title="What a man is paid to fabricate one, where this job pays by the piece">Pay each</span><span class="c">Line total</span><span></span>
+        <span>Description</span><span class="c">Qty</span><span>Unit</span><span class="c">Price each</span><span class="c">Line total</span><span></span>
       </div>
       ${rows || '<p class="empty-state2">Nothing bid yet. Add the first line below.</p>'}
       <div class="bid-panel-foot">
@@ -589,13 +587,6 @@ onList('jobsTable', 'blur', async (e) => {
   else if (e.target.classList.contains('bid-qty')) patch = { qty_bid: num(e.target.value) };
   else if (e.target.classList.contains('bid-unit')) patch = { unit: e.target.value.trim() || 'ea' };
   else if (e.target.classList.contains('bid-price')) patch = { unit_price: num(e.target.value) };
-  else if (e.target.classList.contains('bid-paypay')) {
-    // Blank is not zero. Blank means nobody has set a piece rate on this line
-    // yet; zero means the line genuinely pays nothing, which is a thing a man
-    // would want to argue about either way.
-    const raw = e.target.value.trim();
-    patch = { pay_price: raw === '' ? null : num(raw) };
-  }
   if (!patch) return;
 
   Object.assign(row, patch);
@@ -693,39 +684,6 @@ onList('jobsTable', 'click', async (e) => {
     job.billing_type = job.billing_type === 'flat' ? 'hourly' : 'flat';
     renderJobs();
     await sb.from('jobs').update({ billing_type: job.billing_type }).eq('id', id);
-    return;
-  }
-  if (e.target.closest('[data-action="toggle-paybasis"]')) {
-    const to = job.pay_basis === 'bid' ? 'hourly' : 'bid';
-
-    // Turning this ON stops hours paying anybody on this job. If no bid line
-    // has a pay price yet, that means the crew works for nothing and nobody
-    // finds out until payday, so say so before it happens rather than after.
-    if (to === 'bid') {
-      const lines = bidItemsByJob[job.id];
-      const priced = (lines || []).some(l => Number(l.pay_price) > 0);
-      if (lines !== undefined && !priced) {
-        if (!confirm(
-          `"${job.name}" has no bid line with a price per piece on it yet.\n\n`
-          + 'Switch it to paid by the piece and hours logged to this job stop paying '
-          + 'anybody, so the crew would earn nothing here until you set those prices.\n\n'
-          + 'Turn it on anyway?')) return;
-      }
-    }
-
-    job.pay_basis = to;
-    renderJobs();
-    const { error } = await sb.from('jobs').update({ pay_basis: to }).eq('id', id);
-    if (error) {
-      job.pay_basis = to === 'bid' ? 'hourly' : 'bid';
-      renderJobs();
-      alert('That did not change.\n\n' + error.message);
-      return;
-    }
-    // What a job has cost is worked out differently either side of this switch.
-    delete spendByJob[id];
-    renderJobs();
-    if (openBidJobId === id) loadJobSpend(id);
     return;
   }
   if (e.target.closest('[data-action="toggle-hours"]')) {

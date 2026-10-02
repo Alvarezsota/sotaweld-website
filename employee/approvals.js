@@ -89,17 +89,8 @@ function personLine(o) {
   // site belongs to the job, not to the man who happened to file a ticket that
   // day, and it is counted once at the job level rather than on anybody's row.
   const revenue = (isFlat ? partsSum : o.hours * effectiveBillRate) + pd;
-  /* A day paid by the piece costs nothing in hours. What the man built pays
-     him instead, credited against the bid line, and leaving the hours on as
-     well would pay him twice for the same day. This is pay_mode in
-     v_work_lines -- change one, change the other, the same way the rate chains
-     above are written twice and for the same reason.
-
-     Per diem is untouched: he still went, still ate, still slept there. */
-  const piece = o.payMode === 'piece';
-  const cost = (piece ? 0 : payHours * o.payRate) + pd;
+  const cost = payHours * o.payRate + pd;
   return {
-    payMode: piece ? 'piece' : 'hourly',
     role: o.role, name: o.name, hours: o.hours, payHours,
     payRate: o.payRate, billRate: effectiveBillRate,
     pd: o.perDiem ? pd : null, revenue, cost, margin: revenue - cost,
@@ -125,12 +116,7 @@ function rateTag(l) {
   if (o.bill != null) set.push('bill');
   if (o.stainless != null) set.push('stainless');
   if (o.perDiem != null) set.push('per diem');
-  const bits = set.length ? [`Rate set on this line: ${esc(set.join(', '))}`] : [];
-  // A piece day looks identical to an hourly one once drawn -- same hours, same
-  // man -- and the only visible difference is a cost of zero, which reads as a
-  // mistake rather than a decision. Say which it is.
-  if (l.payMode === 'piece') bits.push('Paid by the piece, not these hours');
-  return bits.length ? `<div class="line-desc rate-tag">${bits.join(' &middot; ')}</div>` : '';
+  return set.length ? `<div class="line-desc rate-tag">Rate set on this line: ${esc(set.join(', '))}</div>` : '';
 }
 
 /* Which job a job's work bills under.
@@ -249,7 +235,6 @@ function buildJobGroups(entries, jobs, jobParts) {
       perDiemRate: rateOr(e.per_diem_override, jobPerDiem),
       perDiem: e.per_diem,
       isStainless: e.is_stainless,
-      payMode: e.pay_mode,
       entryId: e.id,
       description: e.description,
       realJobId: e.job_id,
@@ -292,7 +277,6 @@ function buildJobGroups(entries, jobs, jobParts) {
         billRate: internal ? 0 : rateOr(dh.bill_rate_override, jobHelperRate, hp.bill_rate),
         perDiemRate: internal ? 0 : rateOr(dh.per_diem_override, jobPerDiem),
         perDiem: dh.per_diem,
-        payMode: dh.pay_mode,
         entryId: e.id,
         helperRowId: dh.id,
         helperId: dh.helper_id,
@@ -1134,17 +1118,10 @@ function startEditLine(row, line, groupId) {
           <div class="edit-field edit-field-sm edit-field-pd">
             <label><input type="checkbox" class="edit-pd-input" ${line.perDiemFlag ? 'checked' : ''}> Per diem</label>
           </div>
-          <div class="edit-field edit-field-sm">
-            <label title="How THIS day is paid. By the hour, or by what he fabricated \u2014 the same man on the same job builds one day and does site work the next.">Paid by</label>
-            <select class="input edit-paymode-select">
-              <option value="hourly" ${line.payMode === 'piece' ? '' : 'selected'}>The hour</option>
-              <option value="piece" ${line.payMode === 'piece' ? 'selected' : ''}>The piece</option>
-            </select>
-          </div>
           ${rateFieldHtml('edit-pay-rate-input', 'Pay rate', line.overrides.pay, line.fallbacks.pay)}
           ${rateFieldHtml('edit-bill-rate-input', 'Bill rate', line.overrides.bill, line.fallbacks.bill)}
           ${rateFieldHtml('edit-per-diem-rate-input', 'Per diem', line.overrides.perDiem, line.fallbacks.perDiem)}
-          <div class="edit-rate-note">Leave a rate blank to keep his standing rate. Anything typed here changes this line only. Set <b>Paid by</b> to the piece and this day's hours stop paying him &mdash; what he fabricated pays instead, and the hours stay on the record.</div>
+          <div class="edit-rate-note">Leave a rate blank to keep his standing rate. Anything typed here changes this line only.</div>
           <div class="edit-field-actions">
             <button type="button" class="row-edit" data-action="save-line">Save</button>
             <button type="button" class="row-del" data-action="cancel-line">Cancel</button>
@@ -1182,8 +1159,7 @@ function startEditLine(row, line, groupId) {
       }
 
       const patch = {
-        pay_mode: row.querySelector('.edit-paymode-select').value,
-        helper_id: row.querySelector('.edit-helper-select').value,
+          helper_id: row.querySelector('.edit-helper-select').value,
         hours: Number(row.querySelector('.edit-hours-input').value),
         per_diem: row.querySelector('.edit-pd-input').checked,
         ...rates
@@ -1267,13 +1243,6 @@ function startEditLine(row, line, groupId) {
         <div class="edit-field edit-field-sm edit-field-pd">
           <label><input type="checkbox" class="edit-stainless-input" ${line.isStainless ? 'checked' : ''}> Stainless</label>
         </div>
-        <div class="edit-field edit-field-sm">
-          <label title="How THIS day is paid. By the hour, or by what he fabricated \u2014 the same man on the same job builds one day and does site work the next.">Paid by</label>
-          <select class="input edit-paymode-select">
-            <option value="hourly" ${line.payMode === 'piece' ? '' : 'selected'}>The hour</option>
-            <option value="piece" ${line.payMode === 'piece' ? 'selected' : ''}>The piece</option>
-          </select>
-        </div>
         ${rateFieldHtml('edit-pay-rate-input', 'Pay rate', line.overrides.pay, line.fallbacks.pay)}
         ${rateFieldHtml('edit-bill-rate-input', 'Bill rate', line.overrides.bill, line.fallbacks.bill)}
         ${rateFieldHtml('edit-stainless-rate-input', 'Stainless rate', line.overrides.stainless, line.fallbacks.stainless)}
@@ -1347,7 +1316,6 @@ function startEditLine(row, line, groupId) {
       hours: Number(row.querySelector('.edit-hours-input').value),
       per_diem: row.querySelector('.edit-pd-input').checked,
       is_stainless: row.querySelector('.edit-stainless-input').checked,
-      pay_mode: row.querySelector('.edit-paymode-select').value,
       ...rates
     };
     const { error: entryErr } = await sb.from('daily_entries').update(patch).eq('id', line.entryId);
