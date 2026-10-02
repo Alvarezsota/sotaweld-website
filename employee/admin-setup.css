@@ -466,3 +466,11 @@ select.cell-in:disabled { cursor: default; background-image: none; }
   color: var(--dim2);
 }
 .bid-lines-toggle:hover { color: var(--molten); }
+
+/* A price with no hours behind it reads $0 spent for ever, which looks like
+   good news and is nothing of the sort. */
+.bid-spend-warn {
+  margin: 0 0 10px; padding: 8px 10px; border-radius: 8px;
+  background: rgba(236,125,122,.12); border: 1px solid rgba(236,125,122,.4);
+  color: var(--danger); font-size: 12px; font-weight: 600; line-height: 1.45;
+}

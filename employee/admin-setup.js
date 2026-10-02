@@ -375,6 +375,8 @@ function spendHtml(job) {
   const tone = pct == null ? '' : pct > 100 ? ' is-over' : pct >= 85 ? ' is-close' : '';
 
   return `<div class="bid-spend${tone}">
+    ${job.track_hours === false ? `<p class="bid-spend-warn">Hours are not tracked on this job, so
+      nothing will ever come off the price. Turn hours on and the days will start counting.</p>` : ''}
     <div class="bid-spend-head">Paid out against this job</div>
     <div class="bid-spend-grid">
       <div><span class="bs-lbl">Labour</span><span class="bs-val">${moneyFmt(s.labour_paid)}</span>
@@ -577,6 +579,15 @@ onList('jobsTable', 'blur', async (e) => {
     // nobody has typed it in yet.
     const raw = e.target.value.trim();
     patch = { bid_amount: raw === '' ? null : num(raw) };
+
+    /* A price only comes down because men log days against it. A job with
+       hours tracking switched off takes no days, so its burn would sit at
+       nothing for ever while the work went on -- the number would look fine
+       and be meaningless. Three live lump sum jobs were in exactly that state.
+       Putting a price on a job turns tracking back on. */
+    if (patch.bid_amount != null && job.track_hours === false) {
+      patch.track_hours = true;
+    }
   }
   else if (e.target.classList.contains('job-name')) patch = { name: e.target.value.trim() };
   else if (e.target.classList.contains('job-operator')) patch = { operator: e.target.value.trim() };

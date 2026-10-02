@@ -836,7 +836,27 @@ function bidItemName(id) {
   }
   return 'Bid item';
 }
+/* "Which bid item were you on?" -- retired from the welder's screen.
+ *
+ * It asked a man logging ten hours to also sort his day into a priced line off
+ * the bid. That is piece work by another name, and Gilbert said three times he
+ * does not want it: "I just need to put a price and when a welder logs his day
+ * it deducts from the price of the lump sum. No changing back and forth."
+ *
+ * Nobody lost anything. Across the whole history of the portal not one day's
+ * work was ever tagged to a bid line, so the picker was asking a question no
+ * welder ever answered.
+ *
+ * bid_item_id is still on daily_entries and the Summary page still shows it on
+ * a day that carries one, so the handful of old rows read exactly as before --
+ * there just is not a way to set a new one from here. Billing a job off its
+ * lines is still done where it was always done: on the Summary page, by
+ * Gilbert, marking off what got finished that week. */
 function bidPickerHtml(entry) {
+  return '';
+}
+
+function bidPickerHtmlRetired(entry) {
   const items = bidItemsFor(entry);
   if (!items.length) return '';
   const job = jobs.find(j => j.id === bidJobIdFor(entry));
