@@ -987,7 +987,7 @@ function wireOneDriveFiling() {
     btn.textContent = 'Filing…';
     say('');
     try {
-      const { data: { session } } = await sb.auth.getSession();
+      const session = await freshSession();
       const res = await fetch(ONEDRIVE_FILE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },

@@ -1106,7 +1106,7 @@ submitBtn.addEventListener('click', async () => {
       if (entry.splitPartnerId) {
         const splitItems = buildSplitItemsForPartner(entryEl, currentProfile ? currentProfile.full_name : currentUser.email);
         if (splitItems.length) {
-          const { data: { session } } = await sb.auth.getSession();
+          const session = await freshSession();
           try {
             const res = await fetch(SPLIT_FN_URL, {
               method: 'POST',

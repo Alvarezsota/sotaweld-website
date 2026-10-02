@@ -523,7 +523,7 @@ async function saveEdit(reportId) {
   if (partner) {
     const splitItems = buildSplitItemsForPartner(cardEl, myName);
     if (splitItems.length) {
-      const { data: { session } } = await sb.auth.getSession();
+      const session = await freshSession();
       try {
         const res = await fetch(SPLIT_FN_URL, {
           method: 'POST',
@@ -974,7 +974,7 @@ document.getElementById('sendLogEmailBtn').addEventListener('click', async () =>
   statusEl.textContent = '';
 
   try {
-    const { data: { session } } = await sb.auth.getSession();
+    const session = await freshSession();
     const res = await fetch(WELD_DIGEST_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },

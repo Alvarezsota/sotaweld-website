@@ -869,7 +869,7 @@ onList('weldersTable', 'click', async (e) => {
  * to close with the row, and only the service role can touch an account, so it
  * goes through admin-set-active. That function does both or neither. */
 async function setPersonActive(personId, active) {
-  const { data: { session } } = await sb.auth.getSession();
+  const session = await freshSession();
   const res = await fetch(ADMIN_SET_ACTIVE_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
@@ -899,7 +899,7 @@ async function saveNewPassword(panel, saveBtn) {
   statusEl.textContent = '';
 
   try {
-    const { data: { session } } = await sb.auth.getSession();
+    const session = await freshSession();
     const res = await fetch(ADMIN_SET_PASSWORD_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
@@ -1316,7 +1316,7 @@ onList('officeTable', 'blur', async (e) => {
     say('');
 
     try {
-      const { data: { session } } = await sb.auth.getSession();
+      const session = await freshSession();
       const res = await fetch(ADMIN_CREATE_WELDER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
@@ -1435,7 +1435,7 @@ onList('officeTable', 'blur', async (e) => {
     say('');
 
     try {
-      const { data: { session } } = await sb.auth.getSession();
+      const session = await freshSession();
       const res = await fetch(invite ? ADMIN_INVITE_WELDER_URL : ADMIN_CREATE_WELDER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
@@ -1535,7 +1535,7 @@ function wireOneDrive() {
     connectBtn.textContent = 'Opening Microsoft…';
     odSay('');
     try {
-      const { data: { session } } = await sb.auth.getSession();
+      const session = await freshSession();
       const res = await fetch(ONEDRIVE_START_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
@@ -1556,7 +1556,7 @@ function wireOneDrive() {
     disconnectBtn.disabled = true;
     disconnectBtn.textContent = 'Disconnecting…';
     try {
-      const { data: { session } } = await sb.auth.getSession();
+      const session = await freshSession();
       const res = await fetch(ONEDRIVE_DISCONNECT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },

@@ -9,6 +9,56 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const PUSH_FN_URL = `${SUPABASE_URL}/functions/v1/qb-push-invoice`;
 
 /* ---------------------------------------------------------------------------
+   A TOKEN THAT IS ACTUALLY GOOD
+   ---------------------------------------------------------------------------
+   Every page that calls an edge function did the same thing:
+
+       const { data: { session } } = await sb.auth.getSession();
+       ... `Bearer ${session.access_token}`
+
+   getSession() hands back null once the stored token has expired and the
+   refresh has not run, or has run and failed. The very next line then reads
+   access_token off null, and what the man sees is
+
+       Cannot read properties of null (reading 'access_token')
+
+   which tells him nothing, looks like the portal is broken, and gives him
+   nothing to do about it. Gilbert hit it adding Armando Chavez: the Setup page
+   had been open long enough for the session to lapse, and Send invite blew up
+   on it. Ten call sites across four files had the same hole.
+
+   So: ask for the session, and if it has gone, try once to refresh it -- a
+   laptop coming out of sleep or a phone off the home screen usually can. If it
+   still cannot, say so in English and put him on the login page, which already
+   knows how to show the reason.
+
+   Throws rather than returning null on purpose. Every caller is inside a
+   try/catch that already shows err.message, so the sentence below is what
+   lands on screen without a single call site needing to be taught about it. */
+async function freshSession() {
+  let session = null;
+  try {
+    ({ data: { session } } = await sb.auth.getSession());
+  } catch (_) { /* fall through and try a refresh */ }
+
+  if (!session) {
+    try {
+      ({ data: { session } } = await sb.auth.refreshSession());
+    } catch (_) { session = null; }
+  }
+
+  if (!session || !session.access_token) {
+    const why = 'Your sign-in expired while this page was open. Log in and try that again.';
+    sessionStorage.setItem('sotaSignedOutReason', why);
+    // Long enough for him to read it where he is before the page changes.
+    setTimeout(() => window.location.replace('login.html'), 1500);
+    throw new Error(why);
+  }
+  return session;
+}
+
+
+/* ---------------------------------------------------------------------------
    THE NEXT INVOICE NUMBER
    ---------------------------------------------------------------------------
    invoice_counter is ours. It knows every number the portal has issued and
