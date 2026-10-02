@@ -6,3 +6,9 @@ _source/brochure-images/
 
 # scratch left behind by the Supabase CLI
 supabase/.temp/
+
+# Pay statements. This repo is served at sotaweld.com, so anything committed
+# here is on the public internet -- and a pay stub carries a man's name and what
+# he was paid. They are generated to the scratchpad and go straight to the
+# OneDrive folder; nothing to do with the site, and never in the repo.
+_stubs/
