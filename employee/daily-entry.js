@@ -991,6 +991,27 @@ function isFlat(jobId) {
   const j = jobs.find(x => x.id === jobId);
   return !!(j && j.billing_type === 'flat');
 }
+
+/* A job sold for one agreed figure.
+ *
+ * The customer is paying that number and nothing else, so there is nothing on a
+ * ticket for them to be billed for -- "Parts billed today" on a job like this
+ * bills money that was never owed. Aldo Galindo put his set of steps in the
+ * parts box AND under By the piece on P66 Viper, which billed Rocking Double S
+ * $500 on top of a $26,250 bid and showed the job running at minus a hundred
+ * percent.
+ *
+ * So the parts box does not appear once a job carries a price. Gilbert: "They
+ * both need to be the way Jorge Garcia filed his, and make it like that for all
+ * of the tickets going to P66 Viper platforms."
+ *
+ * Keyed off the price rather than a flag of its own, because the price IS the
+ * fact -- the day a figure goes on the job is the day it stops being billed
+ * piecemeal, and nobody has to remember to tick anything. */
+function isBidPriced(jobId) {
+  const j = jobs.find(x => x.id === jobId);
+  return !!(j && j.bid_amount != null && Number(j.bid_amount) > 0);
+}
 function hoursTracked(jobId) {
   const j = jobs.find(x => x.id === jobId);
   return !j || j.track_hours !== false;
@@ -1094,7 +1115,7 @@ function editCardHtml(entry) {
       ${bidPickerHtml(entry)}
       <label class="field-label">What did you work on?</label>
       <textarea class="input descr-input" rows="2">${esc(entry.description)}</textarea>
-      ${flat && !entry.helpersOnly ? `
+      ${flat && !isBidPriced(entry.jobId) && !entry.helpersOnly ? `
         <div class="oneoff flat">
           <label class="field-label">Parts billed that day</label>
           <div class="parts-list">
@@ -1240,7 +1261,7 @@ function entryCardHtml(entry, idx) {
       ${bidPickerHtml(entry)}
       <label class="field-label">What did you work on?</label>
       <textarea class="input descr-input" rows="2" placeholder="e.g. Cont. fab on compressor piping">${esc(entry.description)}</textarea>
-      ${flat && !entry.helpersOnly ? `
+      ${flat && !isBidPriced(entry.jobId) && !entry.helpersOnly ? `
         <div class="oneoff flat">
           <label class="field-label">Parts billed today</label>
           <span class="oneoff-note" style="margin:0 0 10px;">List each different part you built — quantity &times; rate gets billed to the customer.${hrsOn ? ' Your hours below are still tracked separately for your pay.' : ''}</span>
