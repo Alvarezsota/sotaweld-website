@@ -470,7 +470,22 @@ window.SOTA_QD_EMAIL = {
     // Straight into it, in a new tab. The point of a draft is that he reads it
     // before it goes, and a draft he has to go and find is a draft he sends
     // without reading.
-    if (out.web_link) window.open(out.web_link, '_blank', 'noopener');
+    // Graph hands the link back carrying exvsurl=1, which asks Windows to open
+    // the item in the DESKTOP Outlook through a protocol handler rather than in
+    // the browser. On a machine where that handler is stale it lands in Internet
+    // Explorer, which is where Gilbert ended up on 10-03 -- he had to go and
+    // find the draft in Outlook himself, which is the one thing opening it was
+    // meant to save him. Stripped, the same link opens the draft in Outlook on
+    // the web, in the browser he is already signed into.
+    if (out.web_link) {
+      let link = out.web_link;
+      try {
+        const u = new URL(link);
+        u.searchParams.delete('exvsurl');
+        link = u.toString();
+      } catch { /* unparseable: send him Microsoft's link rather than nothing */ }
+      window.open(link, '_blank', 'noopener');
+    }
     return out;
   },
 };
