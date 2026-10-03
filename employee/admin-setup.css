@@ -522,3 +522,31 @@ select.cell-in:disabled { cursor: default; background-image: none; }
   .cost-line .cost-who, .cost-line .cost-what { grid-column: 1 / 3; }
   .cost-amt { grid-column: 1 / 3; text-align: left; }
 }
+
+/* ------------------------------------------------------ how a man gets in ---
+   Was one box for setting a password. Now the whole of it: his address, a link
+   he can follow himself, and setting one by hand for the man with no inbox. */
+.pw-panel-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.pw-panel-actions .btn2 { flex: 1 1 auto; }
+.pw-warn { color: var(--danger); font-weight: 600; }
+.pw-ok   { color: var(--ok); font-weight: 700; }
+.pw-err  { color: var(--danger); font-weight: 700; }
+
+/* The link is meant to be selected and texted, so it wraps rather than running
+   off the edge, and it is monospaced so a man reading it aloud does not lose
+   his place. */
+.pw-link {
+  margin: 8px 0 0; padding: 8px 10px; border-radius: 8px;
+  background: var(--steel-900); border: 1px solid var(--line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; line-height: 1.5; color: var(--dim);
+  word-break: break-all; user-select: all; cursor: text;
+}
+.pw-link[hidden] { display: none; }
+
+.pw-byhand { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+.pw-byhand summary {
+  cursor: pointer; font-size: 12px; font-weight: 700; color: var(--dim2);
+  letter-spacing: .03em;
+}
+.pw-byhand summary:hover { color: var(--molten); }

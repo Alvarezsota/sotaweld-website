@@ -18,6 +18,7 @@ let bidItemsByJob = {};   // job_id -> rows from job_bid_items
 /* What has gone out in wages against a job, from job_spend(). Kept apart from
    the bid lines above: those are what the customer gets charged, this is what
    the job has cost, and running them together is how the two get confused. */
+let loginsById = {};      // profile id -> { email, confirmed, has_password, ... } from crew_logins()
 let spendByJob = {};      // job_id -> row from job_burn, or null while loading
 let costsByJob = {};      // job_id -> rows from job_materials (money out, not a logged day)
 let openBidJobId = null;   // which job has its price panel open
@@ -969,6 +970,62 @@ const ADMIN_SET_ACTIVE_URL = 'https://woqzbterwialanccprhp.supabase.co/functions
 const ONEDRIVE_START_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/onedrive-oauth-start';
 const ONEDRIVE_DISCONNECT_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/onedrive-disconnect';
 
+/* Everything about how a man gets in, on the row with his name on it.
+ *
+ * It used to be one box: set a password and tell him what it is. That covers
+ * the man standing in front of you and nothing else -- so the address being
+ * wrong, or an invite going stale overnight, kept arriving as a message to me
+ * instead of being a thing the office could do.
+ *
+ * Three things now, in the order they actually get used:
+ *   - his address, because the office could not even SEE it before
+ *   - a link he can follow to pick his own password
+ *   - setting one by hand, for the man with no email worth the name
+ *
+ * The link is shown on screen as well as emailed. Half this crew has an address
+ * that bounces or is never read, and a link Gilbert can text is the difference
+ * between a man logging in today and another message to me. */
+function loginPanelHtml(p) {
+  const li = loginsById[p.id] || null;
+  const state = !li ? ''
+    : !li.has_password ? 'No password set yet &mdash; he cannot log in until one is.'
+    : li.last_sign_in_at ? `Last signed in ${new Date(li.last_sign_in_at).toLocaleDateString()}.`
+    : 'Has a password but has never signed in.';
+  const generated = li && /@crew\.sotaweld\.com$/i.test(li.email || '');
+
+  return `
+    <div class="pw-panel" data-profile-id="${p.id}">
+      <label class="field-label">How ${esc(p.full_name)} signs in</label>
+
+      <div class="pw-panel-row">
+        <input type="email" class="input login-email-input"
+          value="${escAttr(li ? li.email : '')}" placeholder="his@email.com" autocomplete="off">
+        <button type="button" class="btn2 btn2-line small" data-action="save-email">Save email</button>
+      </div>
+      ${generated ? `<p class="pw-note pw-warn">That is a made-up username, not a real inbox &mdash;
+        nothing sent to it ever arrives. Put his real address in and save it.</p>` : ''}
+      ${state ? `<p class="pw-note">${state}</p>` : ''}
+
+      <div class="pw-panel-actions">
+        <button type="button" class="btn2 btn2-solid small" data-action="send-reset">Send him a set-password link</button>
+      </div>
+      <p class="pw-note">Emails him a link to pick his own password. Good for one hour.
+        The link also appears here so you can text it to him instead.</p>
+      <p class="pw-link" hidden></p>
+
+      <details class="pw-byhand">
+        <summary>Or set one by hand</summary>
+        <div class="pw-panel-row" style="margin-top:8px;">
+          <input type="text" class="input pw-input" placeholder="At least 6 characters" autocomplete="off">
+          <button type="button" class="btn2 btn2-line small" data-action="save-password">Save</button>
+        </div>
+        <p class="pw-note">He can log in with this right away &mdash; no email needed. Tell him directly.</p>
+      </details>
+
+      <p class="pw-status"></p>
+    </div>`;
+}
+
 function welderRowHtml(p) {
   return `
     <div class="p-row welders-row-grid${p.active === false ? ' off' : ''}" data-profile-id="${p.id}">
@@ -985,15 +1042,7 @@ function welderRowHtml(p) {
       ${jf('Password', `<span class="c"><button type="button" class="pw-btn" data-action="toggle-password">${passwordEditId === p.id ? 'Cancel' : 'Set password'}</button></span>`)}
     </div>
     ${passwordEditId === p.id ? `
-      <div class="pw-panel" data-profile-id="${p.id}">
-        <label class="field-label">New password for ${esc(p.full_name)}</label>
-        <div class="pw-panel-row">
-          <input type="text" class="input pw-input" placeholder="At least 6 characters" autocomplete="off">
-          <button type="button" class="btn2 btn2-solid small" data-action="save-password">Save</button>
-        </div>
-        <p class="pw-note">They can log in with this right away — no email or link needed. Tell them the new password directly.</p>
-        <p class="pw-status"></p>
-      </div>` : ''}
+      ${loginPanelHtml(p)}` : ''}
   `;
 }
 
@@ -1039,6 +1088,10 @@ onList('weldersTable', 'click', async (e) => {
   }
   const saveBtn = e.target.closest('[data-action="save-password"]');
   if (saveBtn) await saveNewPassword(e.target.closest('[data-profile-id]'), saveBtn);
+  const emailBtn = e.target.closest('[data-action="save-email"]');
+  if (emailBtn) await saveLoginEmail(e.target.closest('[data-profile-id]'), emailBtn);
+  const resetBtn = e.target.closest('[data-action="send-reset"]');
+  if (resetBtn) await sendResetLink(e.target.closest('[data-profile-id]'), resetBtn);
 });
 
 /* Archiving somebody, or bringing them back.
@@ -1058,6 +1111,92 @@ async function setPersonActive(personId, active) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok || !json.ok) throw new Error(json.error || 'Nothing was changed.');
   return json.profile;
+}
+
+const ADMIN_SET_EMAIL_URL = 'https://woqzbterwialanccprhp.supabase.co/functions/v1/admin-set-email';
+
+/* Changing the address a man signs in with.
+ *
+ * David Monge was added with no email, so the portal made him a username --
+ * david.monge.dpgy@crew.sotaweld.com -- which is not an inbox. No invite could
+ * ever reach it, and there was no way to correct it from here, so it took
+ * somebody editing the auth table by hand. Now it is a box on his row. */
+async function saveLoginEmail(panel, btn) {
+  const welderId = panel.dataset.profileId;
+  const input = panel.querySelector('.login-email-input');
+  const statusEl = panel.querySelector('.pw-status');
+  const wanted = (input.value || '').trim();
+
+  if (!wanted) { say2(statusEl, 'Type his email address first.', 'err'); return; }
+
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const session = await freshSession();
+    const res = await fetch(ADMIN_SET_EMAIL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ welderId, newEmail: wanted }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.ok) throw new Error(json.error || 'Nothing was changed.');
+    if (loginsById[welderId]) loginsById[welderId].email = json.email;
+    else loginsById[welderId] = { id: welderId, email: json.email };
+    say2(statusEl, `He signs in with ${json.email} now.`, 'ok');
+  } catch (err) {
+    say2(statusEl, String(err.message || err), 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save email';
+  }
+}
+
+/* A link he can follow to pick his own password.
+ *
+ * Shown on screen as well as emailed. Aldo Galindo's invite went stale
+ * overnight and he had no way to ask for another; half this crew has an address
+ * that bounces or is never read. A link Gilbert can text is the difference
+ * between a man logging in today and a message to the office. */
+async function sendResetLink(panel, btn) {
+  const welderId = panel.dataset.profileId;
+  const statusEl = panel.querySelector('.pw-status');
+  const linkEl = panel.querySelector('.pw-link');
+  const typed = (panel.querySelector('.login-email-input').value || '').trim();
+
+  btn.disabled = true; btn.textContent = 'Sending…';
+  if (linkEl) { linkEl.hidden = true; linkEl.textContent = ''; }
+  try {
+    const session = await freshSession();
+    const res = await fetch(ADMIN_SET_EMAIL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      // Saves the address first if it was edited, so you cannot send a link to
+      // the old one by forgetting to hit Save email.
+      body: JSON.stringify({
+        welderId,
+        newEmail: typed || undefined,
+        sendReset: true,
+        redirectTo: window.location.origin + '/employee/set-password.html',
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.ok) throw new Error(json.error || 'No link was sent.');
+    if (loginsById[welderId]) loginsById[welderId].email = json.email;
+    say2(statusEl, `Link sent to ${json.email}. It is good for one hour.`, 'ok');
+    if (json.link && linkEl) {
+      linkEl.hidden = false;
+      linkEl.textContent = json.link;
+      linkEl.title = 'Tap to select, then copy and text it to him.';
+    }
+  } catch (err) {
+    say2(statusEl, String(err.message || err), 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send him a set-password link';
+  }
+}
+
+function say2(el, text, kind) {
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'pw-status' + (kind ? ` pw-${kind}` : '');
 }
 
 /* Setting somebody's password by hand. Shared, because the office table needs
@@ -1123,7 +1262,17 @@ document.addEventListener('change', (e) => {
 });
 
 async function loadWelders() {
-  const { data } = await sb.from('profiles').select('*').order('full_name');
+  /* The logins come alongside the profiles. profiles has no email -- it lives
+     in auth.users, which the browser cannot read -- so without this the office
+     can see a man's rate but not the address he signs in with, which is the
+     thing they actually need when he cannot get in. Admin only, and it fails
+     quietly: a Setup page that will not draw because one panel could not be
+     filled is worse than a panel with the address missing. */
+  const [{ data }, { data: logins }] = await Promise.all([
+    sb.from('profiles').select('*').order('full_name'),
+    sb.rpc('crew_logins'),
+  ]);
+  loginsById = Object.fromEntries((logins || []).map(r => [r.id, r]));
   const all = data || [];
   // One fetch, two tables. An office person in the welders table would be
   // offered a bill rate and a classification, neither of which means anything
@@ -1342,15 +1491,7 @@ function officeRowHtml(p) {
       ${jf('Password', `<span class="c"><button type="button" class="pw-btn" data-action="toggle-password">${passwordEditId === p.id ? 'Cancel' : 'Set password'}</button></span>`)}
     </div>
     ${passwordEditId === p.id ? `
-      <div class="pw-panel" data-profile-id="${p.id}">
-        <label class="field-label">New password for ${esc(p.full_name)}</label>
-        <div class="pw-panel-row">
-          <input type="text" class="input pw-input" placeholder="At least 6 characters" autocomplete="off">
-          <button type="button" class="btn2 btn2-solid small" data-action="save-password">Save</button>
-        </div>
-        <p class="pw-note">They can log in with this right away — no email or link needed. Tell them the new password directly.</p>
-        <p class="pw-status"></p>
-      </div>` : ''}
+      ${loginPanelHtml(p)}` : ''}
   `;
 }
 
@@ -1398,6 +1539,10 @@ onList('officeTable', 'click', async (e) => {
 
   const saveBtn = e.target.closest('[data-action="save-password"]');
   if (saveBtn) await saveNewPassword(e.target.closest('[data-profile-id]'), saveBtn);
+  const emailBtn2 = e.target.closest('[data-action="save-email"]');
+  if (emailBtn2) await saveLoginEmail(e.target.closest('[data-profile-id]'), emailBtn2);
+  const resetBtn2 = e.target.closest('[data-action="send-reset"]');
+  if (resetBtn2) await sendResetLink(e.target.closest('[data-profile-id]'), resetBtn2);
 });
 
 onList('officeTable', 'blur', async (e) => {
