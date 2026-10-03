@@ -154,7 +154,7 @@ function anchorJobId(job, jobs, week) {
   return family[0].id;
 }
 
-function buildJobGroups(entries, jobs, jobParts) {
+function buildJobGroups(entries, jobs, jobParts, piecesByEntry = {}) {
   const groups = {}; // effectiveJobId -> { job, days: { dateStr: { lines: [] } } }
 
   entries.forEach(e => {
@@ -253,7 +253,7 @@ function buildJobGroups(entries, jobs, jobParts) {
       // Carried whatever the job is set to: the day's own ticket decides how it
       // is paid, so hiding these behind a job-level flag would drop a man's pay
       // off the sheet the week somebody changed that flag.
-      pieces: e.daily_entry_pieces || [],
+      pieces: piecesByEntry[e.id] || [],
       isFlat: isFlatJob,
       welderId: e.welder_id,
       entryDate: e.entry_date,
@@ -366,9 +366,9 @@ async function loadWeek(skipReconcile) {
   //
   // Naming the constraint ends the argument. It costs one identifier and it does
   // not care how many other columns ever point at a person.
-  const [entriesRes, jobsRes, jwRes, openRes, hlprsRes, weldersRes, jobPartsRes] = await Promise.all([
+  const [entriesRes, jobsRes, jwRes, openRes, hlprsRes, weldersRes, jobPartsRes, piecesRes] = await Promise.all([
     sb.from('daily_entries')
-      .select('*, profiles!daily_entries_welder_id_fkey(full_name, pay_rate, bill_rate, bills_as_helper_id, bills_as_helper:helpers!profiles_bills_as_helper_id_fkey(name, pay_rate, bill_rate)), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate)), daily_entry_parts(*), daily_entry_pieces(*)')
+      .select('*, profiles!daily_entries_welder_id_fkey(full_name, pay_rate, bill_rate, bills_as_helper_id, bills_as_helper:helpers!profiles_bills_as_helper_id_fkey(name, pay_rate, bill_rate)), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate)), daily_entry_parts(*)')
       .gte('entry_date', start).lte('entry_date', end),
     sb.from('jobs').select('*'),
     sb.from('job_weeks').select('*').eq('week_start', start),
@@ -385,7 +385,15 @@ async function loadWeek(skipReconcile) {
     // Material billed to a job for this week. It belongs to the job, not to
     // anybody's ticket, so it is read on its own rather than off an entry.
     sb.from('job_week_parts').select('*').eq('week_start', start)
-      .order('sort_order').order('created_at')
+      .order('sort_order').order('created_at'),
+    /* What men built on days they were paid for the work instead of the hours.
+     *
+     * Fetched on its own rather than embedded in the tickets query above. An
+     * embed that cannot be resolved -- a table PostgREST has not picked up yet,
+     * a relationship it cannot see -- fails the WHOLE query, and this page would
+     * then show no work at all for any job rather than one ticket missing its
+     * money. Its own query can come back empty without taking the week with it. */
+    sb.from('daily_entry_pieces').select('*').order('sort_order')
   ]);
 
   // A query that fails and a week nobody worked used to look identical. The error
@@ -400,7 +408,12 @@ async function loadWeek(skipReconcile) {
     ['the tickets', entriesRes], ['the jobs', jobsRes], ['the approvals', jwRes],
     ['the open invoices', openRes],
     ['the helpers', hlprsRes], ['the welders', weldersRes],
-    ['the job parts', jobPartsRes]
+    ['the job parts', jobPartsRes],
+    /* Named here on purpose. If this read fails, a man paid by the piece shows
+       a cost of $0 -- which is the exact failure this list exists to stop: a
+       confident, wrong number wearing the face of an ordinary one. Better the
+       week refuses to draw and says why. */
+    ['the piece work', piecesRes]
   ].filter(([, r]) => r.error);
 
   if (failed.length) {
@@ -421,6 +434,12 @@ async function loadWeek(skipReconcile) {
   }
 
   const entries = entriesRes.data || [];
+  // Pieces indexed by the ticket they belong to, so building a line is a lookup
+  // rather than a scan of every piece row for every line on the page.
+  const piecesByEntry = {};
+  (piecesRes.data || []).forEach((pc) => {
+    (piecesByEntry[pc.daily_entry_id] ||= []).push(pc);
+  });
   const jobs = jobsRes.data || [];
 
   // Only used to word the unlock warning honestly, so a failure here is not worth
@@ -450,7 +469,7 @@ async function loadWeek(skipReconcile) {
     (parents || []).forEach((r) => { carriedParents[r.id] = r; });
   }
 
-  currentGroups = buildJobGroups(entries, jobs, jobPartsRes.data || []);
+  currentGroups = buildJobGroups(entries, jobs, jobPartsRes.data || [], piecesByEntry);
   renderGrid();
   if (openJobId) renderDetail(openJobId);
 
