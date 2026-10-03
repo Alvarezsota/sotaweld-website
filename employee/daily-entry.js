@@ -264,7 +264,13 @@ function weekEntryHtml(d) {
   const foreign = loggingForHelper() && !!e.welder_id;
   const hrsText = loggingForHelper()
     ? (hoursOnEntry(d) ? hoursOnEntry(d) + ' hrs' : '')
-    : (!e.welder_id ? 'Helpers only' : `${hoursTracked(e.job_id) ? e.hours + ' hrs' : ''}${e.per_diem ? ' · PD' : ''}${e.is_stainless ? ' · Stainless' : ''}`);
+    : (!e.welder_id ? 'Helpers only'
+      // A day paid by the piece has no hours on purpose, so "0 hrs" is the one
+      // thing it must not say. What he is owed for it goes here instead.
+      : e.pay_mode === 'piece'
+        ? `$${(d.pieces || []).reduce((t, x) => t + Number(x.amount || 0), 0)
+             .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${e.per_diem ? ' · PD' : ''}`
+        : `${hoursTracked(e.job_id) ? e.hours + ' hrs' : ''}${e.per_diem ? ' · PD' : ''}${e.is_stainless ? ' · Stainless' : ''}`);
   return `
     <div class="week-entry" data-entry-id="${e.id}">
       <div class="week-entry-row">
@@ -274,6 +280,7 @@ function weekEntryHtml(d) {
       ${e.bid_item_id ? `<div class="week-entry-bid">${esc(bidItemName(e.bid_item_id))}</div>` : ''}
       ${e.description ? `<div class="week-entry-desc">${esc(e.description)}</div>` : ''}
       ${d.parts.map(p => `<div class="week-entry-helper">&#8618; ${esc(p.description)} (${p.quantity} &times; $${p.rate}) — $${(Number(p.quantity) * Number(p.rate)).toLocaleString()}</div>`).join('')}
+      ${(d.pieces || []).map(pc => `<div class="week-entry-helper">&#8618; ${esc(pc.description)} (${pc.qty} &times; $${Number(pc.unit_price).toLocaleString()}) — $${Number(pc.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>`).join('')}
       ${d.helpers.map(h => {
         const hp = helpers.find(x => x.id === h.helper_id);
         return `<div class="week-entry-helper">&#8618; ${esc(hp ? hp.name : 'Helper')} — ${h.hours} hrs${h.per_diem ? ' · PD' : ''}</div>`;

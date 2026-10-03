@@ -89,9 +89,18 @@ function personLine(o) {
   // site belongs to the job, not to the man who happened to file a ticket that
   // day, and it is counted once at the job level rather than on anybody's row.
   const revenue = (isFlat ? partsSum : o.hours * effectiveBillRate) + pd;
-  const cost = payHours * o.payRate + pd;
+  /* A day paid by the piece has no hours by design, so hours x rate is zero and
+     the money is in the pieces. Jorge Garcia filed a set of steps for $500 on
+     P66 Viper and this page showed his ticket at $0 -- the lines were never even
+     loaded, so there was nothing on screen to approve.
+     Cost only, never revenue: the customer is paying the bid for that job, not
+     what we agreed to pay a man for a piece of it. */
+  const pieces = Array.isArray(o.pieces) ? o.pieces : [];
+  const pieceSum = pieces.reduce((t, x) => t + Number(x.amount || 0), 0);
+  const cost = payHours * o.payRate + pieceSum + pd;
   return {
     role: o.role, name: o.name, hours: o.hours, payHours,
+    pieces, pieceSum,
     payRate: o.payRate, billRate: effectiveBillRate,
     pd: o.perDiem ? pd : null, revenue, cost, margin: revenue - cost,
     entryId: o.entryId, helperRowId: o.helperRowId || null, description: o.description || '',
@@ -240,6 +249,11 @@ function buildJobGroups(entries, jobs, jobParts) {
       realJobId: e.job_id,
       realOneOffName: e.one_off_name,
       parts: isFlatJob ? (e.daily_entry_parts || []) : [],
+      // What he built on a day he was paid for the work instead of the hours.
+      // Carried whatever the job is set to: the day's own ticket decides how it
+      // is paid, so hiding these behind a job-level flag would drop a man's pay
+      // off the sheet the week somebody changed that flag.
+      pieces: e.daily_entry_pieces || [],
       isFlat: isFlatJob,
       welderId: e.welder_id,
       entryDate: e.entry_date,
@@ -354,7 +368,7 @@ async function loadWeek(skipReconcile) {
   // not care how many other columns ever point at a person.
   const [entriesRes, jobsRes, jwRes, openRes, hlprsRes, weldersRes, jobPartsRes] = await Promise.all([
     sb.from('daily_entries')
-      .select('*, profiles!daily_entries_welder_id_fkey(full_name, pay_rate, bill_rate, bills_as_helper_id, bills_as_helper:helpers!profiles_bills_as_helper_id_fkey(name, pay_rate, bill_rate)), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate)), daily_entry_parts(*)')
+      .select('*, profiles!daily_entries_welder_id_fkey(full_name, pay_rate, bill_rate, bills_as_helper_id, bills_as_helper:helpers!profiles_bills_as_helper_id_fkey(name, pay_rate, bill_rate)), daily_entry_helpers(*, helpers(name, pay_rate, bill_rate)), daily_entry_parts(*), daily_entry_pieces(*)')
       .gte('entry_date', start).lte('entry_date', end),
     sb.from('jobs').select('*'),
     sb.from('job_weeks').select('*').eq('week_start', start),
@@ -732,7 +746,7 @@ function renderDetail(groupId) {
               <tbody>
                 ${d.lines.map((l, li) => `
                   <tr data-entry-id="${esc(l.entryId)}" data-helper-row-id="${l.helperRowId ? esc(l.helperRowId) : ''}" data-line-key="${dateStr}-${li}">
-                    <td class="l-name">${esc(l.name)}<span class="role-tag2">${l.role}</span>${l.role === 'welder' && l.description ? `<div class="line-desc">${esc(l.description)}</div>` : ''}${l.isStainless ? `<div class="line-desc stainless-tag">Stainless</div>` : ''}${rateTag(l)}${l.isFlat ? `<div class="line-desc flat-tag">Flat rate</div>` : ''}${l.parts ? l.parts.map(p => `<div class="line-desc part-line-desc">${esc(p.description)} — ${p.quantity} &times; $${p.rate} = ${money(Number(p.quantity) * Number(p.rate))}</div>`).join('') : ''}</td>
+                    <td class="l-name">${esc(l.name)}<span class="role-tag2">${l.role}</span>${l.role === 'welder' && l.description ? `<div class="line-desc">${esc(l.description)}</div>` : ''}${l.isStainless ? `<div class="line-desc stainless-tag">Stainless</div>` : ''}${rateTag(l)}${l.isFlat ? `<div class="line-desc flat-tag">Flat rate</div>` : ''}${l.parts ? l.parts.map(p => `<div class="line-desc part-line-desc">${esc(p.description)} — ${p.quantity} &times; $${p.rate} = ${money(Number(p.quantity) * Number(p.rate))}</div>`).join('') : ''}${(l.pieces || []).map(pc => `<div class="line-desc piece-line-desc">Paid by the piece: ${esc(pc.description)} — ${pc.qty} &times; ${money(pc.unit_price)} = ${money(pc.amount)}</div>`).join('')}</td>
                     <td class="l-num line-hours">${l.hours}</td>
                     <td class="l-num dim">${l.isFlat ? '—' : '$' + l.billRate}</td>
                     <td class="l-num dim">${l.pd ? money(l.pd) : '—'}</td>

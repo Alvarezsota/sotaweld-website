@@ -383,3 +383,7 @@ body.inv-open { overflow: hidden; }
   .jp-table tfoot tr { border-top: 1px solid var(--line); }
   .jp-table tfoot td:empty { display: none; }
 }
+
+/* A day paid for what was built rather than for hours. Marked, because a line
+   showing no hours and real money reads like a mistake otherwise. */
+.piece-line-desc { color: var(--molten); font-weight: 600; }
