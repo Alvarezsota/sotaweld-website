@@ -303,6 +303,26 @@ window.SOTA_QD_CONVERT = {
    rows, so a quote the tables have not caught up with would come back as it was
    a minute ago rather than as it is on screen. */
 const QUOTE_PDF_URL = `${SUPABASE_URL}/functions/v1/qb-invoice-pdf`;
+const QUOTE_FILE_URL = `${SUPABASE_URL}/functions/v1/quote-file-onedrive`;
+
+/* Files the quote into the Quotes folder on the company OneDrive.
+   Gilbert was saving these out of the download folder by hand, on every quote
+   and again on every revision. Called wherever the portal produces the
+   document, and deliberately not awaited by any of them: the filing is a
+   convenience laid on top of a quote that is already saved and a PDF that is
+   already in his hands. It must never be able to fail either one, so nothing
+   here throws and nothing here is waited on. */
+function fileQuoteToOneDrive(quoteId, token) {
+  fetch(QUOTE_FILE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ quote_id: quoteId }),
+  }).then(async (r) => {
+    const out = await r.json().catch(() => ({}));
+    if (out && out.filed) console.log('[quote] filed to OneDrive as', out.filename);
+    else console.warn('[quote] not filed to OneDrive:', (out && out.error) || r.status);
+  }).catch((err) => console.warn('[quote] not filed to OneDrive:', err.message));
+}
 
 window.SOTA_QD_PDF = {
   download: async function (doc) {
@@ -341,6 +361,9 @@ window.SOTA_QD_PDF = {
     a.href = url; a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+    // He has the document; the filing happens behind him.
+    fileQuoteToOneDrive(row.id, session.access_token);
   }
 };
 
@@ -486,6 +509,11 @@ window.SOTA_QD_EMAIL = {
       } catch { /* unparseable: send him Microsoft's link rather than nothing */ }
       window.open(link, '_blank', 'noopener');
     }
+
+    // The draft carries the same document, so this render files too. A quote is
+    // revised two or three times before it goes out and the folder should hold
+    // the copy that was actually sent, not the first one he downloaded.
+    fileQuoteToOneDrive(row.id, session.access_token);
     return out;
   },
 };
