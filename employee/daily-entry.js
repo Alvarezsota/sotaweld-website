@@ -184,15 +184,18 @@ async function loadWeekPanel() {
   let helperRows = [];
   let partRows = [];
   let equipRows = [];
+  let pieceRows = [];
   if (weekEntries.length) {
-    const [{ data: hRows }, { data: eRows }, { data: pRows }] = await Promise.all([
+    const [{ data: hRows }, { data: eRows }, { data: pRows }, { data: pcRows }] = await Promise.all([
       sb.from('daily_entry_helpers').select('*').in('daily_entry_id', weekEntries.map(e => e.id)),
       sb.from('daily_entry_equipment').select('*').in('daily_entry_id', weekEntries.map(e => e.id)),
-      sb.from('daily_entry_parts').select('*').in('daily_entry_id', weekEntries.map(e => e.id))
+      sb.from('daily_entry_parts').select('*').in('daily_entry_id', weekEntries.map(e => e.id)),
+      sb.from('daily_entry_pieces').select('*').in('daily_entry_id', weekEntries.map(e => e.id)).order('sort_order')
     ]);
     helperRows = hRows || [];
     equipRows = eRows || [];
     partRows = pRows || [];
+    pieceRows = pcRows || [];
   }
 
   weekPanelDays = [];
@@ -202,7 +205,8 @@ async function loadWeekPanel() {
       row: e,
       helpers: helperRows.filter(h => h.daily_entry_id === e.id),
       equipment: equipRows.filter(q => q.daily_entry_id === e.id),
-      parts: partRows.filter(p => p.daily_entry_id === e.id)
+      parts: partRows.filter(p => p.daily_entry_id === e.id),
+      pieces: pieceRows.filter(p => p.daily_entry_id === e.id)
     }));
     weekPanelDays.push({ dateStr, dayEntries });
   }
@@ -316,6 +320,11 @@ function startEditEntry(entryId) {
     // clears them and re-inserts; if the clear removes fewer than this, we must
     // not insert or the helper/part lines get duplicated.
     equipment: (found.equipment || []).map(r => ({ uid: uid(), itemId: r.rate_sheet_item_id, amount: Number(r.amount), qty: Number(r.quantity) })),
+    payMode: e.pay_mode === 'piece' ? 'piece' : 'hourly',
+    pieces: (found.pieces || []).length
+      ? found.pieces.map(p => ({ uid: uid(), what: p.description, qty: p.qty, price: p.unit_price }))
+      : [newPiece()],
+    savedPieceCount: (found.pieces || []).length,
     savedEquipCount: (found.equipment || []).length,
     savedHelperCount: found.helpers.length,
     savedPartCount: found.parts.length
@@ -372,11 +381,34 @@ async function saveEditEntry(entryId) {
       for_job_id: yard ? editState.forJobId : null,
       bid_item_id: editState.bidItemId || null,
       description: editState.description.trim(),
-      hours: helpersOnly ? 0 : editState.hours,
+      hours: (helpersOnly || editState.payMode === 'piece') ? 0 : editState.hours,
+      pay_mode: helpersOnly ? 'hourly' : (editState.payMode || 'hourly'),
       per_diem: helpersOnly ? false : editState.perDiem,
       is_stainless: helpersOnly ? false : editState.stainless
     }).eq('id', entryId);
     if (upErr) throw upErr;
+
+    /* The pieces, cleared and rewritten the same way the helper rows are --
+       including the same refusal check, because a clear that silently removed
+       nothing would put every line on the ticket twice.
+       Order matters: the database will not let pieces sit on an hourly day, and
+       the update above has already set the day's mode, so a day being moved
+       back to hourly has its pieces taken off here and the day is clean. */
+    const { data: delPieces, error: dpcErr } = await sb.from('daily_entry_pieces')
+      .delete().eq('daily_entry_id', entryId).select('id');
+    if (dpcErr) throw dpcErr;
+    if ((delPieces || []).length < (editState.savedPieceCount || 0)) throw new Error('CHILD_DELETE_BLOCKED');
+
+    if (!helpersOnly && editState.payMode === 'piece') {
+      const pieceRows = (editState.pieces || [])
+        .filter(p => p.what.trim() && Number(p.qty) > 0 && Number(p.price) > 0)
+        .map((p, i) => ({ daily_entry_id: entryId, description: p.what.trim(),
+                          qty: Number(p.qty), unit_price: Number(p.price), sort_order: i }));
+      if (pieceRows.length) {
+        const { error: pcErr } = await sb.from('daily_entry_pieces').insert(pieceRows);
+        if (pcErr) throw pcErr;
+      }
+    }
 
     // Clear the old helper rows before re-inserting. If this removes fewer rows
     // than the ticket actually has, the clear was refused — bail out rather than
@@ -446,6 +478,20 @@ function updateEditPartTotals() {
   });
   const totalEl = weekPanelBody.querySelector(`.flat-total-value[data-entry-uid="${editState.uid}"]`);
   if (totalEl) totalEl.textContent = '$' + partsTotal(editState.parts).toLocaleString();
+}
+
+/* The piece amounts on a ticket being corrected. Same reason as the parts
+   totals above: patched in place so the number does not vanish mid-keystroke. */
+function updateEditPieceTotals() {
+  if (!editState) return;
+  const money = (n) => '$' + Number(n).toLocaleString(undefined,
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  (editState.pieces || []).forEach((pc) => {
+    const el = weekPanelBody.querySelector(`[data-piece-uid="${pc.uid}"] .piece-amt`);
+    if (el) el.textContent = money((Number(pc.qty) || 0) * (Number(pc.price) || 0));
+  });
+  const tot = weekPanelBody.querySelector('.piece-total-value');
+  if (tot) tot.textContent = money(piecesTotal(editState.pieces));
 }
 
 weekToggleBtn.addEventListener('click', () => {
@@ -537,6 +583,37 @@ weekPanelBody.addEventListener('click', async (e) => {
     renderWeekPanelBody();
     return;
   }
+  if (e.target.closest('[data-action="pay-hourly"]')) {
+    if (editState.payMode !== 'hourly') {
+      editState.payMode = 'hourly';
+      if (!Number(editState.hours)) editState.hours = editState.hoursBefore || 10;
+      renderWeekPanelBody();
+    }
+    return;
+  }
+  if (e.target.closest('[data-action="pay-piece"]')) {
+    if (editState.payMode !== 'piece') {
+      editState.hoursBefore = editState.hours;
+      editState.payMode = 'piece';
+      editState.hours = 0;
+      if (!(editState.pieces || []).length) editState.pieces = [newPiece()];
+      renderWeekPanelBody();
+    }
+    return;
+  }
+  if (e.target.closest('[data-action="add-piece"]')) {
+    (editState.pieces ||= []).push(newPiece());
+    renderWeekPanelBody();
+    return;
+  }
+  const removePieceBtn2 = e.target.closest('[data-action="remove-piece"]');
+  if (removePieceBtn2) {
+    const el = e.target.closest('[data-piece-uid]');
+    editState.pieces = (editState.pieces || []).filter(x => x.uid !== el.dataset.pieceUid);
+    if (!editState.pieces.length) editState.pieces = [newPiece()];
+    renderWeekPanelBody();
+    return;
+  }
   const stepBtn = e.target.closest('.step-btn');
   if (stepBtn) {
     const helperEl = e.target.closest('[data-helper-uid]');
@@ -623,6 +700,14 @@ weekPanelBody.addEventListener('input', (e) => {
     if (e.target.classList.contains('part-qty-input')) { p.qty = e.target.value; updateEditPartTotals(); return; }
     if (e.target.classList.contains('part-rate-input')) { p.rate = e.target.value; updateEditPartTotals(); return; }
   }
+  const pieceEl2 = e.target.closest('[data-piece-uid]');
+  if (pieceEl2 && editState) {
+    const pc = (editState.pieces || []).find(x => x.uid === pieceEl2.dataset.pieceUid);
+    if (!pc) return;
+    if (e.target.classList.contains('piece-what'))  { pc.what  = e.target.value; return; }
+    if (e.target.classList.contains('piece-qty'))   { pc.qty   = e.target.value; updateEditPieceTotals(); return; }
+    if (e.target.classList.contains('piece-price')) { pc.price = e.target.value; updateEditPieceTotals(); return; }
+  }
 });
 
 function uid() { return Math.random().toString(36).slice(2); }
@@ -634,7 +719,7 @@ function esc(str) {
 function escAttr(str) { return esc(str).replace(/"/g, '&quot;'); }
 
 function newEntry() {
-  const entry = { uid: uid(), jobId: '', oneOffName: '', forJobId: '', bidItemId: '', description: '', hours: 10, perDiem: true, stainless: false, helpersOnly: false, helpers: [], parts: [newPart()], equipment: [] };
+  const entry = { uid: uid(), jobId: '', oneOffName: '', forJobId: '', bidItemId: '', description: '', hours: 10, perDiem: true, stainless: false, helpersOnly: false, helpers: [], parts: [newPart()], equipment: [], payMode: 'hourly', pieces: [newPiece()] };
   // Logging for a helper: nobody's hours on the card are the office man's, so
   // his are zeroed and the helper's line is already there with his name on it.
   if (loggingForHelper()) {
@@ -1014,9 +1099,12 @@ function editCardHtml(entry) {
             <span class="flat-total-value" data-entry-uid="${entry.uid}">$${partsTotal(entry.parts).toLocaleString()}</span>
           </div>
         </div>` : ''}
+      ${entry.helpersOnly || loggingForHelper() ? '' : payModeHtml(entry)}
+      ${!entry.helpersOnly && !loggingForHelper() && entry.payMode === 'piece'
+        ? pieceBlockHtml(entry) : ''}
       <div class="you-row">
         ${entry.helpersOnly ? '' : `
-          ${hrsOn ? stepperHtml('Your hours', entry.hours) : ''}
+          ${hrsOn && entry.payMode !== 'piece' ? stepperHtml('Your hours', entry.hours) : ''}
           ${pdToggleHtml(entry.perDiem)}
           ${stainlessToggleHtml(entry.stainless)}`}
         ${loggingForHelper() ? '' : helpersOnlyToggleHtml(entry.helpersOnly)}
@@ -1034,6 +1122,77 @@ function editCardHtml(entry) {
       <div class="edit-card-footer">
         <button type="button" class="btn2 btn2-line small" data-action="delete-entry">Delete ticket</button>
         <button type="button" class="btn2 btn2-solid small" data-action="save-edit">Save changes</button>
+      </div>
+    </div>`;
+}
+
+/* By the hour, or by the piece -- for this day.
+ *
+ * "If they're working by the day, give them an option to work by the hour. If
+ * they're working contract by the piece, give them the option to click by the
+ * piece. There are going to be days they're going to work and build the
+ * platform, and it's going to take them 2 days. On the second day, when they
+ * finish, they can log the platform that they built and the price that I gave
+ * them."
+ *
+ * So it is a choice on the day, not a setting on the man and not a setting on
+ * the job. Armando carries $50/hr like everybody else and works to it most
+ * weeks; the morning he finishes a platform he taps By the piece and types what
+ * he built.
+ *
+ * The two never share a day -- "never log hours with the fucking part that they
+ * built" -- which is why picking one hides the other outright instead of
+ * leaving both on screen. The database refuses the combination as well, so a
+ * phone running last week's script cannot sneak one through. */
+function newPiece() {
+  return { uid: uid(), what: '', qty: 1, price: '' };
+}
+
+function piecesTotal(pieces) {
+  return (pieces || []).reduce((a, p) =>
+    a + (Number(p.qty) || 0) * (Number(p.price) || 0), 0);
+}
+
+function payModeHtml(entry) {
+  const piece = entry.payMode === 'piece';
+  return `
+    <div class="paymode">
+      <button type="button" class="paymode-btn${piece ? '' : ' on'}" data-action="pay-hourly">By the hour</button>
+      <button type="button" class="paymode-btn${piece ? ' on' : ''}" data-action="pay-piece">By the piece</button>
+    </div>`;
+}
+
+function pieceRowHtml(p) {
+  const amt = (Number(p.qty) || 0) * (Number(p.price) || 0);
+  return `
+    <div class="piece-row" data-piece-uid="${p.uid}">
+      <input type="text" class="input piece-what" placeholder="What you built (e.g. Platform)"
+        value="${escAttr(p.what)}">
+      <div class="piece-nums">
+        <label class="piece-field"><span>How many</span>
+          <input type="number" inputmode="decimal" step="any" min="0" class="input piece-qty"
+            value="${escAttr(p.qty)}"></label>
+        <label class="piece-field"><span>Price each</span>
+          <input type="number" inputmode="decimal" step="any" min="0" class="input piece-price"
+            placeholder="0.00" value="${escAttr(p.price)}"></label>
+        <span class="piece-amt">$${amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        <button type="button" class="piece-x" data-action="remove-piece">&times;</button>
+      </div>
+    </div>`;
+}
+
+function pieceBlockHtml(entry) {
+  const total = piecesTotal(entry.pieces);
+  return `
+    <div class="oneoff piecework">
+      <label class="field-label">What you built today</label>
+      <span class="oneoff-note" style="margin:0 0 10px;">The price you were given for each one.
+        No hours go on a day you are paid for the work.</span>
+      <div class="pieces-list">${(entry.pieces || []).map(pieceRowHtml).join('')}</div>
+      <button type="button" class="add-part" data-action="add-piece">+ Add another</button>
+      <div class="parts-total-row">
+        <span>Your pay for today</span>
+        <span class="piece-total-value">$${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
       </div>
     </div>`;
 }
@@ -1087,9 +1246,12 @@ function entryCardHtml(entry, idx) {
             <span class="flat-total-value" data-entry-uid="${entry.uid}">$${partsTotal(entry.parts).toLocaleString()}</span>
           </div>
         </div>` : ''}
+      ${entry.helpersOnly || loggingForHelper() ? '' : payModeHtml(entry)}
+      ${!entry.helpersOnly && !loggingForHelper() && entry.payMode === 'piece'
+        ? pieceBlockHtml(entry) : ''}
       <div class="you-row">
         ${entry.helpersOnly ? '' : `
-          ${hrsOn ? stepperHtml('Your hours', entry.hours) : ''}
+          ${hrsOn && entry.payMode !== 'piece' ? stepperHtml('Your hours', entry.hours) : ''}
           ${pdToggleHtml(entry.perDiem)}
           ${stainlessToggleHtml(entry.stainless)}`}
         ${loggingForHelper() ? '' : helpersOnlyToggleHtml(entry.helpersOnly)}
@@ -1176,6 +1338,40 @@ entriesContainer.addEventListener('click', (e) => {
   }
   if (e.target.closest('[data-action="add-part"]')) {
     entry.parts.push(newPart());
+    render();
+    return;
+  }
+  /* Switching how the day is paid. Hours are cleared going into piece work and
+     restored coming out, so a man who taps the wrong one does not find his ten
+     hours gone when he taps back. */
+  if (e.target.closest('[data-action="pay-hourly"]')) {
+    if (entry.payMode !== 'hourly') {
+      entry.payMode = 'hourly';
+      if (!Number(entry.hours)) entry.hours = entry.hoursBefore || 10;
+      render();
+    }
+    return;
+  }
+  if (e.target.closest('[data-action="pay-piece"]')) {
+    if (entry.payMode !== 'piece') {
+      entry.hoursBefore = entry.hours;
+      entry.payMode = 'piece';
+      entry.hours = 0;
+      if (!(entry.pieces || []).length) entry.pieces = [newPiece()];
+      render();
+    }
+    return;
+  }
+  if (e.target.closest('[data-action="add-piece"]')) {
+    (entry.pieces ||= []).push(newPiece());
+    render();
+    return;
+  }
+  const removePieceBtn = e.target.closest('[data-action="remove-piece"]');
+  if (removePieceBtn) {
+    const el = e.target.closest('[data-piece-uid]');
+    entry.pieces = (entry.pieces || []).filter(x => x.uid !== el.dataset.pieceUid);
+    if (!entry.pieces.length) entry.pieces = [newPiece()];
     render();
     return;
   }
@@ -1332,7 +1528,35 @@ entriesContainer.addEventListener('input', (e) => {
       return;
     }
   }
+  const pieceEl = e.target.closest('[data-piece-uid]');
+  if (pieceEl) {
+    const pc = (entry.pieces || []).find(x => x.uid === pieceEl.dataset.pieceUid);
+    if (!pc) return;
+    if (e.target.classList.contains('piece-what'))  { pc.what  = e.target.value; return; }
+    if (e.target.classList.contains('piece-qty'))   { pc.qty   = e.target.value; updatePieceTotals(entry); return; }
+    if (e.target.classList.contains('piece-price')) { pc.price = e.target.value; updatePieceTotals(entry); return; }
+  }
 });
+
+/* Same reason as the parts totals above: redrawn in place, never through
+   render(), so the number does not vanish under his thumb as he types it. */
+function updatePieceTotals(entry) {
+  const card = entriesContainer.querySelector(`[data-entry-uid="${entry.uid}"]`);
+  if (!card) return;
+  (entry.pieces || []).forEach((pc) => {
+    const row = card.querySelector(`[data-piece-uid="${pc.uid}"] .piece-amt`);
+    if (row) {
+      const amt = (Number(pc.qty) || 0) * (Number(pc.price) || 0);
+      row.textContent = '$' + amt.toLocaleString(undefined,
+        { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+  });
+  const tot = card.querySelector('.piece-total-value');
+  if (tot) {
+    tot.textContent = '$' + piecesTotal(entry.pieces).toLocaleString(undefined,
+      { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+}
 
 /* Redrawn in place rather than through render(), which would tear the field out
    from under the man's thumb mid-number. */
@@ -1682,6 +1906,20 @@ document.getElementById('shieldsBtn').addEventListener('click', () => {
 });
 
 async function handleSubmit() {
+  /* A piece day with nothing on it is a man who tapped By the piece and then
+     turned it in without saying what he built -- which would pay him nothing
+     and leave the job looking like it got a free day's work. Caught here with
+     a sentence he can act on, rather than at the database with one he cannot. */
+  const emptyPiece = entries.find(e =>
+    !e.helpersOnly && e.payMode === 'piece' &&
+    !(e.pieces || []).some(p => p.what.trim() && Number(p.qty) > 0 && Number(p.price) > 0));
+  if (emptyPiece) {
+    alert('You picked By the piece on ' + (jobName(emptyPiece) || 'a job')
+      + ', so put down what you built and the price you were given for each one.'
+      + '\n\nIf you worked by the hour today, tap By the hour instead.');
+    return;
+  }
+
   submitBtn.disabled = true;
   submitBtn.textContent = 'Submitting...';
 
@@ -1730,12 +1968,31 @@ async function handleSubmit() {
         for_job_id: yard ? entry.forJobId : null,
         bid_item_id: entry.bidItemId || null,
         description: entry.description.trim(),
-        hours: helpersOnly ? 0 : entry.hours,
+        // A day is paid by the hour or by the piece, never both, so a piece
+        // day is written with no hours at all rather than hours we then ignore.
+        hours: (helpersOnly || entry.payMode === 'piece') ? 0 : entry.hours,
+        pay_mode: helpersOnly ? 'hourly' : (entry.payMode || 'hourly'),
         per_diem: helpersOnly ? false : entry.perDiem,
         is_stainless: helpersOnly ? false : entry.stainless
       }).select().single();
 
       if (deError) throw deError;
+
+      if (!helpersOnly && entry.payMode === 'piece') {
+        const pieceRows = (entry.pieces || [])
+          .filter(p => p.what.trim() && Number(p.qty) > 0 && Number(p.price) > 0)
+          .map((p, i) => ({
+            daily_entry_id: deData.id,
+            description: p.what.trim(),
+            qty: Number(p.qty),
+            unit_price: Number(p.price),
+            sort_order: i,
+          }));
+        if (pieceRows.length) {
+          const { error: pcError } = await sb.from('daily_entry_pieces').insert(pieceRows);
+          if (pcError) throw pcError;
+        }
+      }
 
       const helperRows = entry.helpers
         .filter(h => h.helperId)

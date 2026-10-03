@@ -430,23 +430,32 @@ function payStatementSheet(kind, r) {
     byDate.get(l.date).push(l);
   }
   const dayRows = [...byDate.entries()].sort().map(([date, ls]) => {
-    const hrs = ls.reduce((a, l) => a + Number(l.hours || 0), 0);
-    const hourly = ls.reduce((a, l) => a + Number(l.hours || 0) * Number(l.pay_rate || 0), 0);
+    // A day is paid by the hour or by the piece, never both, but a man can have
+    // one of each in the same week -- so split the lines rather than assuming.
+    const hourLines = ls.filter(l => l.kind !== 'piece');
+    const pieceLines = ls.filter(l => l.kind === 'piece');
+    const hrs = hourLines.reduce((a, l) => a + Number(l.hours || 0), 0);
+    const hourly = hourLines.reduce((a, l) => a + Number(l.hours || 0) * Number(l.pay_rate || 0), 0);
+    const pieces = pieceLines.reduce((a, l) => a + Number(l.paid || 0), 0);
     const pd = ls.some(l => l.per_diem) ? Number(ls.find(l => l.per_diem).per_diem_rate || 0) : 0;
-    const rates = [...new Set(ls.map(l => Number(l.pay_rate || 0)))];
-    const jobs = ls.map(l => `<div class="jl">${esc(l.job || '—')}${
-      (l.bid_item || ls.length > 1)
-        ? `<div class="d">${[l.bid_item ? esc(l.bid_item) : '', ls.length > 1 ? num(l.hours) + ' hrs' : '']
-             .filter(Boolean).join(' &middot; ')}</div>`
-        : ''}</div>`).join('');
+    const rates = [...new Set(hourLines.map(l => Number(l.pay_rate || 0)))];
+    const jobs = ls.map(l => l.kind === 'piece'
+      ? `<div class="jl">${esc(l.job || '—')}<div class="d">${
+          [esc(l.description || 'Built'),
+           `${num(l.qty)} &times; ${money(l.pay_price)}`].join(' &middot; ')}</div></div>`
+      : `<div class="jl">${esc(l.job || '—')}${
+        (l.bid_item || ls.length > 1)
+          ? `<div class="d">${[l.bid_item ? esc(l.bid_item) : '', ls.length > 1 ? num(l.hours) + ' hrs' : '']
+               .filter(Boolean).join(' &middot; ')}</div>`
+          : ''}</div>`).join('');
     return `<tr>
       <td class="l nw">${esc(dayLabel(date))}</td>
       <td class="l">${jobs}</td>
-      <td>${num(hrs)}</td>
-      <td>${rates.length === 1 ? money(rates[0]) : '—'}</td>
-      <td>${money(hourly)}</td>
+      <td>${hrs ? num(hrs) : '—'}</td>
+      <td>${(rates.length === 1 && hrs) ? money(rates[0]) : '—'}</td>
+      <td>${money(hourly + pieces)}</td>
       <td>${pd ? money(pd) : '—'}</td>
-      <td><b>${money(hourly + pd)}</b></td>
+      <td><b>${money(hourly + pieces + pd)}</b></td>
     </tr>`;
   }).join('');
 
@@ -470,15 +479,17 @@ function payStatementSheet(kind, r) {
   </div>
 
   <table>
-    <tr><th class="l">Day</th><th class="l">Job</th><th>Hours</th><th>Rate</th><th>Hourly pay</th><th>Per diem</th><th>Day total</th></tr>
+    <tr><th class="l">Day</th><th class="l">Job</th><th>Hours</th><th>Rate</th><th>Pay</th><th>Per diem</th><th>Day total</th></tr>
     ${dayRows || '<tr><td colspan="7" class="l">No days logged this week.</td></tr>'}
     <tr class="tot"><td class="l">Totals</td><td></td><td>${num(r.total_hours)}</td><td></td>
-      <td>${money(r.hours_paid)}</td><td>${money(r.per_diem_amount)}</td><td>${money(r.total_paid)}</td></tr>
+      <td>${money(Number(r.hours_paid || 0) + Number(r.piece_paid || 0))}</td>
+      <td>${money(r.per_diem_amount)}</td><td>${money(r.total_paid)}</td></tr>
   </table>
 
   <div class="totals">
     <div><span>Hours worked</span><span>${num(r.total_hours)}</span></div>
     <div><span>Hourly pay</span><span>${money(r.hours_paid)}</span></div>
+    ${Number(r.piece_paid || 0) ? `<div><span>Paid for work built &mdash; ${num(r.pieces)} piece${Number(r.pieces) === 1 ? '' : 's'}</span><span>${money(r.piece_paid)}</span></div>` : ''}
     <div><span>Per diem &mdash; ${num(r.per_diem_days)} day${Number(r.per_diem_days) === 1 ? '' : 's'}</span><span>${money(r.per_diem_amount)}</span></div>
     <div class="grand"><span>Total due</span><span class="v">${money(r.total_paid)}</span></div>
   </div>
