@@ -63,6 +63,52 @@
     errorMsg.textContent = putOut;
   }
 
+  /* A way back in without ringing the office.
+   *
+   * An invite link lasts a day. Aldo Galindo was invited one afternoon, did not
+   * open it before it went stale, and by the next morning had no password and no
+   * way to make one -- there was nothing on this page to help him. Gilbert had to
+   * come and ask for the account to be reset by hand, which is not a thing that
+   * should need a person.
+   *
+   * It lands on set-password.html, which already knows how to take the one-time
+   * token out of the link and set a password with it.
+   *
+   * The answer is deliberately the same whether or not the address is one of
+   * ours: a login page that says "no such man here" tells anybody who asks which
+   * of your crew's addresses are real. */
+  const forgotBtn = document.getElementById('forgotBtn');
+  const forgotMsg = document.getElementById('forgotMsg');
+  if (forgotBtn) {
+    forgotBtn.addEventListener('click', async () => {
+      const email = document.getElementById('email').value.trim();
+      const errorEl = document.getElementById('errorMsg');
+      errorEl.textContent = '';
+      forgotMsg.style.display = 'none';
+
+      if (!email) {
+        errorEl.textContent = 'Type your email above first, then tap this again.';
+        document.getElementById('email').focus();
+        return;
+      }
+
+      forgotBtn.disabled = true;
+      forgotBtn.textContent = 'Sending\u2026';
+      try {
+        await sb.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + '/employee/set-password.html',
+        });
+      } catch (_) {
+        /* say the same thing either way -- see above */
+      }
+      forgotMsg.textContent = 'If that address is on the crew, a link to set a new password '
+        + 'is on its way to it. It is good for one hour. Check junk mail if it is not there.';
+      forgotMsg.style.display = '';
+      forgotBtn.disabled = false;
+      forgotBtn.textContent = 'Forgot your password?';
+    });
+  }
+
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     errorMsg.textContent = '';
