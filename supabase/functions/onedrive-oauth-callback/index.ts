@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
   if (!clientId || !clientSecret) {
     return page('Not set up yet', '<p>MS_CLIENT_ID and MS_CLIENT_SECRET are not set on this project. Add them under Edge Functions secrets and connect again.</p>', false);
   }
-  const tenant = Deno.env.get('MS_TENANT_ID') || 'organizations';
+  const tenant = (Deno.env.get('MS_TENANT_ID') || '').trim() || 'organizations';
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
   // Single use, and only ever issued to an admin. Spend it before exchanging the
@@ -76,7 +76,14 @@ Deno.serve(async (req) => {
   const form = new URLSearchParams({
     client_id: clientId, client_secret: clientSecret, code,
     grant_type: 'authorization_code', redirect_uri: redirectUri,
-    scope: 'offline_access Files.ReadWrite User.Read',
+    // Must match onedrive-oauth-start's SCOPES exactly. The authorize step asks
+    // the office to consent to mail as well, but it is THIS call that decides
+    // what the stored refresh token actually carries -- and for a year it asked
+    // for three of the four. The office consented to mail, the token never held
+    // it, and quote-outlook-draft got turned away by Microsoft every time it
+    // asked for a mail token. Widening the consent on screen is no use if the
+    // exchange below quietly drops it.
+    scope: 'offline_access Files.ReadWrite Mail.ReadWrite User.Read',
   });
   const tokenRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form,
